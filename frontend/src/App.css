@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+:root {
+  --surface-base: #FBEAD7; /*fundo*/
+  --surface-raised: #FFFFFF; /*blocos - cards, containers, modais, tabelas*/
+
+  --brand-primary: #e44453; /*header, destaques institucionais, ícones ativos, elementos de navegação*/
+  --brand-primary-soft: #fb9f88; /*hover leve, áreas selecionadas, badges informativos, background de destaque suave*/
+
+  --action-strong: #fc3441; /*ênfase*/
+
+  --text-primary: #2E1E1E; /**/
+  --text-secondary: #6F5A5A; /**/
+
+  --border-subtle: #E8CFCF; /*bordas e divisor*/
+}
