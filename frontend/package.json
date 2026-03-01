@@ -10,7 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@emotion/styled": "^11.14.1",
+    "@mui/material": "^7.3.8",
+    "@mui/styled-engine": "^7.3.8",
+    "@mui/x-data-grid": "^8.27.3",
     "@tailwindcss/vite": "^4.1.18",
+    "axios": "^1.13.6",
+    "lucide-react": "^0.563.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.12.0",
