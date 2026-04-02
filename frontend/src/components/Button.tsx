@@ -16,32 +16,29 @@ export function Button({
   size = "md",
   isLoading = false,
   disabled,
+  className,
   ...props
 }: ButtonProps) {
   const baseStyles =
-    "rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-sm";
+    "rounded transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed";
 
   const variantStyles = {
-    primary: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500",
-    secondary: "bg-red-100 text-red-700 hover:bg-red-200 focus:ring-red-400",
-    danger: "bg-red-800 text-white hover:bg-red-900 focus:ring-red-700",
+    primary: "bg-primary text-white shadow hover:bg-[#111111] focus:ring-primary",
+    secondary:
+      "bg-white text-primary border border-gray-300 shadow hover:bg-[#f7f7f7] focus:ring-gray-300",
+    danger: "bg-[#BA1A1A] text-white shadow hover:bg-[#8f1515] focus:ring-[#BA1A1A]",
   };
 
   const sizeStyles = {
-    sm: "px-3 py-1.5 text-sm",
-    md: "px-4 py-2 text-base",
-    lg: "px-8 py-2 text-lg",
+    sm: "px-3 py-1.5 text-md h-9",
+    md: "px-4 py-2 text-md h-10",
+    lg: "px-8 py-2 text-base h-11",
   };
 
   return (
     <button
       disabled={disabled || isLoading}
-      className={`
-        ${baseStyles}
-        ${variantStyles[variant]}
-        ${sizeStyles[size]}
-        ${disabled || isLoading ? "opacity-50 cursor-not-allowed" : ""}
-      `}
+      className={`${baseStyles} ${variantStyles[variant]} ${sizeStyles[size]} ${disabled || isLoading ? "opacity-45" : ""} ${className ?? ""}`}
       {...props}
     >
       {isLoading ? "Carregando..." : children}

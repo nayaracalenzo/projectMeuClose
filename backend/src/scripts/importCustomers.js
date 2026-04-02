@@ -9,7 +9,7 @@ async function importCustomers() {
   const results = [];
   const filePath = path.join(__dirname, 'cliente.csv');
 
-  console.log('📂 Iniciando leitura do CSV...');
+  console.log('Iniciando leitura do CSV...');
 
   fs.createReadStream(filePath)
     .pipe(csv({ separator: ';' }))

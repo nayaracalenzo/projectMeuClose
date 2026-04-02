@@ -32,7 +32,7 @@ export default function LoginPage() {
     >
       <div className="bg-(--brand-primary-light)/90 p-12 rounded-lg w-[50%] flex justify-between gap-6 shadow-xl">
         <div className="flex items-center w-[40%]">
-          <img className="h-30" src={logo} alt="logo meu close" />
+          MEU CLOSE
         </div>
         <form onSubmit={handleSubmit} className="grid gap-4 w-[55%]">
           <div>
