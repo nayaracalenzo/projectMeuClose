@@ -14,6 +14,7 @@ import SalesPage from './pages/SalesPage';
 import SaleDetailsPage from './pages/SaleDetailsPage';
 import AdminPage from './pages/AdminPage';
 import StoragePage from './pages/StoragePage';
+import NewSalePage from './pages/NewSalePage';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
             <Route path="/pedido/:id" element={<OrderDetails />} />
             <Route path="/caixa" element={<Registers />} />
             <Route path="/vendas" element={<SalesPage />} />
+            <Route path="/venda" element={<NewSalePage />} />
             <Route path="/venda/:id" element={<SaleDetailsPage/>} />
             <Route path="/banco" element={<BankPage />} />
             <Route path="/estoque" element={<StoragePage/>} />

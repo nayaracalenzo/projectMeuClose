@@ -9,7 +9,7 @@ async function getAllClients() {
 async function findBirthdaysOfMonth() {
   const currentMonth = new Date().getMonth() + 1;
 
-  return Client.findAll({
+  return Customers.findAll({
     where: Sequelize.literal(
       `EXTRACT(MONTH FROM "birthDate") = ${currentMonth}`
     ),

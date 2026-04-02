@@ -1,20 +1,19 @@
+﻿export default function Header() {
+  const data = new Date();
 
-export default function Header () {
+  const opcoes = {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  };
 
- const data = new Date();
+  const dataFormatada = data.toLocaleDateString("pt-BR", opcoes);
+  const dataFinal = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
 
- const opcoes = {
-   weekday: "long", // nome do dia da semana
-   day: "numeric", // dia do mês
-   month: "long", // nome do mês
-   year: "numeric", // ano
- };
-
- const dataFormatada = data.toLocaleDateString("pt-BR", opcoes);
- const dataFinal =  dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1); 
   return (
-    <header className="w-full text-gray-800 items-center flex justify-end-safe border-b md:border-0 md:static h-20">
-      <div className=" px-4  md:px-8">{dataFinal}</div>
+    <header className="hidden glass-panel md:flex h-20 w-full items-center justify-end border-b border-outline-variant/25 text-primary">
+      <div className="px-4 text-base font-medium md:px-8">{dataFinal}</div>
     </header>
   );
-};
+}

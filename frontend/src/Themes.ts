@@ -1,132 +1,129 @@
-import { createTheme } from "@mui/material";
-import { ptBR } from "@mui/x-data-grid/locales";
+import { createTheme } from '@mui/material';
+import { ptBR } from '@mui/x-data-grid/locales';
 
 export const LightTheme = createTheme(
   {
     palette: {
-      mode: "light",
-
+      mode: 'light',
       primary: {
-        main: "#e44453", // brand-primary
-        light: "#cbefbe", // brand-primary-light
-        dark: "#c83745",
-        contrastText: "#ffffff",
+        main: '#1A1A1A',
+        light: '#2C2C2C',
+        dark: '#000000',
+        contrastText: '#FFFFFF',
       },
-
       secondary: {
-        main: "#9a4d6a", // text-secondary como apoio
-        light: "#fde4f0", // brand-primary-soft
-        dark: "#7a3d55",
-        contrastText: "#ffffff",
+        main: '#E8C2CA',
+        light: '#F5DCE1',
+        dark: '#CFA8B1',
+        contrastText: '#1A1A1A',
       },
-
       error: {
-        main: "#fc3441", // action-strong
+        main: '#BA1A1A',
       },
-
       background: {
-        default: "#fcf3fa", // surface-base
-        paper: "#fefefe", // surface-raised
+        default: '#FCFCFC',
+        paper: '#FFFFFF',
       },
-
       text: {
-        primary: "#2E1E1E",
-        secondary: "#9a4d6a",
+        primary: '#1A1A1A',
+        secondary: '#8E8D8A',
       },
-
-      divider: "#E8CFCF", // border-subtle
+      divider: 'rgba(116, 120, 120, 0.2)',
     },
-
     typography: {
-      fontFamily: "Exo, sans-serif",
-
+      fontFamily: '"Work Sans", "Montserrat", sans-serif',
+      h1: {
+        fontFamily: '"Cormorant Garamond", serif',
+        fontWeight: 600,
+        letterSpacing: '-0.02em',
+      },
+      h2: {
+        fontFamily: '"Cormorant Garamond", serif',
+        fontWeight: 600,
+      },
       h3: {
-        fontSize: "1rem",
-        fontWeight: 700,
-        color: "#e44453",
+        fontFamily: '"Cormorant Garamond", serif',
+        fontWeight: 600,
+      },
+      button: {
+        textTransform: 'none',
+        fontWeight: 600,
+        letterSpacing: '0.01em',
+      },
+      caption: {
+        fontSize: '0.6875rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.12em',
       },
     },
-
+    shape: {
+      borderRadius: 2,
+    },
     components: {
       MuiButton: {
         styleOverrides: {
           root: {
-            padding: "1rem",
-            margin: "0.5em",
-            height: "2.45rem",
-            borderRadius: "0.75rem",
-            textTransform: "none",
-            fontWeight: 600,
+            borderRadius: 0,
+            paddingInline: '1.4rem',
+            minHeight: '2.6rem',
           },
-
           containedPrimary: {
-            backgroundColor: "#f95191",
-            color: "#ffffff",
-            "&:hover": {
-              backgroundColor: "#fc3441",
+            background: 'linear-gradient(120deg, #000000 0%, #1C1B1B 100%)',
+            color: '#FFFFFF',
+            '&:hover': {
+              background: 'linear-gradient(120deg, #1A1A1A 0%, #000000 100%)',
             },
           },
-
           outlinedPrimary: {
-            borderColor: "#e44453",
-            color: "#e44453",
-            "&:hover": {
-              backgroundColor: "#fde4f0",
-              borderColor: "#e44453",
+            borderColor: 'rgba(116, 120, 120, 0.4)',
+            color: '#1A1A1A',
+            '&:hover': {
+              borderColor: '#1A1A1A',
+              backgroundColor: 'rgba(244, 243, 241, 0.8)',
             },
           },
         },
       },
-
       MuiPaper: {
         styleOverrides: {
           root: {
-            backgroundColor: "#fefefe",
+            backgroundImage: 'none',
+            boxShadow: 'none',
+            borderRadius: 2,
           },
         },
       },
-
-      MuiTextField: {
-        styleOverrides: {
-          root: {
-            backgroundColor: "#fefefe",
-          },
-        },
-      },
-
       MuiOutlinedInput: {
         styleOverrides: {
           root: {
-            "& fieldset": {
-              borderColor: "#E8CFCF",
+            borderRadius: 2,
+            '& fieldset': {
+              borderColor: 'rgba(116, 120, 120, 0.2)',
             },
-            "&:hover fieldset": {
-              borderColor: "#ecbfbe",
+            '&:hover fieldset': {
+              borderColor: 'rgba(116, 120, 120, 0.4)',
             },
-            "&.Mui-focused fieldset": {
-              borderColor: "#e44453",
+            '&.Mui-focused fieldset': {
+              borderColor: '#1A1A1A',
             },
           },
         },
       },
-
       MuiDataGrid: {
         styleOverrides: {
           root: {
-            borderColor: "#E8CFCF",
-
-            "& .MuiDataGrid-columnHeader": {
-              backgroundColor: "#ffe1e2",
+            borderColor: 'rgba(116, 120, 120, 0.2)',
+            '& .MuiDataGrid-columnHeader': {
+              backgroundColor: '#F5F4F2',
             },
-            "& .MuiDataGrid-columnHeaderTitle": {
+            '& .MuiDataGrid-columnHeaderTitle': {
               fontWeight: 600,
             },
-            "& .MuiDataGrid-footerContainer": {
-              backgroundColor: "#ffe1e2",
+            '& .MuiDataGrid-footerContainer': {
+              backgroundColor: '#FAF9F7',
             },
-
-            "& .MuiDataGrid-cell": {
-              borderColor: "#ffebf6",
+            '& .MuiDataGrid-cell': {
+              borderColor: 'rgba(116, 120, 120, 0.1)',
             },
           },
         },
