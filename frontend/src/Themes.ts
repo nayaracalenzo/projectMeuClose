@@ -109,25 +109,6 @@ export const LightTheme = createTheme(
           },
         },
       },
-      MuiDataGrid: {
-        styleOverrides: {
-          root: {
-            borderColor: 'rgba(116, 120, 120, 0.2)',
-            '& .MuiDataGrid-columnHeader': {
-              backgroundColor: '#F5F4F2',
-            },
-            '& .MuiDataGrid-columnHeaderTitle': {
-              fontWeight: 600,
-            },
-            '& .MuiDataGrid-footerContainer': {
-              backgroundColor: '#FAF9F7',
-            },
-            '& .MuiDataGrid-cell': {
-              borderColor: 'rgba(116, 120, 120, 0.1)',
-            },
-          },
-        },
-      },
     },
   },
   ptBR,

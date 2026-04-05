@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function SalesPage() {
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   return (
     <>
       {loading ? (
