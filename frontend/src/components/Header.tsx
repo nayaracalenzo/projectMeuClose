@@ -1,7 +1,7 @@
 ﻿export default function Header() {
   const data = new Date();
 
-  const opcoes = {
+  const opcoes: Intl.DateTimeFormatOptions = {
     weekday: "long",
     day: "numeric",
     month: "long",

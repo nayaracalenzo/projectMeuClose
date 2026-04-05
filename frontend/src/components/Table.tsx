@@ -2,11 +2,11 @@ import {
   DataGrid,
   type GridAlignment,
   type GridColDef,
-  type GridRowModel,
+  type GridRowSelectionModel,
   gridClasses,
 } from "@mui/x-data-grid";
-import { alpha, styled, useTheme } from "@mui/material/styles";
-import { Box, Card, Typography, useMediaQuery } from "@mui/material";
+import { alpha, styled } from "@mui/material/styles";
+import { Box, Typography, useMediaQuery } from "@mui/material";
 
 import { ptBR } from "@mui/x-data-grid/locales";
 // import RemoveBtn from "./RemoveBtn";
@@ -30,10 +30,8 @@ interface TableProps {
   noPagination?: boolean;
   rowHeight?: number;
   checkboxSelection?: boolean;
-  handleSelectionChange?: (items: any[]) => void;
+  handleSelectionChange?: (items: GridRowSelectionModel) => void;
   disableRowSelectionOnClick?: boolean;
-  rowReordering?: boolean;
-  onRowOrderChange?: (rows: any[]) => void;
   headerExpanded?: boolean;
   customWidth?: boolean;
   catchRowValues?: (row: any) => void;
@@ -60,9 +58,7 @@ const shortenHeader = (header: string): string => {
 };
 
 const ODD_OPACITY = 0.5;
-const lighter = 0.2;
 const darker = 0.7;
-const full = 0.9;
 
 const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
   '.MuiDataGrid-root .MuiDataGrid-booleanCell[data-value="true"]': {
@@ -131,25 +127,18 @@ const StripedDataGrid = styled(DataGrid)(({ theme }) => ({
   },
 }));
 
-const updateRowPosition = (
-  initialIndex: number,
-  newIndex: number,
-  rows: Array<GridRowModel>,
-): Promise<any> => {
-  return new Promise((resolve) => {
-    setTimeout(
-      () => {
-        const rowsClone = [...rows];
-        const row = rowsClone.splice(initialIndex, 1)[0];
-        rowsClone.splice(newIndex, 0, row);
-        resolve(rowsClone);
-      },
-      Math.random() * 500 + 100,
-    ); // simulate network latency
-  });
+const resolveColType = (value: unknown): GridColDef["type"] => {
+  switch (typeof value) {
+    case "number":
+      return "number";
+    case "boolean":
+      return "boolean";
+    case "string":
+      return "string";
+    default:
+      return "string";
+  }
 };
-
-const HEADER_HEIGHT = 80;
 
 export default function Table(props: TableProps) {
   if (!props.values || props.values.length === 0) {
@@ -174,12 +163,6 @@ export default function Table(props: TableProps) {
 
   const columns: GridColDef[] = [];
 
-  const hiddenFields = new Set<string>();
-
-  if (props.hideIdColumn) {
-    hiddenFields.add("id");
-  }
-
   chavesCorretas.map((chave, index) => {
     let flexValue = 1;
     if (index === 0) {
@@ -193,15 +176,12 @@ export default function Table(props: TableProps) {
     const obj: GridColDef = {
       headerAlign: headerAlignment,
       align: alignment,
-      // headerAlign: "center",
-      // align: "center",
-      // align: valueType === 'number' ? "right" : "left",
       field: chave,
       width: 120,
-      type: typeof allKeys[index],
+      type: resolveColType(allKeys[index]),
       flex: flexValue,
       headerName: isMobile ? shortenHeader(chave) : chave,
-      minWidth: isMobile ? Math.min(120) : 120,
+      minWidth: 120,
     };
 
     columns.push(obj);
@@ -213,7 +193,7 @@ export default function Table(props: TableProps) {
       width: 100,
       headerAlign: "center" as GridAlignment,
       align: "center" as GridAlignment,
-      renderCell: (params) => (
+      renderCell: () => (
         <div
           style={{
             display: "flex",
@@ -238,20 +218,6 @@ export default function Table(props: TableProps) {
 
     columns.push(attachColumn);
   }
-
-  const handleRowOrderChange = async (params: GridRowOrderChangeParams) => {
-    const newRows = await updateRowPosition(
-      params.oldIndex,
-      params.targetIndex,
-      props.values,
-    );
-
-    if (props.onRowOrderChange) {
-      props.onRowOrderChange(newRows);
-    }
-  };
-
-  const theme = useTheme();
 
   return (
     <Box
@@ -283,19 +249,14 @@ export default function Table(props: TableProps) {
           rowHeight={props.rowHeight ? props.rowHeight : 60.5}
           columns={columns.map((column) => ({
             ...column,
-            width:
-              // columnSizes[column.field] ||
-              column.width, // Load column size from state or fallback to default
+            width: column.width,
           }))}
-          // onColumnResize={handleColumnResize}
-          // onPaginationModelChange={handlePaginationChange}
           pagination
           initialState={{
             pagination: {
               paginationModel: {
                 page: 0,
                 pageSize: 5,
-                // Number(pageSize)
               },
             },
             columns: {
@@ -305,10 +266,6 @@ export default function Table(props: TableProps) {
               },
             },
           }}
-          // filterModel={filterModel}
-          // onFilterModelChange={handleFilterChange}
-          // sortModel={sortModel}
-          // onSortModelChange={handleSortChange}
           pageSizeOptions={props.noPagination ? [] : [5, 10, 20, 50]}
           getRowClassName={(params) =>
             params.indexRelativeToCurrentPage % 2 === 0 ? "even" : "odd"
@@ -319,8 +276,6 @@ export default function Table(props: TableProps) {
           }
           disableMultipleRowSelection={props.multipleRows ? false : true}
           disableRowSelectionOnClick={props.disableRowSelectionOnClick}
-          rowReordering={props.rowReordering}
-          onRowOrderChange={handleRowOrderChange}
           columnHeaderHeight={props.headerExpanded ? 70 : 56}
           hideFooter={props.hideFooter ? true : false}
         />

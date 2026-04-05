@@ -1,4 +1,8 @@
-export function SaleStepper({ step }) {
+interface SaleStepperProps {
+  step: number;
+}
+
+export function SaleStepper({ step }: SaleStepperProps) {
   const steps = ["Cliente", "Tipo", "Produtos", "Resumo"];
 
   return (

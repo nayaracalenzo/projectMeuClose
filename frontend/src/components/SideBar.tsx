@@ -109,7 +109,7 @@ export default function Sidebar() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/30 bg-surface-lowest backdrop-blur-3xl md:hidden py-3">
         {isQuickCreateOpen && (
-          <div className="absolute bottom-full left-1/2 mb-2 w-44 -translate-x-1/2 bg-surface-lowest p-2 shadow-[var(--ambient-shadow)]">
+          <div className="absolute bottom-full left-1/2 mb-2 w-44 -translate-x-1/2 bg-surface-lowest p-2 shadow-(--ambient-shadow)">
             <button
               type="button"
               onClick={() => navigate(primaryMobileItems.clients.path)}
@@ -128,7 +128,7 @@ export default function Sidebar() {
         )}
 
         {isMoreMenuOpen && (
-          <div className="absolute bottom-full right-2 mb-2 w-52 bg-surface-lowest p-2 shadow-[var(--ambient-shadow)]">
+          <div className="absolute bottom-full right-2 mb-2 w-52 bg-surface-lowest p-2 shadow-(--ambient-shadow)">
             {secondaryMobileItems.map((item) => (
               <button
                 key={item.path}
