@@ -8,15 +8,15 @@ console.log(process.env.DATABASE_URL)
 module.exports = {
   development: {
     use_env_variable: 'DATABASE_URL',
-    dialect: 'postgres',
+    dialect: 'postgresql',
   },
   test: {
     url: String(process.env.DATABASE_URL),
-    dialect: 'postgres'
+    dialect: 'postgresql'
   },
   production: {
     url: String(process.env.DATABASE_URL),
-    dialect: 'postgres',
+    dialect: 'postgresql',
     logging: false
   }
 };
