@@ -11,12 +11,18 @@ module.exports = {
     dialect: 'postgresql',
   },
   test: {
-    url: String(process.env.DATABASE_URL),
-    dialect: 'postgresql'
+    use_env_variable: 'DATABASE_URL',
+    dialect: 'postgresql',
   },
   production: {
-    url: String(process.env.DATABASE_URL),
+    use_env_variable: 'DATABASE_URL',
     dialect: 'postgresql',
-    logging: false
+    dialectOptions: {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false,
+      },
+    },
+    logging: false,
   }
 };
