@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getStoredToken, isTokenExpired, logoutAndRedirect } from "../utils/auth";
 
 export const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
@@ -6,19 +7,35 @@ export const API = axios.create({
 
 API.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      // Remove any surrounding quotes just in case
-      config.headers.Authorization = token.replace(/^"|"$/g, "");
+    const normalizedToken = getStoredToken();
+
+    if (normalizedToken && !isTokenExpired(normalizedToken)) {
+      config.headers.Authorization = normalizedToken.startsWith("Bearer ")
+        ? normalizedToken
+        : `Bearer ${normalizedToken}`;
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(error),
+);
+
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      axios.isAxiosError(error) &&
+      error.response?.status === 401 &&
+      error.config?.url !== "/auth/login"
+    ) {
+      logoutAndRedirect("expired");
+    }
+
+    return Promise.reject(error);
+  },
 );
 
 export const getRequest = async (url: string) => {
   const { data } = await API.get(url);
-
   return data;
 };
 
@@ -44,4 +61,3 @@ export const getUserInfo = async () => {
 
   return data;
 };
-

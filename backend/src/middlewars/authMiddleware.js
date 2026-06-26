@@ -4,10 +4,14 @@ function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    return res.status(401).json({ message: "Token not provided" });
+    return res.status(401).json({ message: "Authorization header not provided" });
   }
 
-  const token = authHeader.split(" ")[1];
+  const [scheme, token] = authHeader.split(" ");
+
+  if (scheme !== "Bearer" || !token) {
+    return res.status(401).json({ message: "Invalid authorization format" });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);

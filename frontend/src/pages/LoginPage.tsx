@@ -1,10 +1,11 @@
-﻿import axios from "axios";
+import axios from "axios";
 import { Eye, EyeClosed } from "lucide-react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
 import NoticeToast from "../components/NoticeToast";
 import { postRequest } from "../services/request";
+import { consumeAuthNotice } from "../utils/auth";
 
 type LoginNotice = {
   tone: "success" | "warning" | "error";
@@ -26,6 +27,26 @@ export default function LoginPage() {
   function showNotice(nextNotice: LoginNotice) {
     setNotice(nextNotice);
   }
+
+  useEffect(() => {
+    const authNotice = consumeAuthNotice();
+
+    if (authNotice === "expired") {
+      showNotice({
+        tone: "warning",
+        title: "Sessão expirada",
+        message: "Seu acesso expirou. Faça login novamente para continuar.",
+      });
+    }
+
+    if (authNotice === "logged_out") {
+      showNotice({
+        tone: "success",
+        title: "Logout realizado",
+        message: "Você saiu com segurança da sua conta.",
+      });
+    }
+  }, []);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
