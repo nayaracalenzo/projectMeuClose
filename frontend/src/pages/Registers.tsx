@@ -52,11 +52,16 @@ export default function Registers() {
   const totalIn = filtered.reduce((acc, row) => acc + (row.amountIn || 0), 0);
   const totalOut = filtered.reduce((acc, row) => acc + (row.amountOut || 0), 0);
 
-  let runningBalance = 0;
-  const rowsWithBalance = filtered.map((row) => {
-    runningBalance += (row.amountIn || 0) - (row.amountOut || 0);
-    return { ...row, balance: runningBalance };
-  });
+  const rowsWithBalance = useMemo(
+    () =>
+      filtered.reduce<Array<CashRow & { balance: number }>>((acc, row) => {
+        const previousBalance = acc[acc.length - 1]?.balance || 0;
+        const balance = previousBalance + (row.amountIn || 0) - (row.amountOut || 0);
+        acc.push({ ...row, balance });
+        return acc;
+      }, []),
+    [filtered],
+  );
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">

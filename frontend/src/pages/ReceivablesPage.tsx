@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getRequest, postRequest } from "../services/request";
 import { formatCurrency } from "../utils/currency";
 
@@ -71,7 +71,7 @@ export default function ReceivablesPage() {
   const [receiptPaidAt, setReceiptPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [receiptReferenceCode, setReceiptReferenceCode] = useState("");
 
-  const fetchRows = async () => {
+  const fetchRows = useCallback(async () => {
     try {
       setLoading(true);
       setMessage("");
@@ -83,11 +83,11 @@ export default function ReceivablesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
   useEffect(() => {
     fetchRows();
-  }, [filter]);
+  }, [fetchRows]);
 
   useEffect(() => {
     const fetchPaymentTypes = async () => {
@@ -150,8 +150,14 @@ export default function ReceivablesPage() {
       setMessage("Recebimento registrado com sucesso.");
       setActiveReceiptId(null);
       await fetchRows();
-    } catch (error: any) {
-      setMessage(error?.response?.data?.message || "Nao foi possivel registrar o recebimento.");
+    } catch (error: unknown) {
+      const maybeAxiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      setMessage(
+        maybeAxiosError.response?.data?.message ||
+          "Nao foi possivel registrar o recebimento.",
+      );
     }
   };
 

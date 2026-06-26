@@ -165,8 +165,9 @@ export default function CustomerDetails() {
         setClient(clientData);
         setForm(toEditableForm(clientData));
         setProfessions(professionsData);
-      } catch (err: any) {
-        if (err?.response?.status === 404) {
+      } catch (err: unknown) {
+        const maybeAxiosError = err as { response?: { status?: number } };
+        if (maybeAxiosError.response?.status === 404) {
           setError("Cliente nao encontrado.");
         } else {
           setError("Erro ao carregar detalhes do cliente.");
@@ -210,7 +211,7 @@ export default function CustomerDetails() {
         state: data.uf || prev.state || "",
       }));
       setZipLookupMessage("Endereço preenchido automaticamente.");
-    } catch (_error) {
+    } catch {
       setZipLookupMessage("Nao foi possivel consultar o CEP.");
     }
   };
@@ -445,8 +446,13 @@ export default function CustomerDetails() {
       setForm(toEditableForm(updated as ClientDetails));
       setIsEditing(false);
       setSaveMessage("Cliente atualizado com sucesso.");
-    } catch (err: any) {
-      setSaveMessage(err?.response?.data?.message || "Nao foi possivel salvar as alteracoes.");
+    } catch (err: unknown) {
+      const maybeAxiosError = err as {
+        response?: { data?: { message?: string } };
+      };
+      setSaveMessage(
+        maybeAxiosError.response?.data?.message || "Não foi possível salvar as alterações.",
+      );
     } finally {
       setSaving(false);
     }

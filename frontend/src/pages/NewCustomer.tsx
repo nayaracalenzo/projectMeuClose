@@ -101,7 +101,7 @@ export default function NewCustomer() {
       try {
         const data = await getRequest("/professions");
         setProfessions(data);
-      } catch (_error) {
+      } catch {
         setProfessions([]);
       }
     };
@@ -176,7 +176,7 @@ export default function NewCustomer() {
         city: data.localidade || prev.city,
         state: data.uf || prev.state,
       }));
-    } catch (_error) {
+    } catch {
       // noop
     }
   };
@@ -275,8 +275,13 @@ export default function NewCustomer() {
       });
 
       navigate("/clientes");
-    } catch (error: any) {
-      setMessage(error?.response?.data?.message || "Nao foi possivel salvar o cliente.");
+    } catch (error: unknown) {
+      const maybeAxiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      setMessage(
+        maybeAxiosError.response?.data?.message || "Nao foi possivel salvar o cliente.",
+      );
     } finally {
       setSaving(false);
     }

@@ -17,8 +17,10 @@ interface ColumnOptions {
   headerAlign?: "left" | "center" | "right";
 }
 
+type TableRow = Record<string, unknown>;
+
 interface TableProps {
-  values: any[];
+  values: TableRow[];
   hideIdColumn?: boolean;
   hasInLineEditing?: boolean;
   hasInlineExclusion?: boolean;
@@ -34,7 +36,7 @@ interface TableProps {
   disableRowSelectionOnClick?: boolean;
   headerExpanded?: boolean;
   customWidth?: boolean;
-  catchRowValues?: (row: any) => void;
+  catchRowValues?: (row: TableRow) => void;
   selectedId?: number;
   columnOptions?: Record<string, ColumnOptions>;
   idField?: string;
@@ -141,6 +143,8 @@ const resolveColType = (value: unknown): GridColDef["type"] => {
 };
 
 export default function Table(props: TableProps) {
+  const isMobile = useMediaQuery("(max-width: 600px)");
+
   if (!props.values || props.values.length === 0) {
     return (
       <Typography
@@ -158,8 +162,6 @@ export default function Table(props: TableProps) {
   }
   const chavesCorretas: string[] = Object.keys(props.values[0]);
   const allKeys = Object.values(props.values[0]);
-
-  const isMobile = useMediaQuery("(max-width: 600px)");
 
   const columns: GridColDef[] = [];
 

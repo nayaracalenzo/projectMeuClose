@@ -9,8 +9,18 @@ import { Button } from "../components/Button.tsx";
 import { useNavigate } from "react-router-dom";
 
 export default function CustomersPage() {
+  type CustomerRow = {
+    id: number;
+    "Nome do Cliente": string;
+    "CPF/CNPJ": string;
+    Contato: string;
+    Ativo: boolean;
+    Bloqueado?: string;
+    email: string;
+  };
+
   const navigate = useNavigate();
-  const [customers, setCustomers] = useState([]);
+  const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -54,7 +64,7 @@ export default function CustomersPage() {
     fetchCustomers();
   }, []);
 
-  const filteredCustomers = customers.filter((customer: any) => {
+  const filteredCustomers = customers.filter((customer) => {
     const searchLower = search.toLowerCase();
 
     const matchSearch =
@@ -190,7 +200,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedCustomers.map((customer: any) => (
+                {paginatedCustomers.map((customer) => (
                   <tr
                     key={customer.id}
                     onClick={() => catchIdFromTable(customer.id)}
@@ -238,7 +248,7 @@ export default function CustomersPage() {
           </div>
 
           <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:bg-surface-lowest  md:hidden">
-            {filteredCustomers.map((customer: any) => (
+            {filteredCustomers.map((customer) => (
               <button
                 key={customer.id}
                 type="button"
