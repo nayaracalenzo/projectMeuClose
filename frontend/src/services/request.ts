@@ -6,10 +6,13 @@ export const API = axios.create({
 
 API.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      // Remove any surrounding quotes just in case
-      config.headers.Authorization = token.replace(/^"|"$/g, "");
+    const storedToken = localStorage.getItem("token");
+    const normalizedToken = storedToken?.replace(/^"|"$/g, "").trim();
+
+    if (normalizedToken) {
+      config.headers.Authorization = normalizedToken.startsWith("Bearer ")
+        ? normalizedToken
+        : `Bearer ${normalizedToken}`;
     }
     return config;
   },
