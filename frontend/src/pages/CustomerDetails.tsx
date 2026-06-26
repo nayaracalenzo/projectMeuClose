@@ -390,7 +390,7 @@ export default function CustomerDetails() {
         formatValue: (v) => formatDate(String(v || "")),
       },
       {
-        key: "comments",
+        key: "comment",
         label: "Observações",
         editable: true,
         inputClassName: "w-[85%] h-20",
@@ -437,7 +437,7 @@ export default function CustomerDetails() {
         active: form.active,
         blocked: form.blocked,
         professionId: form.professionId,
-        comments: form.comments,
+        comment: form.comment,
       };
 
       const updated = await updateRequest(`/clients/${id}`, payload as object);

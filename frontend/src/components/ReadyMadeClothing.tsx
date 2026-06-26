@@ -62,19 +62,6 @@ export default function ReadyMadeClothing({
     updateProduct(productId, "price", formattedValue);
   };
 
-  const addProduct = () => {
-    setProducts((prev) => [
-      ...prev,
-      {
-        id: prev.length ? prev[prev.length - 1].id + 1 : 1,
-        name: "",
-        size: "",
-        quantity: "1",
-        price: "",
-      },
-    ]);
-  };
-
   const removeProduct = (productId: number) => {
     setProducts((prev) => prev.filter((product) => product.id !== productId));
   };

@@ -6,7 +6,7 @@ import { Button } from "../components/Button";
 export default function SalesPage() {
   const [loading] = useState(false);
   const navigate = useNavigate();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId] = useState<number | null>(null);
   return (
     <>
       {loading ? (
