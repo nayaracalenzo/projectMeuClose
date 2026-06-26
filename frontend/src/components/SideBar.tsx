@@ -11,7 +11,7 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
@@ -50,11 +50,6 @@ export default function Sidebar() {
   const secondaryMobileItems = navigation.filter(
     (item) => item.path !== "/home" && item.path !== "/clientes",
   );
-
-  useEffect(() => {
-    setIsQuickCreateOpen(false);
-    setIsMoreMenuOpen(false);
-  }, [location.pathname]);
 
   return (
     <>
@@ -113,14 +108,20 @@ export default function Sidebar() {
           <div className="absolute bottom-full left-1/2 mb-2 w-44 -translate-x-1/2 bg-surface-lowest p-2 shadow-(--ambient-shadow)">
             <button
               type="button"
-              onClick={() => navigate(primaryMobileItems.clients.path)}
+              onClick={() => {
+                setIsQuickCreateOpen(false);
+                navigate(primaryMobileItems.clients.path);
+              }}
               className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
             >
               Novo cliente
             </button>
             <button
               type="button"
-              onClick={() => navigate("/nova-venda")}
+              onClick={() => {
+                setIsQuickCreateOpen(false);
+                navigate("/nova-venda");
+              }}
               className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
             >
               Nova venda
@@ -134,7 +135,10 @@ export default function Sidebar() {
               <button
                 key={item.path}
                 type="button"
-                onClick={() => navigate(item.path)}
+                onClick={() => {
+                  setIsMoreMenuOpen(false);
+                  navigate(item.path);
+                }}
                 className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
               >
                 {item.title}
@@ -146,7 +150,11 @@ export default function Sidebar() {
         <div className="grid h-16 grid-cols-3 items-center px-2">
           <button
             type="button"
-            onClick={() => navigate(primaryMobileItems.home.path)}
+            onClick={() => {
+              setIsQuickCreateOpen(false);
+              setIsMoreMenuOpen(false);
+              navigate(primaryMobileItems.home.path);
+            }}
             className={`flex flex-col items-center justify-center gap-1 ${
               location.pathname === primaryMobileItems.home.path
                 ? "text-primary"

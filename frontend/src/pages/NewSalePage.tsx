@@ -442,8 +442,13 @@ export default function NewSalePage() {
       setCardClientInstallmentCount("1");
       setCardFeeAmount("");
       setStep(1);
-    } catch (error: any) {
-      setSaveMessage(error?.response?.data?.message || "Nao foi possivel salvar o pedido.");
+    } catch (error: unknown) {
+      const maybeAxiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      setSaveMessage(
+        maybeAxiosError.response?.data?.message || "Nao foi possivel salvar o pedido.",
+      );
     } finally {
       setIsSaving(false);
     }

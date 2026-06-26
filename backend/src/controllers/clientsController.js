@@ -1,3 +1,4 @@
+const { logger, serializeError } = require("../utils/logger");
 const service = require("../services/clientsService.js");
 
 async function getBirthdaysOfMonthController(req, res) {
@@ -5,6 +6,10 @@ async function getBirthdaysOfMonthController(req, res) {
     const clients = await service.getBirthdaysOfMonth(req.query);
     return res.status(200).json(clients);
   } catch (error) {
+    logger.error("clientsController.getBirthdaysOfMonthController failed", {
+      operation: "getBirthdaysOfMonthController",
+      ...serializeError(error),
+    });
     if (error.statusCode === 400) {
       return res.status(400).json({ message: error.message });
     }
@@ -21,7 +26,10 @@ async function getAllClients(_req, res) {
     const clients = await service.getAllClients();
     return res.status(200).json(clients);
   } catch (error) {
-    console.error(error);
+    logger.error("clientsController.getAllClients failed", {
+      operation: "getAllClients",
+      ...serializeError(error),
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -37,7 +45,11 @@ async function getClientById(req, res) {
 
     return res.status(200).json(client);
   } catch (error) {
-    console.error(error);
+    logger.error("clientsController.getClientById failed", {
+      operation: "getClientById",
+      clientId: req.params?.id || null,
+      ...serializeError(error),
+    });
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -53,11 +65,15 @@ async function updateClientById(req, res) {
 
     return res.status(200).json(client);
   } catch (error) {
+    logger.error("clientsController.updateClientById failed", {
+      operation: "updateClientById",
+      clientId: req.params?.id || null,
+      ...serializeError(error),
+    });
     if (error.statusCode === 400) {
       return res.status(400).json({ message: error.message });
     }
 
-    console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }
@@ -67,11 +83,14 @@ async function createClient(req, res) {
     const created = await service.createClient(req.body);
     return res.status(201).json(created);
   } catch (error) {
+    logger.error("clientsController.createClient failed", {
+      operation: "createClient",
+      ...serializeError(error),
+    });
     if (error.statusCode === 400) {
       return res.status(400).json({ message: error.message });
     }
 
-    console.error(error);
     return res.status(500).json({ message: "Internal server error" });
   }
 }

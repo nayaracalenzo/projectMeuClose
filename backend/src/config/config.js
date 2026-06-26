@@ -4,7 +4,6 @@ require('dotenv').config({
   path: path.resolve(__dirname, '../../.env')
 });
 
-console.log(process.env.DATABASE_URL)
 module.exports = {
   development: {
     use_env_variable: 'DATABASE_URL',

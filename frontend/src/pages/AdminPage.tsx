@@ -206,7 +206,10 @@ export default function AdminPage() {
     [selectedResource],
   );
 
-  const currentRows = resourceRows[selectedResource] ?? [];
+  const currentRows = useMemo(
+    () => resourceRows[selectedResource] ?? [],
+    [resourceRows, selectedResource],
+  );
 
   async function fetchResource(resource: AdminResourceKey) {
     const config = resourceConfigList.find((item) => item.key === resource)!;
@@ -387,9 +390,14 @@ export default function AdminPage() {
         await fetchRoles();
       }
       resetForm();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const maybeAxiosError = err as {
+        response?: { data?: { message?: string } };
+      };
       console.error(err);
-      setError(err?.response?.data?.message || "Nao foi possivel salvar o registro.");
+      setError(
+        maybeAxiosError.response?.data?.message || "Nao foi possivel salvar o registro.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -419,9 +427,14 @@ export default function AdminPage() {
       if (editingId === id) {
         resetForm();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const maybeAxiosError = err as {
+        response?: { data?: { message?: string } };
+      };
       console.error(err);
-      setError(err?.response?.data?.message || "Nao foi possivel remover o registro.");
+      setError(
+        maybeAxiosError.response?.data?.message || "Nao foi possivel remover o registro.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -455,7 +468,7 @@ export default function AdminPage() {
                 <td className="px-4 py-3 text-[14px] text-neutral-700">{formatPhone(row.primaryPhone)}</td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">{String(row.email ?? "-")}</td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(row.birthDate)}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{Boolean(row.active) ? "Ativa" : "Inativa"}</td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">{row.active ? "Ativa" : "Inativa"}</td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
                     <Button variant="secondary" size="sm" onClick={() => startEdit(row)}>
@@ -494,7 +507,7 @@ export default function AdminPage() {
                 <td className="px-4 py-3 text-[14px] text-neutral-700">{String(row.desc ?? "")}</td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">{String(row.financialFlow ?? "IMMEDIATE_CASH")}</td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
-                  {Boolean(row.allowsEntryAmount) ? "Entrada" : "Sem entrada"} • {Boolean(row.allowsInstallments) ? "Parcela" : "Sem parcelas"} • {Boolean(row.requiresDueDate) ? "Com vencimento" : "Sem vencimento"}
+                  {row.allowsEntryAmount ? "Entrada" : "Sem entrada"} • {row.allowsInstallments ? "Parcela" : "Sem parcelas"} • {row.requiresDueDate ? "Com vencimento" : "Sem vencimento"}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
@@ -570,7 +583,7 @@ export default function AdminPage() {
                   ID {String(row.idPaymentType ?? "")} • {String(row.financialFlow ?? "IMMEDIATE_CASH")}
                 </p>
                 <p className="mt-1 text-sm text-neutral-700">
-                  {Boolean(row.allowsEntryAmount) ? "Permite entrada" : "Sem entrada"} • {Boolean(row.allowsInstallments) ? "Permite parcelas" : "Sem parcelas"}
+                  {row.allowsEntryAmount ? "Permite entrada" : "Sem entrada"} • {row.allowsInstallments ? "Permite parcelas" : "Sem parcelas"}
                 </p>
               </>
             ) : (

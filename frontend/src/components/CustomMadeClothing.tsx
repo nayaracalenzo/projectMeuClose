@@ -32,7 +32,7 @@ interface Measurements {
   gancho: string;
 }
 
-export interface CustomMadeMeasurements extends Measurements {}
+export type CustomMadeMeasurements = Measurements;
 
 export type MeasurementField = keyof Measurements;
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getRequest, postRequest } from "../services/request";
 import { formatCurrency } from "../utils/currency";
 
@@ -78,7 +78,7 @@ export default function PayablesPage() {
   const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [referenceCode, setReferenceCode] = useState("");
 
-  const fetchRows = async () => {
+  const fetchRows = useCallback(async () => {
     try {
       setLoading(true);
       setMessage("");
@@ -90,11 +90,11 @@ export default function PayablesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter, scope]);
 
   useEffect(() => {
     fetchRows();
-  }, [scope, filter]);
+  }, [fetchRows]);
 
   useEffect(() => {
     const fetchPaymentTypes = async () => {
@@ -151,8 +151,14 @@ export default function PayablesPage() {
       setIsCreateFormOpen(false);
       setMessage("Conta a pagar criada com sucesso.");
       await fetchRows();
-    } catch (error: any) {
-      setMessage(error?.response?.data?.message || "Nao foi possivel criar a conta a pagar.");
+    } catch (error: unknown) {
+      const maybeAxiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      setMessage(
+        maybeAxiosError.response?.data?.message ||
+          "Nao foi possivel criar a conta a pagar.",
+      );
     }
   };
 
@@ -178,8 +184,14 @@ export default function PayablesPage() {
       setMessage("Pagamento registrado com sucesso.");
       setActivePayableId(null);
       await fetchRows();
-    } catch (error: any) {
-      setMessage(error?.response?.data?.message || "Nao foi possivel registrar o pagamento.");
+    } catch (error: unknown) {
+      const maybeAxiosError = error as {
+        response?: { data?: { message?: string } };
+      };
+      setMessage(
+        maybeAxiosError.response?.data?.message ||
+          "Nao foi possivel registrar o pagamento.",
+      );
     }
   };
 
