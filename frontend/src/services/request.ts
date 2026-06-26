@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getStoredToken } from "../utils/auth";
 
 export const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
@@ -6,8 +7,7 @@ export const API = axios.create({
 
 API.interceptors.request.use(
   (config) => {
-    const storedToken = localStorage.getItem("token");
-    const normalizedToken = storedToken?.replace(/^"|"$/g, "").trim();
+    const normalizedToken = getStoredToken();
 
     if (normalizedToken) {
       config.headers.Authorization = normalizedToken.startsWith("Bearer ")
