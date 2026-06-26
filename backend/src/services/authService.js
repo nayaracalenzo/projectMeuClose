@@ -28,7 +28,6 @@ async function register({ name, email, password , username, roleId, active}) {
 }
 
 async function login({ username, password }) {
-  console.log(username, password)
   const normalizedUsername = username?.trim().toLowerCase();
   const user = await repository.findUserByUsername(normalizedUsername);
 
@@ -36,7 +35,6 @@ async function login({ username, password }) {
     throw new Error("Invalid credentials");
   }
   const passwordMatch = await bcrypt.compare(password, user.password);
-  console.log(passwordMatch)
   if (!passwordMatch) {
     throw new Error("Invalid credentials");
   }

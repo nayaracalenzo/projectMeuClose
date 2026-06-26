@@ -6,3 +6,5 @@ contrato
 *.md
 *.docx
 *.txt
+logs/
+*.log
