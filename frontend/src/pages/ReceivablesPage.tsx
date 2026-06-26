@@ -79,7 +79,7 @@ export default function ReceivablesPage() {
       setRows(data);
     } catch (error) {
       console.error("Erro ao buscar contas a receber", error);
-      setMessage("Nao foi possivel carregar os recebimentos.");
+      setMessage("Não foi possível carregar os recebimentos.");
     } finally {
       setLoading(false);
     }
@@ -156,7 +156,7 @@ export default function ReceivablesPage() {
       };
       setMessage(
         maybeAxiosError.response?.data?.message ||
-          "Nao foi possivel registrar o recebimento.",
+          "Não foi possível registrar o recebimento.",
       );
     }
   };

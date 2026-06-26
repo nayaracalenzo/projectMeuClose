@@ -236,7 +236,7 @@ export default function AdminPage() {
         ]);
       } catch (err) {
         console.error(err);
-        setError("Nao foi possivel carregar os dados da administracao.");
+        setError("Não foi possível carregar os dados da administração.");
       } finally {
         setLoading(false);
       }
@@ -396,7 +396,7 @@ export default function AdminPage() {
       };
       console.error(err);
       setError(
-        maybeAxiosError.response?.data?.message || "Nao foi possivel salvar o registro.",
+        maybeAxiosError.response?.data?.message || "Não foi possível salvar o registro.",
       );
     } finally {
       setSubmitting(false);
@@ -433,7 +433,7 @@ export default function AdminPage() {
       };
       console.error(err);
       setError(
-        maybeAxiosError.response?.data?.message || "Nao foi possivel remover o registro.",
+        maybeAxiosError.response?.data?.message || "Não foi possível remover o registro.",
       );
     } finally {
       setSubmitting(false);
@@ -611,7 +611,7 @@ export default function AdminPage() {
   return (
     <div className="w-full min-h-full bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-6 flex items-center gap-3 pt-12">
-        <h1 className="text-6xl font-semibold text-primary md:text-4xl">Administracao</h1>
+        <h1 className="text-6xl font-semibold text-primary md:text-4xl">Administração</h1>
       </div>
 
       {loading ? (
@@ -731,7 +731,7 @@ export default function AdminPage() {
                             setCurrentPage((prev) => Math.min(totalPages, prev + 1))
                           }
                         >
-                          Proxima
+                          Próxima
                         </Button>
                       </div>
                     </div>

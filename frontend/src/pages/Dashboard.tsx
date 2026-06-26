@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { getRequest } from "../services/request";
-import { Button } from "../components/Button";
 import { useNavigate } from "react-router-dom";
+import { Button } from "../components/Button";
+import { getRequest } from "../services/request";
 
 interface BirthdayClient {
   id: number;
@@ -34,6 +34,7 @@ const upcomingFittings = [
 export default function Dashboard() {
   const [clients, setClients] = useState<BirthdayClient[]>([]);
   const navigate = useNavigate();
+
   useEffect(() => {
     async function fetchBirthdays() {
       const data = await getRequest("/clients/birthdays/month");
@@ -59,7 +60,7 @@ export default function Dashboard() {
   return (
     <div className="rounded-2xl p-5">
       <h1 className="mb-5 font-editorial text-4xl font-extralight leading-none tracking-tight text-primary">
-        Olá, Lia bem-vinda de volta!
+        Olá, Lia. Bem-vinda de volta!
       </h1>
       <div className="mb-8 grid min-h-0 w-full grid-rows-[12rem_minmax(0,1fr)] gap-4">
         <div className="grid h-30 w-full gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -67,9 +68,7 @@ export default function Dashboard() {
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">
               Pedidos Pendentes
             </h2>
-            <p className="font-editorial text-[2.5rem] leading-none text-primary">
-              2
-            </p>
+            <p className="font-editorial text-[2.5rem] leading-none text-primary">2</p>
           </div>
 
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
@@ -80,6 +79,7 @@ export default function Dashboard() {
               R$ 3.120
             </p>
           </div>
+
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">
               Vendas de {formattedMonth}
@@ -93,19 +93,17 @@ export default function Dashboard() {
           </div>
 
           <div className="flex h-full flex-col justify-between bg-surface-low p-5 shadow-md">
-            <h1 className="mb-3 text-lg font-semibold text-gray-700">
-              Ações Rápidas
-            </h1>
+            <h1 className="mb-3 text-lg font-semibold text-gray-700">Ações Rápidas</h1>
             <div className="grid gap-2">
-               <Button
-                                variant="primary"
-                                size="md"
-                                className="px-5"
-                                onClick={() => navigate("/nova-venda")}
-                              >
-                                + Nova Venda
-                              </Button>
-              <button className="bg-white hover:cursor-pointer rounded border] border-gray-300 px-5 py-2 text-center text-black shadow transition">
+              <Button
+                variant="primary"
+                size="md"
+                className="px-5"
+                onClick={() => navigate("/nova-venda")}
+              >
+                + Nova Venda
+              </Button>
+              <button className="rounded border border-gray-300 bg-white px-5 py-2 text-center text-black shadow transition hover:cursor-pointer">
                 Novo Cliente
               </button>
             </div>
@@ -116,7 +114,7 @@ export default function Dashboard() {
           <div className="min-h-0 bg-surface-low p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-editorial text-4xl font-semibold text-primary">
-                Proximas Provas
+                Próximas Provas
               </h2>
             </div>
 
@@ -142,7 +140,7 @@ export default function Dashboard() {
                     </span>
                     {fitting.done && (
                       <p className="mt-1 text-[10px] font-medium uppercase text-neutral-700">
-                        Concluido
+                        Concluído
                       </p>
                     )}
                   </div>
@@ -163,7 +161,7 @@ export default function Dashboard() {
 
             {clients.length === 0 ? (
               <p className="text-sm font-medium text-neutral-700">
-                Nenhum aniversariante este mes.
+                Nenhum aniversariante este mês.
               </p>
             ) : (
               <div className="flex max-h-[26rem] flex-col gap-3 overflow-auto pr-1">

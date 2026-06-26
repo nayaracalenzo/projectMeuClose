@@ -86,7 +86,7 @@ export default function PayablesPage() {
       setRows(data);
     } catch (error) {
       console.error("Erro ao buscar contas a pagar", error);
-      setMessage("Nao foi possivel carregar as contas a pagar.");
+      setMessage("Não foi possível carregar as contas a pagar.");
     } finally {
       setLoading(false);
     }
@@ -157,7 +157,7 @@ export default function PayablesPage() {
       };
       setMessage(
         maybeAxiosError.response?.data?.message ||
-          "Nao foi possivel criar a conta a pagar.",
+          "Não foi possível criar a conta a pagar.",
       );
     }
   };
@@ -190,7 +190,7 @@ export default function PayablesPage() {
       };
       setMessage(
         maybeAxiosError.response?.data?.message ||
-          "Nao foi possivel registrar o pagamento.",
+          "Não foi possível registrar o pagamento.",
       );
     }
   };
