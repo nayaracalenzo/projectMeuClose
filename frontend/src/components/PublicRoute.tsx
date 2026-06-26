@@ -1,10 +1,17 @@
 import { Navigate, Outlet } from "react-router-dom";
-import { hasAuthToken } from "../utils/auth";
+import { clearStoredToken, getStoredToken, isTokenExpired } from "../utils/auth";
 
 export default function PublicRoute() {
-  if (hasAuthToken()) {
-    return <Navigate to="/home" replace />;
+  const token = getStoredToken();
+
+  if (!token) {
+    return <Outlet />;
   }
 
-  return <Outlet />;
+  if (isTokenExpired(token)) {
+    clearStoredToken();
+    return <Outlet />;
+  }
+
+  return <Navigate to="/home" replace />;
 }

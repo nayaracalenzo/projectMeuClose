@@ -3,6 +3,7 @@ import {
   ArrowUpCircle,
   Banknote,
   Home,
+  LogOut,
   Menu,
   Package,
   Plus,
@@ -14,6 +15,7 @@ import {
 import { useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { logoutAndRedirect } from "../utils/auth";
 
 type NavItem = {
   title: string;
@@ -36,7 +38,6 @@ export default function Sidebar() {
       { title: "A Pagar", path: "/a-pagar", icon: ArrowUpCircle },
       { title: "Banco", path: "/banco", icon: Banknote },
       { title: "Caixa", path: "/caixa", icon: Wallet },
-      // { title: "Estoque", path: "/estoque", icon: Store },
       { title: "Administração", path: "/admin", icon: UserLock },
     ],
     [],
@@ -100,10 +101,21 @@ export default function Sidebar() {
               );
             })}
           </ul>
+
+          <div className="px-4 pt-4">
+            <button
+              type="button"
+              onClick={() => logoutAndRedirect("logged_out")}
+              className="flex w-full items-center gap-3 rounded px-4 py-3 text-[13px] font-medium uppercase tracking-[0.12em] text-neutral-700 transition hover:bg-surface hover:text-primary"
+            >
+              <LogOut size={16} strokeWidth={2} />
+              <span>Sair</span>
+            </button>
+          </div>
         </div>
       </aside>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/30 bg-surface-lowest backdrop-blur-3xl py-3 md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/30 bg-surface-lowest py-3 backdrop-blur-3xl md:hidden">
         {isQuickCreateOpen && (
           <div className="absolute bottom-full left-1/2 mb-2 w-44 -translate-x-1/2 bg-surface-lowest p-2 shadow-(--ambient-shadow)">
             <button
@@ -144,6 +156,16 @@ export default function Sidebar() {
                 {item.title}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setIsMoreMenuOpen(false);
+                logoutAndRedirect("logged_out");
+              }}
+              className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
+            >
+              Sair
+            </button>
           </div>
         )}
 
