@@ -1,0 +1,26 @@
+const ClothingsTypeSchema = (sequelize, DataTypes) => {
+  const ClothingsType = sequelize.define(
+    "ClothingsType",
+    {
+      id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        allowNull: false,
+        autoIncrement: true,
+      },
+      desc: {
+        type: DataTypes.STRING(50),
+        allowNull: false,
+        unique: true,
+      },
+    },
+    {
+      tableName: "clothings_type",
+      timestamps: false,
+    }
+  );
+
+  return ClothingsType;
+};
+
+module.exports = ClothingsTypeSchema;

@@ -1,0 +1,49 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js",
+    "dev": " nodemon src/index.js",
+    "db:migrate": "npx sequelize-cli db:migrate --config src/config/config.js --migrations-path src/migrations",
+    "db:seed:payment-types": "node src/scripts/importPaymentTypes.js",
+    "db:setup:payment-types": "npm run db:migrate && npm run db:seed:payment-types",
+    "db:seed:status": "node src/scripts/importStatus.js",
+    "db:setup:status": "npm run db:migrate && npm run db:seed:status",
+    "db:seed:products-types": "node src/scripts/importProductsTypes.js",
+    "db:setup:products-types": "npm run db:migrate && npm run db:seed:products-types",
+    "db:seed:clothings-type": "node src/scripts/importClothingsType.js",
+    "db:setup:clothings-type": "npm run db:migrate && npm run db:seed:clothings-type",
+    "db:seed:colors": "node src/scripts/importColors.js",
+    "db:setup:colors": "npm run db:migrate && npm run db:seed:colors",
+    "db:seed:sizes": "node src/scripts/importSizes.js",
+    "db:setup:sizes": "npm run db:migrate && npm run db:seed:sizes",
+    "db:seed:fabrics": "node src/scripts/importFabrics.js",
+    "db:setup:fabrics": "npm run db:migrate && npm run db:seed:fabrics",
+    "db:seed:roles": "node src/scripts/importRoles.js",
+    "db:setup:roles": "npm run db:migrate && npm run db:seed:roles",
+    "db:seed:employees": "node src/scripts/importEmployees.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "nodemon": "^3.1.11",
+    "sequelize-cli": "^6.6.5"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^17.2.4",
+    "express": "^5.2.1",
+    "fs": "^0.0.1-security",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.17.1",
+    "pg-hstore": "^2.3.4",
+    "sequelize": "^6.37.7"
+  }
+}

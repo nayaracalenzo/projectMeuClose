@@ -1,0 +1,8 @@
+node_modules
+contrato
+.env
+*.pdf
+*.csv
+*.md
+*.docx
+*.txt
