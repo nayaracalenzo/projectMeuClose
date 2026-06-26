@@ -64,7 +64,7 @@ const getCustomerValidationMessage = (form: NewCustomerForm) => {
   if (form.typeCustomer === "COMPANY") {
     if (!documentDigits) return "CNPJ e obrigatorio.";
     if (documentDigits.length !== 14) return "CNPJ deve conter 14 digitos.";
-    if (!form.companyName.trim()) return "Razao social e obrigatoria para pessoa juridica.";
+    if (!form.companyName.trim()) return "Razão social é obrigatória para pessoa jurídica.";
   }
 
   return null;
@@ -280,7 +280,7 @@ export default function NewCustomer() {
         response?: { data?: { message?: string } };
       };
       setMessage(
-        maybeAxiosError.response?.data?.message || "Nao foi possivel salvar o cliente.",
+        maybeAxiosError.response?.data?.message || "Não foi possível salvar o cliente.",
       );
     } finally {
       setSaving(false);

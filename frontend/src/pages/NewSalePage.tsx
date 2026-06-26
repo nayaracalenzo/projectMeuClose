@@ -447,7 +447,7 @@ export default function NewSalePage() {
         response?: { data?: { message?: string } };
       };
       setSaveMessage(
-        maybeAxiosError.response?.data?.message || "Nao foi possivel salvar o pedido.",
+        maybeAxiosError.response?.data?.message || "Não foi possível salvar o pedido.",
       );
     } finally {
       setIsSaving(false);
@@ -862,7 +862,7 @@ export default function NewSalePage() {
             </p>
             <p className="mb-3 text-sm text-neutral-700">Tipo: {selectedTypesLabel}</p>
             <p className="text-sm text-neutral-700">
-              Forma: {selectedPaymentType?.name || "Nao definida"}
+              Forma: {selectedPaymentType?.name || "Não definida"}
             </p>
             <p className="mb-3 text-sm text-neutral-700">
               Parcelas: {previewInstallmentCount}

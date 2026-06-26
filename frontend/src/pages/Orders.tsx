@@ -336,7 +336,7 @@ export default function Orders() {
           >
             <option value="TODOS">Todos</option>
             <option value="ENCOMENDA">Encomenda</option>
-            <option value="PECA PRONTA">Peca pronta</option>
+            <option value="PECA PRONTA">Peça pronta</option>
             <option value="AJUSTE">Ajuste</option>
           </select>
         </div>
@@ -352,13 +352,13 @@ export default function Orders() {
           >
             <option value="TODOS">Todos</option>
             <option value="ABERTO">Aberto</option>
-            <option value="EM PRODUCAO">Em producao</option>
+            <option value="EM PRODUCAO">Em produção</option>
             <option value="FINALIZADO">Finalizado</option>
             <option value="ENTREGUE">Entregue</option>
           </select>
         </div>
         <div className="flex-1">
-          <label className="mb-2 block text-sm font-semibold text-primary">Ordenacao</label>
+          <label className="mb-2 block text-sm font-semibold text-primary">Ordenação</label>
           <select
             value={sortBy}
             onChange={(e) => {
@@ -457,7 +457,7 @@ export default function Orders() {
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
           >
-            Proxima
+            Próxima
           </Button>
         </div>
       </div>

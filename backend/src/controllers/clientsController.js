@@ -15,7 +15,7 @@ async function getBirthdaysOfMonthController(req, res) {
     }
 
     return res.status(500).json({
-      message: "Erro ao buscar aniversariantes do mes",
+      message: "Erro ao buscar aniversariantes do mês",
       error,
     });
   }

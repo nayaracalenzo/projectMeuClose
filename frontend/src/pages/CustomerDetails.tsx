@@ -56,7 +56,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const formatType = (value: string) =>
-  value === "INDIVIDUAL" ? "Pessoa fisica" : "Pessoa juridica";
+  value === "INDIVIDUAL" ? "Pessoa física" : "Pessoa jurídica";
 
 const onlyDigits = (value?: string | null) => (value || "").replace(/\D/g, "");
 
@@ -91,18 +91,18 @@ const getClientValidationIssues = (
     issues.push({
       key: "phone",
       label: "Telefone",
-      message: "Telefone e obrigatorio.",
+      message: "Telefone é obrigatório.",
     });
   }
 
   if (typeCustomer === "INDIVIDUAL") {
     if (!documentDigits) {
-      issues.push({ key: "document", label: "CPF", message: "CPF e obrigatorio." });
+      issues.push({ key: "document", label: "CPF", message: "CPF é obrigatório." });
     } else if (documentDigits.length !== 11) {
       issues.push({
         key: "document",
         label: "CPF",
-        message: "CPF deve conter 11 digitos.",
+        message: "CPF deve conter 11 dígitos.",
       });
     }
 
@@ -110,27 +110,27 @@ const getClientValidationIssues = (
       issues.push({
         key: "fullName",
         label: "Nome",
-        message: "Nome completo e obrigatorio para pessoa fisica.",
+        message: "Nome completo é obrigatório para pessoa física.",
       });
     }
   }
 
   if (typeCustomer === "COMPANY") {
     if (!documentDigits) {
-      issues.push({ key: "document", label: "CNPJ", message: "CNPJ e obrigatorio." });
+      issues.push({ key: "document", label: "CNPJ", message: "CNPJ é obrigatório." });
     } else if (documentDigits.length !== 14) {
       issues.push({
         key: "document",
         label: "CNPJ",
-        message: "CNPJ deve conter 14 digitos.",
+        message: "CNPJ deve conter 14 dígitos.",
       });
     }
 
     if (!companyName) {
       issues.push({
         key: "companyName",
-        label: "Razao social",
-        message: "Razao social e obrigatoria para pessoa juridica.",
+        label: "Razão social",
+        message: "Razão social é obrigatória para pessoa jurídica.",
       });
     }
   }
@@ -168,7 +168,7 @@ export default function CustomerDetails() {
       } catch (err: unknown) {
         const maybeAxiosError = err as { response?: { status?: number } };
         if (maybeAxiosError.response?.status === 404) {
-          setError("Cliente nao encontrado.");
+          setError("Cliente não encontrado.");
         } else {
           setError("Erro ao carregar detalhes do cliente.");
         }
@@ -192,12 +192,12 @@ export default function CustomerDetails() {
     if (digits.length !== 8) return;
 
     try {
-      setZipLookupMessage("Buscando endereco pelo CEP...");
+      setZipLookupMessage("Buscando endereço pelo CEP...");
       const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const data = await response.json();
 
       if (data.erro) {
-        setZipLookupMessage("CEP nao encontrado.");
+        setZipLookupMessage("CEP não encontrado.");
         return;
       }
 
@@ -212,7 +212,7 @@ export default function CustomerDetails() {
       }));
       setZipLookupMessage("Endereço preenchido automaticamente.");
     } catch {
-      setZipLookupMessage("Nao foi possivel consultar o CEP.");
+      setZipLookupMessage("Não foi possível consultar o CEP.");
     }
   };
 
@@ -281,7 +281,7 @@ export default function CustomerDetails() {
       },
       {
         key: "companyName",
-        label: "Razao social",
+        label: "Razão social",
         editable: true,
         required: isCompany,
         invalid: invalidFieldKeys.has("companyName"),
@@ -330,7 +330,7 @@ export default function CustomerDetails() {
       },
       {
         key: "professionId",
-        label: "Profissao",
+        label: "Profissão",
         type: "select",
         editable: true,
         options: professionsOptions,
@@ -470,7 +470,7 @@ export default function CustomerDetails() {
     return (
       <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
         <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">Detalhe do Cliente</h1>
-        <p className="mb-4 text-neutral-700">{error || "Cliente nao encontrado."}</p>
+        <p className="mb-4 text-neutral-700">{error || "Cliente não encontrado."}</p>
         <Button variant="secondary" size="md" onClick={() => navigate("/clientes")}>Voltar para clientes</Button>
       </div>
     );
@@ -512,7 +512,7 @@ export default function CustomerDetails() {
 
       {validationIssues.length > 0 && !isEditing && (
         <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Cadastro legado com pendencias: {validationIssues.map((issue) => issue.label).join(", ")}.
+          Cadastro legado com pendências: {validationIssues.map((issue) => issue.label).join(", ")}.
         </p>
       )}
       {saveMessage && <p className="mb-4 text-sm text-neutral-700">{saveMessage}</p>}
