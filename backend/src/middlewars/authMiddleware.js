@@ -1,16 +1,17 @@
 const jwt = require("jsonwebtoken");
+const { unauthorizedError } = require("../errors/AppError");
 
-function authMiddleware(req, res, next) {
+function authMiddleware(req, _res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
-    return res.status(401).json({ message: "Authorization header not provided" });
+    return next(unauthorizedError("Authorization header not provided"));
   }
 
   const [scheme, token] = authHeader.split(" ");
 
   if (scheme !== "Bearer" || !token) {
-    return res.status(401).json({ message: "Invalid authorization format" });
+    return next(unauthorizedError("Invalid authorization format"));
   }
 
   try {
@@ -18,7 +19,7 @@ function authMiddleware(req, res, next) {
     req.user = decoded;
     return next();
   } catch (error) {
-    return res.status(401).json({ message: "Invalid or expired token" });
+    return next(unauthorizedError("Invalid or expired token"));
   }
 }
 

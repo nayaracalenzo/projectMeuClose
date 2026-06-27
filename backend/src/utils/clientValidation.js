@@ -1,9 +1,10 @@
-class ClientValidationError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "ClientValidationError";
-    this.statusCode = 400;
-  }
+const { validationError } = require("../errors/AppError");
+
+function createClientValidationError(message) {
+  return validationError(message, {
+    name: "ClientValidationError",
+    code: "CLIENT_VALIDATION_ERROR",
+  });
 }
 
 function normalizeText(value) {
@@ -67,8 +68,8 @@ function getClientValidationIssues(payload) {
   if (!payload.document) {
     issues.push(
       payload.typeCustomer === "COMPANY"
-        ? "CNPJ é obrigatório."
-        : "CPF é obrigatório."
+        ? "CNPJ e obrigatorio."
+        : "CPF e obrigatorio.",
     );
   } else if (payload.typeCustomer === "INDIVIDUAL" && payload.document.length !== 11) {
     issues.push("CPF deve conter 11 digitos.");
@@ -91,12 +92,12 @@ function validateClientPayload(payload) {
   const issues = getClientValidationIssues(payload);
 
   if (issues.length) {
-    throw new ClientValidationError(issues[0]);
+    throw createClientValidationError(issues[0]);
   }
 }
 
 module.exports = {
-  ClientValidationError,
+  createClientValidationError,
   getClientValidationIssues,
   normalizeClientInput,
   validateClientPayload,

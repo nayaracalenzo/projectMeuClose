@@ -1,18 +1,20 @@
+const { notFoundError, validationError } = require("../errors/AppError");
 const repository = require("../repositories/receivablesRepository");
 
-class ReceivablesValidationError extends Error {
-  constructor(message, statusCode = 400) {
-    super(message);
-    this.name = "ReceivablesValidationError";
-    this.statusCode = statusCode;
-  }
+function createReceivablesValidationError(message, statusCode = 400) {
+  const error = validationError(message, {
+    name: "ReceivablesValidationError",
+    code: "RECEIVABLES_VALIDATION_ERROR",
+  });
+  error.statusCode = statusCode;
+  return error;
 }
 
 function normalizeAmount(value, fieldName) {
   const normalized = Number(value);
 
   if (!Number.isFinite(normalized) || normalized <= 0) {
-    throw new ReceivablesValidationError(`${fieldName} invalido.`);
+    throw createReceivablesValidationError(`${fieldName} invalido.`);
   }
 
   return normalized;
@@ -20,7 +22,7 @@ function normalizeAmount(value, fieldName) {
 
 function normalizeDate(value, fieldName) {
   if (!value) {
-    throw new ReceivablesValidationError(`${fieldName} obrigatoria.`);
+    throw createReceivablesValidationError(`${fieldName} obrigatoria.`);
   }
 
   const raw = String(value).trim();
@@ -28,7 +30,7 @@ function normalizeDate(value, fieldName) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
 
   if (!match) {
-    throw new ReceivablesValidationError(`${fieldName} invalida.`);
+    throw createReceivablesValidationError(`${fieldName} invalida.`);
   }
 
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
@@ -67,7 +69,7 @@ async function listInstallments({ status, customerId }) {
         item.status,
         item.dueDate,
         item.paidAmount,
-        item.amount
+        item.amount,
       );
       const openBalance = Math.max(0, Number(item.amount) - Number(item.paidAmount));
 
@@ -80,7 +82,7 @@ async function listInstallments({ status, customerId }) {
         operatorLabel,
         customerName,
         parcela: `${String(item.installmentNumber).padStart(3, "0")}/${String(
-          item.totalInstallments
+          item.totalInstallments,
         ).padStart(3, "0")}`,
         installmentNumber: item.installmentNumber,
         totalInstallments: item.totalInstallments,
@@ -110,12 +112,12 @@ async function registerReceipt(installmentId, body = {}) {
   const normalizedInstallmentId = Number(installmentId);
 
   if (!Number.isInteger(normalizedInstallmentId) || normalizedInstallmentId <= 0) {
-    throw new ReceivablesValidationError("Parcela invalida.");
+    throw createReceivablesValidationError("Parcela invalida.");
   }
 
   const paymentTypeId = Number(body.paymentTypeId);
   if (!Number.isInteger(paymentTypeId) || paymentTypeId <= 0) {
-    throw new ReceivablesValidationError("Forma de pagamento invalida.");
+    throw createReceivablesValidationError("Forma de pagamento invalida.");
   }
 
   const created = await repository.registerReceipt(normalizedInstallmentId, {
@@ -126,7 +128,7 @@ async function registerReceipt(installmentId, body = {}) {
   });
 
   if (created === undefined) {
-    throw new ReceivablesValidationError("Parcela nao encontrada.", 404);
+    throw notFoundError("Parcela nao encontrada.");
   }
 
   return {
@@ -136,7 +138,7 @@ async function registerReceipt(installmentId, body = {}) {
 }
 
 module.exports = {
-  ReceivablesValidationError,
+  createReceivablesValidationError,
   listInstallments,
   registerReceipt,
 };

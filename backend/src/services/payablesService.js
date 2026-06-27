@@ -1,30 +1,32 @@
+const { notFoundError, validationError } = require("../errors/AppError");
 const repository = require("../repositories/payablesRepository");
 
-class PayablesValidationError extends Error {
-  constructor(message, statusCode = 400) {
-    super(message);
-    this.name = "PayablesValidationError";
-    this.statusCode = statusCode;
-  }
+function createPayablesValidationError(message, statusCode = 400) {
+  const error = validationError(message, {
+    name: "PayablesValidationError",
+    code: "PAYABLES_VALIDATION_ERROR",
+  });
+  error.statusCode = statusCode;
+  return error;
 }
 
 function normalizeAmount(value, fieldName) {
   const normalized = Number(value);
   if (!Number.isFinite(normalized) || normalized <= 0) {
-    throw new PayablesValidationError(`${fieldName} invalido.`);
+    throw createPayablesValidationError(`${fieldName} invalido.`);
   }
   return normalized;
 }
 
 function normalizeDate(value, fieldName) {
   if (!value) {
-    throw new PayablesValidationError(`${fieldName} obrigatoria.`);
+    throw createPayablesValidationError(`${fieldName} obrigatoria.`);
   }
 
   const base = String(value).trim().split("T")[0];
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
   if (!match) {
-    throw new PayablesValidationError(`${fieldName} invalida.`);
+    throw createPayablesValidationError(`${fieldName} invalida.`);
   }
 
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
@@ -83,12 +85,12 @@ async function listPayables({ status, scope }) {
 async function createPayable(body = {}) {
   const scope = String(body.scope || "").trim();
   if (scope !== "LOJA" && scope !== "PESSOAL") {
-    throw new PayablesValidationError("Escopo invalido.");
+    throw createPayablesValidationError("Escopo invalido.");
   }
 
   const settlementTarget = String(body.settlementTarget || "").trim();
   if (settlementTarget !== "BANCO" && settlementTarget !== "CAIXA") {
-    throw new PayablesValidationError("Destino previsto invalido.");
+    throw createPayablesValidationError("Destino previsto invalido.");
   }
 
   const description = String(body.description || "").trim();
@@ -96,7 +98,7 @@ async function createPayable(body = {}) {
   const beneficiary = String(body.beneficiary || "").trim();
 
   if (!description || !category || !beneficiary) {
-    throw new PayablesValidationError("Descricao, categoria e favorecido sao obrigatorios.");
+    throw createPayablesValidationError("Descricao, categoria e favorecido sao obrigatorios.");
   }
 
   const amount = normalizeAmount(body.amount, "Valor");
@@ -124,12 +126,12 @@ async function createPayable(body = {}) {
 async function registerPayment(payableId, body = {}) {
   const normalizedPayableId = Number(payableId);
   if (!Number.isInteger(normalizedPayableId) || normalizedPayableId <= 0) {
-    throw new PayablesValidationError("Conta a pagar invalida.");
+    throw createPayablesValidationError("Conta a pagar invalida.");
   }
 
   const paymentTypeId = Number(body.paymentTypeId);
   if (!Number.isInteger(paymentTypeId) || paymentTypeId <= 0) {
-    throw new PayablesValidationError("Forma de pagamento invalida.");
+    throw createPayablesValidationError("Forma de pagamento invalida.");
   }
 
   const created = await repository.registerPayment(normalizedPayableId, {
@@ -140,7 +142,7 @@ async function registerPayment(payableId, body = {}) {
   });
 
   if (created === undefined) {
-    throw new PayablesValidationError("Conta a pagar nao encontrada.", 404);
+    throw notFoundError("Conta a pagar nao encontrada.");
   }
 
   return {
@@ -150,7 +152,7 @@ async function registerPayment(payableId, body = {}) {
 }
 
 module.exports = {
-  PayablesValidationError,
+  createPayablesValidationError,
   listPayables,
   createPayable,
   registerPayment,
