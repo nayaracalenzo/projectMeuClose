@@ -10,27 +10,6 @@ interface BirthdayClient {
   source: "customer" | "employee";
 }
 
-const upcomingFittings = [
-  {
-    customer: "Isabella Almeida",
-    description: "Vestido de Seda - 1a Prova",
-    time: "14:30",
-    done: false,
-  },
-  {
-    customer: "Mariana Costa",
-    description: "Terno em Linho - Prova Final",
-    time: "16:00",
-    done: false,
-  },
-  {
-    customer: "Camila Ferraz",
-    description: "Blazer Estruturado - Entrega",
-    time: "09:00",
-    done: true,
-  },
-];
-
 export default function Dashboard() {
   const [clients, setClients] = useState<BirthdayClient[]>([]);
   const navigate = useNavigate();
@@ -49,7 +28,6 @@ export default function Dashboard() {
   });
 
   const formattedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-  const monthlySalesSummary = "R$ 0,00";
   const getBirthDay = (birthDate?: string) => {
     const base = String(birthDate || "").slice(0, 10);
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
@@ -68,15 +46,19 @@ export default function Dashboard() {
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">
               Pedidos Pendentes
             </h2>
-            <p className="font-editorial text-[2.5rem] leading-none text-primary">2</p>
+            <p className="font-editorial text-[2.5rem] leading-none text-primary">-</p>
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
+              Em integração
+            </p>
           </div>
 
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">
               Contas a Pagar
             </h2>
-            <p className="font-editorial text-[2rem] leading-none text-primary">
-              R$ 3.120
+            <p className="font-editorial text-[2rem] leading-none text-primary">-</p>
+            <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
+              Em integração
             </p>
           </div>
 
@@ -84,16 +66,14 @@ export default function Dashboard() {
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">
               Vendas de {formattedMonth}
             </h2>
-            <p className="font-editorial text-[2.5rem] leading-none text-primary">
-              {monthlySalesSummary}
-            </p>
+            <p className="font-editorial text-[2.5rem] leading-none text-primary">-</p>
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
-              Resumo mensal
+              Em integração
             </p>
           </div>
 
           <div className="flex h-full flex-col justify-between bg-surface-low p-5 shadow-md">
-            <h1 className="mb-3 text-lg font-semibold text-gray-700">Ações Rápidas</h1>
+            <h2 className="mb-3 text-lg font-semibold text-gray-700">Ações Rápidas</h2>
             <div className="grid gap-2">
               <Button
                 variant="primary"
@@ -103,7 +83,11 @@ export default function Dashboard() {
               >
                 + Nova Venda
               </Button>
-              <button className="rounded border border-gray-300 bg-white px-5 py-2 text-center text-black shadow transition hover:cursor-pointer">
+              <button
+                type="button"
+                onClick={() => navigate("/novo-cliente")}
+                className="rounded border border-gray-300 bg-white px-5 py-2 text-center text-black shadow transition hover:cursor-pointer"
+              >
                 Novo Cliente
               </button>
             </div>
@@ -118,34 +102,8 @@ export default function Dashboard() {
               </h2>
             </div>
 
-            <div className="space-y-2">
-              {upcomingFittings.map((fitting) => (
-                <article
-                  key={`${fitting.customer}-${fitting.time}`}
-                  className={`flex items-start justify-between bg-surface-lowest px-4 py-4 ${
-                    fitting.done ? "opacity-60" : ""
-                  }`}
-                >
-                  <div className="border-l-2 border-secondary pl-4">
-                    <h3 className="text-base font-semibold text-primary">
-                      {fitting.customer}
-                    </h3>
-                    <p className="mt-1 text-sm text-neutral-700">
-                      {fitting.description}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span className="inline-block bg-surface px-2 py-1 text-xs text-primary">
-                      {fitting.time}
-                    </span>
-                    {fitting.done && (
-                      <p className="mt-1 text-[10px] font-medium uppercase text-neutral-700">
-                        Concluído
-                      </p>
-                    )}
-                  </div>
-                </article>
-              ))}
+            <div className="bg-surface-lowest px-4 py-6 text-sm text-neutral-700">
+              Nenhuma prova cadastrada no dashboard.
             </div>
           </div>
 
