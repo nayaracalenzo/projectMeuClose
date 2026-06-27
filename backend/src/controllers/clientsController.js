@@ -1,97 +1,60 @@
-const { logger, serializeError } = require("../utils/logger");
+const { notFoundError } = require("../errors/AppError");
 const service = require("../services/clientsService.js");
 
-async function getBirthdaysOfMonthController(req, res) {
+async function getBirthdaysOfMonthController(req, res, next) {
   try {
     const clients = await service.getBirthdaysOfMonth(req.query);
     return res.status(200).json(clients);
   } catch (error) {
-    logger.error("clientsController.getBirthdaysOfMonthController failed", {
-      operation: "getBirthdaysOfMonthController",
-      ...serializeError(error),
-    });
-    if (error.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
-    }
-
-    return res.status(500).json({
-      message: "Erro ao buscar aniversariantes do mês",
-      error,
-    });
+    return next(error);
   }
 }
 
-async function getAllClients(_req, res) {
+async function getAllClients(_req, res, next) {
   try {
     const clients = await service.getAllClients();
     return res.status(200).json(clients);
   } catch (error) {
-    logger.error("clientsController.getAllClients failed", {
-      operation: "getAllClients",
-      ...serializeError(error),
-    });
-    return res.status(500).json({ message: "Internal server error" });
+    return next(error);
   }
 }
 
-async function getClientById(req, res) {
+async function getClientById(req, res, next) {
   try {
     const { id } = req.params;
     const client = await service.getClientById(id);
 
     if (!client) {
-      return res.status(404).json({ message: "Cliente não encontrado" });
+      throw notFoundError("Cliente nao encontrado");
     }
 
     return res.status(200).json(client);
   } catch (error) {
-    logger.error("clientsController.getClientById failed", {
-      operation: "getClientById",
-      clientId: req.params?.id || null,
-      ...serializeError(error),
-    });
-    return res.status(500).json({ message: "Internal server error" });
+    return next(error);
   }
 }
 
-async function updateClientById(req, res) {
+async function updateClientById(req, res, next) {
   try {
     const { id } = req.params;
     const client = await service.updateClientById(id, req.body);
 
     if (!client) {
-      return res.status(404).json({ message: "Cliente não encontrado" });
+      throw notFoundError("Cliente nao encontrado");
     }
 
     return res.status(200).json(client);
   } catch (error) {
-    logger.error("clientsController.updateClientById failed", {
-      operation: "updateClientById",
-      clientId: req.params?.id || null,
-      ...serializeError(error),
-    });
-    if (error.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
-    }
-
-    return res.status(500).json({ message: "Internal server error" });
+    return next(error);
   }
 }
 
-async function createClient(req, res) {
+async function createClient(req, res, next) {
   try {
     const created = await service.createClient(req.body);
     return res.status(201).json(created);
   } catch (error) {
-    logger.error("clientsController.createClient failed", {
-      operation: "createClient",
-      ...serializeError(error),
-    });
-    if (error.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
-    }
-
-    return res.status(500).json({ message: "Internal server error" });
+    return next(error);
   }
 }
 

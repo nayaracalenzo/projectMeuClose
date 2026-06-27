@@ -1,3 +1,4 @@
+const { notFoundError, validationError } = require("../errors/AppError");
 const repository = require("../repositories/adminRepository");
 const { getAdminResourceConfig } = require("../utils/adminResourceConfig");
 const {
@@ -5,12 +6,12 @@ const {
   normalizeAllowedEntryPaymentKinds,
 } = require("../utils/paymentTypeRules");
 
-class AdminResourceError extends Error {
-  constructor(message, statusCode = 400) {
-    super(message);
-    this.name = "AdminResourceError";
-    this.statusCode = statusCode;
-  }
+function createAdminResourceError(message, statusCode = 400) {
+  return validationError(message, {
+    name: "AdminResourceError",
+    code: "ADMIN_RESOURCE_ERROR",
+    statusCode,
+  });
 }
 
 function normalizeText(value) {
@@ -45,7 +46,7 @@ function normalizeDate(value) {
 function sanitizePayload(resource, body = {}) {
   const config = getAdminResourceConfig(resource);
   if (!config) {
-    throw new AdminResourceError("Recurso administrativo invalido.", 404);
+    throw notFoundError("Recurso administrativo invalido.");
   }
 
   const payload = {};
@@ -104,23 +105,23 @@ function sanitizePayload(resource, body = {}) {
 function validatePayload(resource, payload, isCreate) {
   if (resource === "payment-types") {
     if (isCreate && !payload.desc) {
-      throw new AdminResourceError("Descricao e obrigatoria.");
+      throw createAdminResourceError("Descricao e obrigatoria.");
     }
 
     if (isCreate && !payload.kind) {
-      throw new AdminResourceError("Tipo da forma de pagamento e obrigatorio.");
+      throw createAdminResourceError("Tipo da forma de pagamento e obrigatorio.");
     }
 
     const allowedKinds = ["CASH", "CHECK", "BOOKLET", "INVOICE", "CARD"];
     if (payload.kind && !allowedKinds.includes(payload.kind)) {
-      throw new AdminResourceError("Tipo da forma de pagamento invalido.");
+      throw createAdminResourceError("Tipo da forma de pagamento invalido.");
     }
 
     payload.financialFlow = payload.financialFlow || inferFinancialFlowFromKind(payload.kind);
 
     const allowedFlows = ["IMMEDIATE_CASH", "FUTURE_CUSTOMER", "FUTURE_OPERATOR"];
     if (payload.financialFlow && !allowedFlows.includes(payload.financialFlow)) {
-      throw new AdminResourceError("Fluxo financeiro invalido.");
+      throw createAdminResourceError("Fluxo financeiro invalido.");
     }
 
     if (payload.defaultInstallments === null || payload.defaultInstallments === undefined) {
@@ -128,12 +129,12 @@ function validatePayload(resource, payload, isCreate) {
     }
 
     if (!Number.isInteger(payload.defaultInstallments) || payload.defaultInstallments <= 0) {
-      throw new AdminResourceError("Quantidade padrao de parcelas invalida.");
+      throw createAdminResourceError("Quantidade padrao de parcelas invalida.");
     }
 
     if (payload.maxInstallments !== null && payload.maxInstallments !== undefined) {
       if (!Number.isInteger(payload.maxInstallments) || payload.maxInstallments <= 0) {
-        throw new AdminResourceError("Maximo de parcelas invalido.");
+        throw createAdminResourceError("Maximo de parcelas invalido.");
       }
     }
 
@@ -141,7 +142,9 @@ function validatePayload(resource, payload, isCreate) {
       payload.maxInstallments = payload.maxInstallments || payload.defaultInstallments;
 
       if (payload.defaultInstallments > payload.maxInstallments) {
-        throw new AdminResourceError("Quantidade padrao nao pode ser maior que o maximo de parcelas.");
+        throw createAdminResourceError(
+          "Quantidade padrao nao pode ser maior que o maximo de parcelas.",
+        );
       }
     } else {
       payload.maxInstallments = 1;
@@ -161,18 +164,18 @@ function validatePayload(resource, payload, isCreate) {
 
   if (resource === "employees") {
     if (isCreate && !payload.fullName) {
-      throw new AdminResourceError("Nome da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Nome da funcionaria e obrigatorio.");
     }
 
     if (isCreate && !payload.shortName) {
-      throw new AdminResourceError("Nome curto da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Nome curto da funcionaria e obrigatorio.");
     }
 
     if (isCreate && !payload.roleId) {
-      throw new AdminResourceError("Cargo da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Cargo da funcionaria e obrigatorio.");
     }
   } else if (isCreate && !payload.desc) {
-    throw new AdminResourceError("Descricao e obrigatoria.");
+    throw createAdminResourceError("Descricao e obrigatoria.");
   }
 }
 
@@ -180,7 +183,7 @@ async function listResource(resource) {
   const records = await repository.listResource(resource);
 
   if (records === null) {
-    throw new AdminResourceError("Recurso administrativo invalido.", 404);
+    throw notFoundError("Recurso administrativo invalido.");
   }
 
   return records;
@@ -192,7 +195,7 @@ async function createResource(resource, body) {
 
   const created = await repository.createResource(resource, payload);
   if (created === null) {
-    throw new AdminResourceError("Recurso administrativo invalido.", 404);
+    throw notFoundError("Recurso administrativo invalido.");
   }
 
   return created;
@@ -205,11 +208,11 @@ async function updateResource(resource, id, body) {
   const updated = await repository.updateResource(resource, id, payload);
 
   if (updated === null) {
-    throw new AdminResourceError("Recurso administrativo invalido.", 404);
+    throw notFoundError("Recurso administrativo invalido.");
   }
 
   if (updated === undefined) {
-    throw new AdminResourceError("Registro nao encontrado.", 404);
+    throw notFoundError("Registro nao encontrado.");
   }
 
   return updated;
@@ -219,18 +222,18 @@ async function deleteResource(resource, id) {
   const removed = await repository.deleteResource(resource, id);
 
   if (removed === null) {
-    throw new AdminResourceError("Recurso administrativo invalido.", 404);
+    throw notFoundError("Recurso administrativo invalido.");
   }
 
   if (removed === undefined) {
-    throw new AdminResourceError("Registro nao encontrado.", 404);
+    throw notFoundError("Registro nao encontrado.");
   }
 
   return true;
 }
 
 module.exports = {
-  AdminResourceError,
+  createAdminResourceError,
   listResource,
   createResource,
   updateResource,

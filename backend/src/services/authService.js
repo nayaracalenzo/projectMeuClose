@@ -1,12 +1,13 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { conflictError, unauthorizedError } = require("../errors/AppError");
 const repository = require("../repositories/usersRepository");
 
-async function register({ name, email, password , username, roleId, active}) {
+async function register({ name, email, password, username, roleId, active }) {
   const userExists = await repository.findUserByEmail(email);
 
   if (userExists) {
-    throw new Error("User already exists");
+    throw conflictError("User already exists");
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -32,11 +33,13 @@ async function login({ username, password }) {
   const user = await repository.findUserByUsername(normalizedUsername);
 
   if (!user) {
-    throw new Error("Invalid credentials");
+    throw unauthorizedError("Invalid credentials");
   }
+
   const passwordMatch = await bcrypt.compare(password, user.password);
+
   if (!passwordMatch) {
-    throw new Error("Invalid credentials");
+    throw unauthorizedError("Invalid credentials");
   }
 
   const token = jwt.sign(
@@ -46,8 +49,9 @@ async function login({ username, password }) {
       username: user.username,
     },
     process.env.JWT_SECRET,
-    { expiresIn: "1d" }
+    { expiresIn: "1d" },
   );
+
   return {
     user: {
       id: user.idUser,

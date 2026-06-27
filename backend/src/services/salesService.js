@@ -1,3 +1,4 @@
+const { validationError } = require("../errors/AppError");
 const repository = require("../repositories/salesRepository");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const {
@@ -27,12 +28,13 @@ const MEASUREMENT_FIELDS = [
   "gancho",
 ];
 
-class SalesValidationError extends Error {
-  constructor(message, statusCode = 400) {
-    super(message);
-    this.name = "SalesValidationError";
-    this.statusCode = statusCode;
-  }
+function createSalesValidationError(message, statusCode = 400) {
+  const error = validationError(message, {
+    name: "SalesValidationError",
+    code: "SALES_VALIDATION_ERROR",
+  });
+  error.statusCode = statusCode;
+  return error;
 }
 
 function normalizeDecimal(value, fieldName) {
@@ -41,7 +43,7 @@ function normalizeDecimal(value, fieldName) {
   const normalized = Number(String(value).replace(",", "."));
 
   if (!Number.isFinite(normalized)) {
-    throw new SalesValidationError(`${fieldName} invalido.`);
+    throw createSalesValidationError(`${fieldName} invalido.`);
   }
 
   return normalized;
@@ -51,7 +53,7 @@ function normalizeInteger(value, fieldName) {
   const normalized = Number(value);
 
   if (!Number.isInteger(normalized) || normalized <= 0) {
-    throw new SalesValidationError(`${fieldName} invalido.`);
+    throw createSalesValidationError(`${fieldName} invalido.`);
   }
 
   return normalized;
@@ -65,13 +67,13 @@ function normalizeDate(value, fieldName) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
 
   if (!match) {
-    throw new SalesValidationError(`${fieldName} invalida.`);
+    throw createSalesValidationError(`${fieldName} invalida.`);
   }
 
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
 
   if (Number.isNaN(date.getTime())) {
-    throw new SalesValidationError(`${fieldName} invalida.`);
+    throw createSalesValidationError(`${fieldName} invalida.`);
   }
 
   return date;
@@ -85,7 +87,7 @@ function addMonths(baseDate, monthsToAdd) {
     0,
     0,
     0,
-    0
+    0,
   );
 }
 
@@ -139,13 +141,13 @@ function normalizeSaleItem(item = {}) {
   const itemType = String(item.itemType || "").trim();
 
   if (itemType !== "READY_MADE" && itemType !== "CUSTOM_MADE") {
-    throw new SalesValidationError("Tipo de item invalido.");
+    throw createSalesValidationError("Tipo de item invalido.");
   }
 
   const description = String(item.description || "").trim();
 
   if (!description) {
-    throw new SalesValidationError("Descricao do item e obrigatoria.");
+    throw createSalesValidationError("Descricao do item e obrigatoria.");
   }
 
   const quantity = normalizeInteger(item.quantity ?? 1, "Quantidade do item");
@@ -153,7 +155,7 @@ function normalizeSaleItem(item = {}) {
   const subtotal = normalizeDecimal(item.subtotal, "Subtotal do item");
 
   if (unitPrice === null || subtotal === null) {
-    throw new SalesValidationError("Valores do item sao obrigatorios.");
+    throw createSalesValidationError("Valores do item sao obrigatorios.");
   }
 
   return {
@@ -177,7 +179,7 @@ async function getRequiredPaymentType(idPaymentType, fieldName) {
   const paymentType = await paymentTypesRepository.getPaymentTypeById(normalizedId);
 
   if (!paymentType || !paymentType.active) {
-    throw new SalesValidationError(`${fieldName} invalida.`);
+    throw createSalesValidationError(`${fieldName} invalida.`);
   }
 
   return buildPaymentTypeResponse(paymentType);
@@ -185,25 +187,25 @@ async function getRequiredPaymentType(idPaymentType, fieldName) {
 
 function validateInstallmentCount(paymentType, installmentCount) {
   if (!paymentType.allowsInstallments && installmentCount > 1) {
-    throw new SalesValidationError("A forma de pagamento selecionada nao permite parcelamento.");
+    throw createSalesValidationError("A forma de pagamento selecionada nao permite parcelamento.");
   }
 
   if (paymentType.maxInstallments && installmentCount > paymentType.maxInstallments) {
-    throw new SalesValidationError("Quantidade de parcelas acima do limite permitido.");
+    throw createSalesValidationError("Quantidade de parcelas acima do limite permitido.");
   }
 }
 
 function validateEntryPaymentType(mainPaymentType, entryPaymentType) {
   if (!mainPaymentType.allowsEntryAmount) {
-    throw new SalesValidationError("A forma de pagamento selecionada nao permite entrada.");
+    throw createSalesValidationError("A forma de pagamento selecionada nao permite entrada.");
   }
 
   if (!mainPaymentType.allowedEntryPaymentKinds.includes(entryPaymentType.kind)) {
-    throw new SalesValidationError("Forma de pagamento da entrada invalida.");
+    throw createSalesValidationError("Forma de pagamento da entrada invalida.");
   }
 
   if (!isImmediateEntryPaymentType(entryPaymentType)) {
-    throw new SalesValidationError("A entrada so pode ser recebida em Dinheiro ou Cheque Dia.");
+    throw createSalesValidationError("A entrada so pode ser recebida em Dinheiro ou Cheque Dia.");
   }
 }
 
@@ -220,7 +222,8 @@ function buildReceivablePayload({
     return null;
   }
 
-  const debtorType = mainPaymentType.financialFlow === "FUTURE_OPERATOR" ? "CARD_OPERATOR" : "CUSTOMER";
+  const debtorType =
+    mainPaymentType.financialFlow === "FUTURE_OPERATOR" ? "CARD_OPERATOR" : "CUSTOMER";
   const effectiveDueDate = dueDate || cardData.expectedSettlementDate || new Date();
   const effectiveInstallmentCount = mainPaymentType.allowsInstallments ? installmentCount : 1;
 
@@ -233,7 +236,7 @@ function buildReceivablePayload({
       remainingAmount,
       effectiveInstallmentCount,
       paymentTypeId,
-      effectiveDueDate
+      effectiveDueDate,
     ),
     cardTransaction:
       debtorType === "CARD_OPERATOR"
@@ -258,14 +261,14 @@ async function createSale(body = {}) {
   const items = Array.isArray(body.items) ? body.items.map(normalizeSaleItem) : [];
 
   if (!items.length) {
-    throw new SalesValidationError("Adicione ao menos um item na venda.");
+    throw createSalesValidationError("Adicione ao menos um item na venda.");
   }
 
   const totalAmount = normalizeDecimal(body.totalAmount, "Valor total");
   const finalAmount = normalizeDecimal(body.finalAmount, "Valor final");
 
   if (totalAmount === null || finalAmount === null) {
-    throw new SalesValidationError("Valores totais sao obrigatorios.");
+    throw createSalesValidationError("Valores totais sao obrigatorios.");
   }
 
   const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
@@ -278,11 +281,11 @@ async function createSale(body = {}) {
 
   const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
   if (mainPaymentType.requiresDueDate && !dueDate) {
-    throw new SalesValidationError("Data de vencimento e obrigatoria.");
+    throw createSalesValidationError("Data de vencimento e obrigatoria.");
   }
 
   if (!mainPaymentType.requiresDueDate && !isCardPaymentType(mainPaymentType) && dueDate) {
-    throw new SalesValidationError("A forma de pagamento selecionada nao utiliza vencimento futuro.");
+    throw createSalesValidationError("A forma de pagamento selecionada nao utiliza vencimento futuro.");
   }
 
   const entryAmount =
@@ -294,11 +297,14 @@ async function createSale(body = {}) {
   let entryPaymentType = null;
 
   if (entryAmount !== null && entryAmount > 0) {
-    entryPaymentType = await getRequiredPaymentType(body.entryPaymentTypeId, "Forma de pagamento da entrada");
+    entryPaymentType = await getRequiredPaymentType(
+      body.entryPaymentTypeId,
+      "Forma de pagamento da entrada",
+    );
     validateEntryPaymentType(mainPaymentType, entryPaymentType);
 
     if (entryAmount >= finalAmount) {
-      throw new SalesValidationError("O valor da entrada deve ser menor que o valor final.");
+      throw createSalesValidationError("O valor da entrada deve ser menor que o valor final.");
     }
 
     entryReceipt = {
@@ -308,7 +314,7 @@ async function createSale(body = {}) {
       referenceCode: body.entryReferenceCode ? String(body.entryReferenceCode).trim() : null,
     };
   } else if (body.entryPaymentTypeId || body.entryPaidAt || body.entryReferenceCode) {
-    throw new SalesValidationError("Informe um valor de entrada valido para registrar a entrada.");
+    throw createSalesValidationError("Informe um valor de entrada valido para registrar a entrada.");
   }
 
   if (!entryReceipt && mainPaymentType.financialFlow === "IMMEDIATE_CASH") {
@@ -338,7 +344,7 @@ async function createSale(body = {}) {
       : normalizeDecimal(body.cardFeeAmount, "Taxa do cartao");
 
   if (cardFeeAmount !== null && cardFeeAmount < 0) {
-    throw new SalesValidationError("Taxa do cartao invalida.");
+    throw createSalesValidationError("Taxa do cartao invalida.");
   }
 
   const cardData = {
@@ -354,7 +360,7 @@ async function createSale(body = {}) {
   };
 
   if (mainPaymentType.financialFlow === "FUTURE_OPERATOR" && !cardData.expectedSettlementDate) {
-    throw new SalesValidationError("Data prevista de repasse e obrigatoria para cartao.");
+    throw createSalesValidationError("Data prevista de repasse e obrigatoria para cartao.");
   }
 
   const receivable = buildReceivablePayload({
@@ -421,6 +427,6 @@ async function createSale(body = {}) {
 
 module.exports = {
   MEASUREMENT_FIELDS,
-  SalesValidationError,
+  createSalesValidationError,
   createSale,
 };

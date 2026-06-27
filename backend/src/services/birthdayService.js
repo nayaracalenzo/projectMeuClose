@@ -1,3 +1,5 @@
+const { validationError } = require("../errors/AppError");
+
 function parseBirthdayFilters(query = {}) {
   const now = new Date();
   const parsedMonth =
@@ -8,18 +10,14 @@ function parseBirthdayFilters(query = {}) {
     query.year == null || query.year === "" ? null : Number(query.year);
 
   if (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
-    const error = new Error("Mes invalido. Informe um valor entre 1 e 12.");
-    error.statusCode = 400;
-    throw error;
+    throw validationError("Mes invalido. Informe um valor entre 1 e 12.");
   }
 
   if (
     parsedYear != null &&
     (!Number.isInteger(parsedYear) || parsedYear < 1 || parsedYear > 9999)
   ) {
-    const error = new Error("Ano invalido. Informe um ano valido.");
-    error.statusCode = 400;
-    throw error;
+    throw validationError("Ano invalido. Informe um ano valido.");
   }
 
   return {
