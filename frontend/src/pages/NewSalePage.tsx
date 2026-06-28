@@ -12,6 +12,7 @@ import ReadyMadeClothing, {
 import { SaleStepper } from "../components/SaleStepper";
 import type { ICustomer } from "../interfaces/ICustomer";
 import { getRequest, postRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { parseCurrencyToNumber } from "../utils/currency";
 import { formatDocument } from "../utils/formatDocument";
 
@@ -443,12 +444,7 @@ export default function NewSalePage() {
       setCardFeeAmount("");
       setStep(1);
     } catch (error: unknown) {
-      const maybeAxiosError = error as {
-        response?: { data?: { message?: string } };
-      };
-      setSaveMessage(
-        maybeAxiosError.response?.data?.message || "Não foi possível salvar o pedido.",
-      );
+      setSaveMessage(getUserFacingApiErrorMessage(error, "Não foi possível salvar o pedido."));
     } finally {
       setIsSaving(false);
     }

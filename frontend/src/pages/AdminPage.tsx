@@ -9,6 +9,7 @@ import {
   postRequest,
   updateRequest,
 } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 
 type AdminResourceKey =
   | "employees"
@@ -391,13 +392,8 @@ export default function AdminPage() {
       }
       resetForm();
     } catch (err: unknown) {
-      const maybeAxiosError = err as {
-        response?: { data?: { message?: string } };
-      };
       console.error(err);
-      setError(
-        maybeAxiosError.response?.data?.message || "Não foi possível salvar o registro.",
-      );
+      setError(getUserFacingApiErrorMessage(err, "Não foi possível salvar o registro."));
     } finally {
       setSubmitting(false);
     }
@@ -428,13 +424,8 @@ export default function AdminPage() {
         resetForm();
       }
     } catch (err: unknown) {
-      const maybeAxiosError = err as {
-        response?: { data?: { message?: string } };
-      };
       console.error(err);
-      setError(
-        maybeAxiosError.response?.data?.message || "Não foi possível remover o registro.",
-      );
+      setError(getUserFacingApiErrorMessage(err, "Não foi possível remover o registro."));
     } finally {
       setSubmitting(false);
     }

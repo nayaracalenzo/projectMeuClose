@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getRequest, postRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 
 type ReceivableFilter =
@@ -151,13 +152,7 @@ export default function ReceivablesPage() {
       setActiveReceiptId(null);
       await fetchRows();
     } catch (error: unknown) {
-      const maybeAxiosError = error as {
-        response?: { data?: { message?: string } };
-      };
-      setMessage(
-        maybeAxiosError.response?.data?.message ||
-          "Não foi possível registrar o recebimento.",
-      );
+      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível registrar o recebimento."));
     }
   };
 

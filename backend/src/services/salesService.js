@@ -404,6 +404,7 @@ async function createSale(body = {}) {
     totalAmount: Number(created.sale.totalAmount),
     finalAmount: Number(created.sale.finalAmount),
     status: created.sale.status,
+    productsCount: created.products.length,
     itemsCount: created.items.length,
     measurementsCount: created.measurements.length,
     entryReceiptId: created.entryReceipt?.idPaymentReceipt || null,

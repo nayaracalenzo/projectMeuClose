@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
 import { getRequest, postRequest } from "../services/request";
 import CustomerModal from "./CustomerModal";
@@ -165,20 +166,13 @@ export default function ReadyMadeClothing({
           message: "Tamanho adicionado com sucesso.",
         });
       } catch (error: unknown) {
-        const maybeAxiosError = error as {
-          response?: { data?: { message?: string } };
-        };
-
         console.error("Erro ao cadastrar tamanho da roupa pronta", error);
-        setQuickCreateError(
-          maybeAxiosError.response?.data?.message || "Não foi possível salvar o tamanho.",
-        );
+        const message = getUserFacingApiErrorMessage(error, "Não foi possível salvar o tamanho.");
+        setQuickCreateError(message);
         setNotice({
           tone: "error",
           title: "Erro ao cadastrar",
-          message:
-            maybeAxiosError.response?.data?.message ||
-            "Não foi possível cadastrar o tamanho.",
+          message,
         });
       } finally {
         setQuickCreateSubmitting(false);

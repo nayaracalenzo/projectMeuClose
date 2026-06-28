@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
 import { getRequest, postRequest } from "../services/request";
 import MeasurementsFields from "./MeasurementsFields";
@@ -419,20 +420,13 @@ export default function CustomMadeClothing({
           message: `${quickCreateConfig[quickCreateResource].buttonLabel} adicionado com sucesso.`,
         });
       } catch (error: unknown) {
-        const maybeAxiosError = error as {
-          response?: { data?: { message?: string } };
-        };
-
         console.error("Erro ao cadastrar opção administrativa da roupa sob medida", error);
-        setQuickCreateError(
-          maybeAxiosError.response?.data?.message || "Não foi possível salvar o cadastro.",
-        );
+        const message = getUserFacingApiErrorMessage(error, "Não foi possível salvar o cadastro.");
+        setQuickCreateError(message);
         setNotice({
           tone: "error",
           title: "Erro ao cadastrar",
-          message:
-            maybeAxiosError.response?.data?.message ||
-            `Não foi possível cadastrar ${quickCreateConfig[quickCreateResource].label}.`,
+          message,
         });
       } finally {
         setQuickCreateSubmitting(false);

@@ -1,14 +1,21 @@
 const { CustomerMeasurements, SaleItems, Sales, sequelize } = require("../models");
+const productsRepository = require("./productsRepository");
 const receivablesRepository = require("./receivablesRepository");
 
 async function createSale({ sale, items, customerMeasurements, entryReceipt, receivable }) {
   return sequelize.transaction(async (transaction) => {
     const createdSale = await Sales.create(sale, { transaction });
+    const createdProducts = await productsRepository.createProductsFromSale(
+      createdSale,
+      items,
+      transaction
+    );
 
     const createdItems = await SaleItems.bulkCreate(
-      items.map((item) => ({
+      items.map((item, index) => ({
         ...item,
         saleId: createdSale.idSale,
+        productId: createdProducts[index]?.id || null,
       })),
       { transaction }
     );
@@ -69,6 +76,7 @@ async function createSale({ sale, items, customerMeasurements, entryReceipt, rec
 
     return {
       sale: createdSale,
+      products: createdProducts,
       items: createdItems,
       measurements: createdMeasurements,
       entryReceipt: createdEntryReceipt,

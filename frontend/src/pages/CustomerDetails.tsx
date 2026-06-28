@@ -7,6 +7,7 @@ import CustomerReceivablesModal from "../components/CustomerReceivablesModal";
 import CustomerSalesModal from "../components/CustomerSalesModal";
 import { getRequest, updateRequest } from "../services/request";
 import { formatDocument } from "../utils/formatDocument";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { maskCpfCnpj } from "../utils/maskCpfCnpj";
 
 type ClientDetails = {
@@ -447,11 +448,8 @@ export default function CustomerDetails() {
       setIsEditing(false);
       setSaveMessage("Cliente atualizado com sucesso.");
     } catch (err: unknown) {
-      const maybeAxiosError = err as {
-        response?: { data?: { message?: string } };
-      };
       setSaveMessage(
-        maybeAxiosError.response?.data?.message || "Não foi possível salvar as alterações.",
+        getUserFacingApiErrorMessage(err, "Não foi possível salvar as alterações."),
       );
     } finally {
       setSaving(false);

@@ -59,6 +59,9 @@ const SaleItemsSchema = (sequelize, DataTypes) => {
     SaleItems.belongsTo(models.Sales, {
       foreignKey: "saleId",
     });
+    SaleItems.belongsTo(models.Products, {
+      foreignKey: "productId",
+    });
   };
 
   return SaleItems

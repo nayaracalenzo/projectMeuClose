@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getRequest, postRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 
 type Scope = "LOJA" | "PESSOAL";
@@ -152,13 +153,7 @@ export default function PayablesPage() {
       setMessage("Conta a pagar criada com sucesso.");
       await fetchRows();
     } catch (error: unknown) {
-      const maybeAxiosError = error as {
-        response?: { data?: { message?: string } };
-      };
-      setMessage(
-        maybeAxiosError.response?.data?.message ||
-          "Não foi possível criar a conta a pagar.",
-      );
+      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível criar a conta a pagar."));
     }
   };
 
@@ -185,13 +180,7 @@ export default function PayablesPage() {
       setActivePayableId(null);
       await fetchRows();
     } catch (error: unknown) {
-      const maybeAxiosError = error as {
-        response?: { data?: { message?: string } };
-      };
-      setMessage(
-        maybeAxiosError.response?.data?.message ||
-          "Não foi possível registrar o pagamento.",
-      );
+      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível registrar o pagamento."));
     }
   };
 

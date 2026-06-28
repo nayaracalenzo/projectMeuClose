@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
 import { getRequest, postRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { maskPhone } from "../utils/maskPhone";
 import { maskCpfCnpj } from "../utils/maskCpfCnpj";
 import { maskCep } from "../utils/maskCep";
@@ -276,11 +277,8 @@ export default function NewCustomer() {
 
       navigate("/clientes");
     } catch (error: unknown) {
-      const maybeAxiosError = error as {
-        response?: { data?: { message?: string } };
-      };
       setMessage(
-        maybeAxiosError.response?.data?.message || "Não foi possível salvar o cliente.",
+        getUserFacingApiErrorMessage(error, "Não foi possível salvar o cliente."),
       );
     } finally {
       setSaving(false);

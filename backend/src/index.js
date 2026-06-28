@@ -39,11 +39,11 @@ app.use("/sales", salesRoute);
 app.use("/payment-types", paymentTypesRoute);
 app.use("/receivables", receivablesRoute);
 app.use("/payables", payablesRoute);
+app.use("/products", productsRoute);
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // app.use("/users", usersRoute);
 // app.use("/customers", customersRoute);
 // app.use("/cash", cashRoute);
-// app.use("/products", productsRoute);
 
 app.get("/", (_req, res) => res.status(200).send("Online."));
 app.use(notFoundHandler);
