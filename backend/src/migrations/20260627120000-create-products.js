@@ -7,29 +7,19 @@ module.exports = {
         autoIncrement: true,
         allowNull: false,
       },
-      saleId: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
-        references: {
-          model: "sales",
-          key: "idSale",
-        },
-        onUpdate: "CASCADE",
-        onDelete: "CASCADE",
-      },
       desc: {
         type: Sequelize.STRING(255),
         allowNull: false,
       },
       customerId: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: "customers",
           key: "idCustomer",
         },
         onUpdate: "CASCADE",
-        onDelete: "RESTRICT",
+        onDelete: "SET NULL",
       },
       employeeId: {
         type: Sequelize.INTEGER,
@@ -122,7 +112,7 @@ module.exports = {
         type: Sequelize.DECIMAL(10, 2),
         allowNull: false,
       },
-      profit: {
+      remaining_value: {
         type: Sequelize.DECIMAL(10, 2),
         allowNull: true,
       },

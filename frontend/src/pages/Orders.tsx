@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Printer } from "lucide-react";
 import { Button } from "../components/Button";
@@ -8,8 +8,10 @@ import { formatCurrency } from "../utils/currency";
 
 interface ProductOrderRow {
   id: number;
-  saleId: number;
+  saleId: number | null;
+  description: string;
   customer: string;
+  category: string | null;
   productType: string | null;
   clothingType: string | null;
   seamstress: string | null;
@@ -17,6 +19,19 @@ interface ProductOrderRow {
   finalValue: number;
   testDate: string | null;
   createdAt: string;
+}
+
+interface StatusOption {
+  id: number;
+  desc: string;
+}
+
+interface OrdersResponse {
+  items: ProductOrderRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 const formatDate = (value?: string | null) => {
@@ -28,38 +43,102 @@ const formatDate = (value?: string | null) => {
   return new Intl.DateTimeFormat("pt-BR").format(date);
 };
 
-const formatType = (row: ProductOrderRow) => {
-  return row.clothingType || row.productType || "-";
+const formatCustomerName = (value?: string | null) => {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "Sem cliente";
+
+  return parts.slice(0, 2).join(" ");
+};
+
+const getStatusBadgeClassName = (status?: string | null) => {
+  const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalized === "entregue") {
+    return "bg-secondary text-primary";
+  }
+
+  if (normalized === "a produzir") {
+    return "bg-[#F5E6A9] text-[#6D5200]";
+  }
+
+  if (normalized === "cancelada") {
+    return "bg-[#F8D7DA] text-[#7A1717]";
+  }
+
+  if (normalized === "atrasada") {
+    return "bg-[#F8D7DA] text-[#7A1717]";
+  }
+
+  return "bg-gray-200 text-neutral-700";
 };
 
 export default function Orders() {
+  const pageSize = 10;
   const navigate = useNavigate();
   const [orders, setOrders] = useState<ProductOrderRow[]>([]);
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [dateOrder, setDateOrder] = useState("createdAtDesc");
+  const [page, setPage] = useState(1);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const fetchStatuses = async () => {
+      try {
+        const data = await getRequest("/products/status-options");
+        setStatusOptions(Array.isArray(data) ? data : []);
+      } catch {
+        setStatusOptions([]);
+      }
+    };
+
+    fetchStatuses();
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, dateOrder]);
 
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
         setError("");
-        const data = await getRequest("/products");
-        setOrders(Array.isArray(data) ? data : []);
+
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+          sortBy: dateOrder,
+        });
+
+        if (statusFilter !== "todos") {
+          params.set("statusId", statusFilter);
+        }
+
+        const data = (await getRequest(`/products?${params.toString()}`)) as OrdersResponse;
+
+        setOrders(Array.isArray(data.items) ? data.items : []);
+        setTotalOrders(Number(data.total) || 0);
+        setTotalPages(Number(data.totalPages) || 1);
       } catch (err: unknown) {
         setError(getUserFacingApiErrorMessage(err));
         setOrders([]);
+        setTotalOrders(0);
+        setTotalPages(1);
       } finally {
         setLoading(false);
       }
     };
 
     fetchOrders();
-  }, []);
-
-  const pendingCount = useMemo(
-    () => orders.filter((order) => String(order.status || "").toLowerCase() !== "entregue").length,
-    [orders],
-  );
+  }, [dateOrder, page, pageSize, statusFilter]);
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
@@ -69,9 +148,7 @@ export default function Orders() {
             Pedidos
           </h1>
           <p className="text-sm text-neutral-700">
-            {loading
-              ? "Carregando pedidos..."
-              : `${pendingCount} pedido(s) carregado(s) da base.`}
+            {loading ? "Carregando pedidos..." : `${totalOrders} pedido(s) encontrado(s).`}
           </p>
         </div>
         <div className="hidden gap-2 md:flex">
@@ -101,6 +178,43 @@ export default function Orders() {
         </Button>
       </div>
 
+      <div className="mb-4 grid w-full max-w-2xl gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="orders-status-filter" className="text-sm font-medium text-primary">
+            Filtrar por situação
+          </label>
+          <select
+            id="orders-status-filter"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="todos">Todos</option>
+            {statusOptions.map((status) => (
+              <option key={status.id} value={status.id}>
+                {status.desc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="orders-date-order" className="text-sm font-medium text-primary">
+            Ordenar por data
+          </label>
+          <select
+            id="orders-date-order"
+            value={dateOrder}
+            onChange={(event) => setDateOrder(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="createdAtDesc">Mais recentes</option>
+            <option value="testDateAsc">Data de prova mais antiga</option>
+            <option value="testDateDesc">Data de prova mais recente</option>
+          </select>
+        </div>
+      </div>
+
       {error ? (
         <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
           {error}
@@ -111,9 +225,10 @@ export default function Orders() {
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Pedido</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Descrição
+              </th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Cliente</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Tipo</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
                 Data Prova
               </th>
@@ -130,7 +245,7 @@ export default function Orders() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={6}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando pedidos...
@@ -139,7 +254,7 @@ export default function Orders() {
             ) : orders.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={6}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhum pedido cadastrado
@@ -149,13 +264,15 @@ export default function Orders() {
               orders.map((order) => (
                 <tr
                   key={order.id}
-                  className="bg-surface-lowest transition-colors hover:bg-surface"
+                  className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
+                  onClick={() => navigate(`/pedido/${order.id}`)}
                 >
-                  <td className="px-4 py-3 text-[14px] font-semibold text-primary">
-                    #{order.saleId}
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {order.description || "-"}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{order.customer}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatType(order)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {formatCustomerName(order.customer)}
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(order.testDate)}
                   </td>
@@ -163,7 +280,13 @@ export default function Orders() {
                     {order.seamstress || "-"}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
-                    {order.status || "-"}
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getStatusBadgeClassName(
+                        order.status,
+                      )}`}
+                    >
+                      {order.status || "-"}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
                     {formatCurrency(order.finalValue)}
@@ -186,24 +309,62 @@ export default function Orders() {
           </div>
         ) : (
           orders.map((order) => (
-            <div key={order.id} className="px-4 py-4">
+            <button
+              key={order.id}
+              type="button"
+              className="w-full px-4 py-4 text-left"
+              onClick={() => navigate(`/pedido/${order.id}`)}
+            >
+              <p className="text-xs text-neutral-700">Descrição: {order.description || "-"}</p>
               <p className="text-sm font-semibold text-primary">
-                #{order.saleId} - {order.customer}
+                {formatCustomerName(order.customer)}
               </p>
-              <p className="text-xs text-neutral-700">Tipo: {formatType(order)}</p>
               <p className="text-xs text-neutral-700">
                 Data Prova: {formatDate(order.testDate)}
               </p>
               <p className="text-xs text-neutral-700">
                 Costureira: {order.seamstress || "-"}
               </p>
-              <p className="text-xs text-neutral-700">Status: {order.status || "-"}</p>
+              <p className="text-xs text-neutral-700">
+                Status:{" "}
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${getStatusBadgeClassName(
+                    order.status,
+                  )}`}
+                >
+                  {order.status || "-"}
+                </span>
+              </p>
               <p className="mt-1 text-sm font-semibold text-primary">
                 {formatCurrency(order.finalValue)}
               </p>
-            </div>
+            </button>
           ))
         )}
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-neutral-700">
+          Página {page} de {totalPages}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={loading || page <= 1}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={loading || page >= totalPages}
+          >
+            Próxima
+          </Button>
+        </div>
       </div>
     </div>
   );

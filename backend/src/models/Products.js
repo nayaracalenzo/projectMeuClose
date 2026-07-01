@@ -7,23 +7,23 @@ const ProductsSchema = (sequelize, DataTypes) => {
         primaryKey: true,
         autoIncrement: true,
       },
-      saleId: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-      },
       desc: {
         type: DataTypes.STRING(255),
         allowNull: false,
       },
       customerId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       employeeId: {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
       statusId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      categoryId: {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
@@ -55,6 +55,11 @@ const ProductsSchema = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      dsbl: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       qtyStock: {
         type: DataTypes.INTEGER,
         allowNull: false,
@@ -68,9 +73,10 @@ const ProductsSchema = (sequelize, DataTypes) => {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
       },
-      profit: {
+      remainingValue: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
+        field: "remaining_value",
       },
     },
     {
@@ -80,9 +86,6 @@ const ProductsSchema = (sequelize, DataTypes) => {
   );
 
   Products.associate = (models) => {
-    Products.belongsTo(models.Sales, {
-      foreignKey: "saleId",
-    });
     Products.belongsTo(models.Customers, {
       foreignKey: "customerId",
     });
@@ -91,6 +94,9 @@ const ProductsSchema = (sequelize, DataTypes) => {
     });
     Products.belongsTo(models.Status, {
       foreignKey: "statusId",
+    });
+    Products.belongsTo(models.Categories, {
+      foreignKey: "categoryId",
     });
     Products.belongsTo(models.ProductsTypes, {
       foreignKey: "productTypeId",

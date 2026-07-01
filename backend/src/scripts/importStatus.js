@@ -6,6 +6,7 @@ const statusList = [
   { id: 2, desc: 'produzida' },
   { id: 3, desc: 'entregue' },
   { id: 4, desc: 'cancelada' },
+  { id: 5, desc: 'atrasada' },
 ];
 
 async function importStatus() {

@@ -39,6 +39,12 @@ const resourceConfig = {
     defaultOrder: [["desc", "ASC"]],
     editableFields: ["desc"],
   },
+  categories: {
+    modelName: "Categories",
+    primaryKey: "id",
+    defaultOrder: [["id", "ASC"]],
+    editableFields: ["desc"],
+  },
   sizes: {
     modelName: "Sizes",
     primaryKey: "id",
@@ -47,6 +53,12 @@ const resourceConfig = {
   },
   "clothings-types": {
     modelName: "ClothingsType",
+    primaryKey: "id",
+    defaultOrder: [["desc", "ASC"]],
+    editableFields: ["desc"],
+  },
+  "products-types": {
+    modelName: "ProductsTypes",
     primaryKey: "id",
     defaultOrder: [["desc", "ASC"]],
     editableFields: ["desc"],

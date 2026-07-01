@@ -1,13 +1,15 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomMadeClothing, {
   type CustomMadeProductDraft,
-  type CustomMadeSummaryItem,
 } from "../components/CustomMadeClothing";
+import GeneralCatalogItems, {
+  type GeneralCatalogProductDraft,
+  type GeneralCatalogSummaryItem,
+} from "../components/GeneralCatalogItems";
 import ReadyMadeClothing, {
   type ReadyMadeProductDraft,
-  type ReadyMadeSummaryItem,
 } from "../components/ReadyMadeClothing";
 import { SaleStepper } from "../components/SaleStepper";
 import type { ICustomer } from "../interfaces/ICustomer";
@@ -22,18 +24,27 @@ interface CustomerOption {
   document: string;
 }
 
-interface SelectedSaleTypes {
-  readyMade: boolean;
-  customMade: boolean;
+type SaleCategoryCode = "CLOTHING" | "ACCESSORY" | "SERVICE" | "MISC";
+type ClothingSubtype = "READY_MADE" | "CUSTOM_MADE";
+type ModalType =
+  | "Roupa pronta"
+  | "Sob medida"
+  | "Acessório"
+  | "Serviço"
+  | "Diversos";
+
+interface SaleCategoryOption {
+  id: number;
+  code: SaleCategoryCode;
+  label: string;
 }
 
 interface SaleTableItem {
   id: number;
   code: string;
-  type: "Roupa pronta" | "Sob-medida";
+  type: ModalType;
   description: string;
   value: number;
-  discountValue: number;
   finalValue: number;
 }
 
@@ -51,6 +62,38 @@ interface PaymentTypeOption {
   financialFlow: "IMMEDIATE_CASH" | "FUTURE_CUSTOMER" | "FUTURE_OPERATOR";
 }
 
+type ModalSummaryItem = {
+  type: string;
+  quantity: number;
+  value: number;
+};
+
+const CATEGORY_CODE_BY_ID: Record<number, SaleCategoryCode> = {
+  1: "CLOTHING",
+  3: "SERVICE",
+  4: "ACCESSORY",
+  5: "MISC",
+};
+
+const DEFAULT_CATEGORIES: SaleCategoryOption[] = [
+  { id: 1, code: "CLOTHING", label: "Roupas" },
+  { id: 3, code: "SERVICE", label: "Serviços" },
+  { id: 4, code: "ACCESSORY", label: "Acessórios" },
+  { id: 5, code: "MISC", label: "Diversos" },
+];
+
+const MODAL_PREFIX: Record<ModalType, string> = {
+  "Roupa pronta": "RP",
+  "Sob medida": "SM",
+  "Acessório": "AC",
+  "Serviço": "SV",
+  "Diversos": "DV",
+};
+
+function getCategoryLabelByCode(code: SaleCategoryCode) {
+  return DEFAULT_CATEGORIES.find((item) => item.code === code)?.label || "Categoria";
+}
+
 export default function NewSalePage() {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
@@ -62,33 +105,37 @@ export default function NewSalePage() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
 
-  const [selectedSaleTypes, setSelectedSaleTypes] = useState<SelectedSaleTypes>({
-    readyMade: false,
-    customMade: false,
-  });
+  const [categories, setCategories] = useState<SaleCategoryOption[]>(DEFAULT_CATEGORIES);
+  const [selectedCategoryCode, setSelectedCategoryCode] = useState<SaleCategoryCode | "">("");
+  const [selectedClothingSubtype, setSelectedClothingSubtype] = useState<
+    ClothingSubtype | ""
+  >("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<"Roupa pronta" | "Sob-medida">(
-    "Roupa pronta",
-  );
-  const [modalItems, setModalItems] = useState<
-    ReadyMadeSummaryItem[] | CustomMadeSummaryItem[]
-  >([]);
+  const [modalType, setModalType] = useState<ModalType>("Roupa pronta");
+  const [modalItems, setModalItems] = useState<ModalSummaryItem[]>([]);
   const [modalSessionKey, setModalSessionKey] = useState(0);
 
   const [tableItems, setTableItems] = useState<SaleTableItem[]>([]);
   const [readyMadeProducts, setReadyMadeProducts] = useState<ReadyMadeProductDraft[]>([]);
   const [customMadeProducts, setCustomMadeProducts] = useState<CustomMadeProductDraft[]>([]);
+  const [accessoryProducts, setAccessoryProducts] = useState<GeneralCatalogProductDraft[]>([]);
+  const [serviceProducts, setServiceProducts] = useState<GeneralCatalogProductDraft[]>([]);
+  const [miscProducts, setMiscProducts] = useState<GeneralCatalogProductDraft[]>([]);
   const [modalReadyMadeProducts, setModalReadyMadeProducts] = useState<
     ReadyMadeProductDraft[]
   >([]);
   const [modalCustomMadeProducts, setModalCustomMadeProducts] = useState<
     CustomMadeProductDraft[]
   >([]);
+  const [modalGeneralProducts, setModalGeneralProducts] = useState<
+    GeneralCatalogProductDraft[]
+  >([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
   const [paymentTypeId, setPaymentTypeId] = useState("");
+  const [discountPercent, setDiscountPercent] = useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [entryAmount, setEntryAmount] = useState("");
@@ -98,7 +145,9 @@ export default function NewSalePage() {
   const [cardOperatorLabel, setCardOperatorLabel] = useState("");
   const [cardBrand, setCardBrand] = useState("");
   const [cardAuthorizationCode, setCardAuthorizationCode] = useState("");
-  const [cardExpectedSettlementDate, setCardExpectedSettlementDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [cardExpectedSettlementDate, setCardExpectedSettlementDate] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  );
   const [cardClientInstallmentCount, setCardClientInstallmentCount] = useState("1");
   const [cardFeeAmount, setCardFeeAmount] = useState("");
 
@@ -154,6 +203,40 @@ export default function NewSalePage() {
     fetchPaymentTypes();
   }, []);
 
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await getRequest("/admin/categories");
+        if (!Array.isArray(data)) {
+          setCategories(DEFAULT_CATEGORIES);
+          return;
+        }
+
+        const parsedCategories = data
+          .map((item) => {
+            const id = Number((item as { id?: number }).id);
+            const code = CATEGORY_CODE_BY_ID[id];
+            if (!code) return null;
+
+            const desc = String((item as { desc?: string }).desc || "").trim();
+            return {
+              id,
+              code,
+              label: desc || getCategoryLabelByCode(code),
+            };
+          })
+          .filter(Boolean) as SaleCategoryOption[];
+
+        setCategories(parsedCategories.length ? parsedCategories : DEFAULT_CATEGORIES);
+      } catch (error) {
+        console.error("Erro ao buscar categorias", error);
+        setCategories(DEFAULT_CATEGORIES);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
   const filteredCustomers = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
@@ -171,17 +254,29 @@ export default function NewSalePage() {
   }, [customers, search]);
 
   const selectedTypesLabel = useMemo(() => {
-    const labels: string[] = [];
-
-    if (selectedSaleTypes.readyMade) labels.push("Roupa pronta");
-    if (selectedSaleTypes.customMade) labels.push("Sob-medida");
-
+    const labels = Array.from(new Set(tableItems.map((item) => item.type)));
     return labels.length ? labels.join(" + ") : "Não definido";
-  }, [selectedSaleTypes]);
+  }, [tableItems]);
 
   const totalValue = useMemo(
     () => tableItems.reduce((acc, item) => acc + item.finalValue, 0),
     [tableItems],
+  );
+  const parsedDiscountPercent = useMemo(() => {
+    if (!discountPercent.trim()) return 0;
+
+    const parsed = Number(discountPercent.replace(",", "."));
+    if (!Number.isFinite(parsed)) return 0;
+
+    return Math.min(100, Math.max(0, parsed));
+  }, [discountPercent]);
+  const discountAmount = useMemo(
+    () => Number(((totalValue * parsedDiscountPercent) / 100).toFixed(2)),
+    [parsedDiscountPercent, totalValue],
+  );
+  const discountedTotalValue = useMemo(
+    () => Math.max(0, Number((totalValue - discountAmount).toFixed(2))),
+    [discountAmount, totalValue],
   );
   const selectedPaymentType = useMemo(
     () => paymentTypes.find((item) => String(item.id) === paymentTypeId) || null,
@@ -197,8 +292,8 @@ export default function NewSalePage() {
     return Number.isFinite(parsed) ? parsed : 0;
   }, [entryAmount]);
   const remainingAmount = useMemo(
-    () => Math.max(0, Number((totalValue - parsedEntryAmount).toFixed(2))),
-    [parsedEntryAmount, totalValue],
+    () => Math.max(0, Number((discountedTotalValue - parsedEntryAmount).toFixed(2))),
+    [discountedTotalValue, parsedEntryAmount],
   );
   const previewInstallmentCount = useMemo(() => {
     if (!selectedPaymentType) return 1;
@@ -237,7 +332,7 @@ export default function NewSalePage() {
     (!selectedPaymentType?.allowsEntryAmount ||
       parsedEntryAmount <= 0 ||
       (!!entryPaymentTypeId && !!entryPaidAt)) &&
-    parsedEntryAmount < totalValue &&
+    parsedEntryAmount < discountedTotalValue &&
     (selectedPaymentType?.financialFlow !== "FUTURE_OPERATOR" || !!cardExpectedSettlementDate);
 
   const formatCurrency = (value: number) =>
@@ -246,13 +341,27 @@ export default function NewSalePage() {
       currency: "BRL",
     }).format(value);
 
-  const openModal = (type: "Roupa pronta" | "Sob-medida") => {
+  const openModal = (type: ModalType) => {
     setModalType(type);
     setModalItems([]);
     setModalReadyMadeProducts([]);
     setModalCustomMadeProducts([]);
+    setModalGeneralProducts([]);
     setModalSessionKey((prev) => prev + 1);
     setIsModalOpen(true);
+  };
+
+  const resolveModalTypeFromSelection = () => {
+    if (selectedCategoryCode === "CLOTHING") {
+      if (selectedClothingSubtype === "READY_MADE") return "Roupa pronta";
+      if (selectedClothingSubtype === "CUSTOM_MADE") return "Sob medida";
+      return null;
+    }
+
+    if (selectedCategoryCode === "ACCESSORY") return "Acessório";
+    if (selectedCategoryCode === "SERVICE") return "Serviço";
+    if (selectedCategoryCode === "MISC") return "Diversos";
+    return null;
   };
 
   useEffect(() => {
@@ -284,21 +393,6 @@ export default function NewSalePage() {
     }
   }, [selectedPaymentType]);
 
-  const toggleSaleType = (type: keyof SelectedSaleTypes) => {
-    setSelectedSaleTypes((prev) => {
-      const willSelect = !prev[type];
-
-      if (willSelect) {
-        openModal(type === "readyMade" ? "Roupa pronta" : "Sob-medida");
-      }
-
-      return {
-        ...prev,
-        [type]: willSelect,
-      };
-    });
-  };
-
   const addModalItemsToTable = () => {
     if (!modalItems.length) {
       return;
@@ -306,13 +400,19 @@ export default function NewSalePage() {
 
     if (modalType === "Roupa pronta") {
       setReadyMadeProducts((prev) => [...prev, ...modalReadyMadeProducts]);
-    } else {
+    } else if (modalType === "Sob medida") {
       setCustomMadeProducts((prev) => [...prev, ...modalCustomMadeProducts]);
+    } else if (modalType === "Acessório") {
+      setAccessoryProducts((prev) => [...prev, ...modalGeneralProducts]);
+    } else if (modalType === "Serviço") {
+      setServiceProducts((prev) => [...prev, ...modalGeneralProducts]);
+    } else {
+      setMiscProducts((prev) => [...prev, ...modalGeneralProducts]);
     }
 
     setTableItems((prev) => {
       const next = [...prev];
-      const prefix = modalType === "Roupa pronta" ? "RP" : "SM";
+      const prefix = MODAL_PREFIX[modalType];
 
       modalItems.forEach((item) => {
         const baseValue = item.value * Math.max(1, item.quantity);
@@ -324,7 +424,6 @@ export default function NewSalePage() {
           type: modalType,
           description: item.type || modalType,
           value: baseValue,
-          discountValue: baseValue,
           finalValue: baseValue,
         });
       });
@@ -334,6 +433,25 @@ export default function NewSalePage() {
 
     setIsModalOpen(false);
   };
+
+  const buildGenericSaleItems = (
+    products: GeneralCatalogProductDraft[],
+    itemType: "ACCESSORY" | "SERVICE" | "MISC",
+    fallbackLabel: string,
+  ) =>
+    products.map((product) => {
+      const quantity = Number(product.quantity) > 0 ? Number(product.quantity) : 1;
+      const unitPrice = parseCurrencyToNumber(product.price);
+
+      return {
+        itemType,
+        description: product.name.trim() || fallbackLabel,
+        quantity,
+        unitPrice,
+        subtotal: unitPrice * quantity,
+        metadata: null,
+      };
+    });
 
   const handleSaveSale = async () => {
     if (!selectedCustomer || tableItems.length === 0) {
@@ -366,7 +484,7 @@ export default function NewSalePage() {
 
         return {
           itemType: "CUSTOM_MADE",
-          description: product.type.trim() || "Sob-medida",
+          description: product.type.trim() || "Sob medida",
           quantity: 1,
           unitPrice,
           subtotal: unitPrice,
@@ -383,6 +501,14 @@ export default function NewSalePage() {
         };
       });
 
+      const accessoryItems = buildGenericSaleItems(
+        accessoryProducts,
+        "ACCESSORY",
+        "Acessório",
+      );
+      const serviceItems = buildGenericSaleItems(serviceProducts, "SERVICE", "Serviço");
+      const miscItems = buildGenericSaleItems(miscProducts, "MISC", "Diversos");
+
       const customerMeasurements = customMadeProducts.map((product) => ({
         ...product.measurements,
       }));
@@ -390,16 +516,27 @@ export default function NewSalePage() {
       await postRequest("/sales", {
         customerId: selectedCustomer.id,
         totalAmount: totalValue,
-        finalAmount: totalValue,
+        finalAmount: discountedTotalValue,
+        discountType: parsedDiscountPercent > 0 ? "PERCENTAGE" : null,
+        discountValue: parsedDiscountPercent > 0 ? parsedDiscountPercent : null,
         paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
         installmentCount: previewInstallmentCount,
         dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
-        entryAmount: selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0 ? parsedEntryAmount : null,
+        entryAmount:
+          selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
+            ? parsedEntryAmount
+            : null,
         entryPaymentTypeId: entryPaymentTypeId ? Number(entryPaymentTypeId) : null,
         entryPaidAt: parsedEntryAmount > 0 ? entryPaidAt : null,
         entryReferenceCode: entryReferenceCode || null,
-        cardOperatorLabel: selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" ? cardOperatorLabel || null : null,
-        cardBrand: selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" ? cardBrand || null : null,
+        cardOperatorLabel:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+            ? cardOperatorLabel || null
+            : null,
+        cardBrand:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+            ? cardBrand || null
+            : null,
         cardAuthorizationCode:
           selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
             ? cardAuthorizationCode || null
@@ -416,7 +553,13 @@ export default function NewSalePage() {
           selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" && cardFeeAmount
             ? Number(cardFeeAmount.replace(",", "."))
             : null,
-        items: [...readyMadeItems, ...customItems],
+        items: [
+          ...readyMadeItems,
+          ...customItems,
+          ...accessoryItems,
+          ...serviceItems,
+          ...miscItems,
+        ],
         customerMeasurements,
       });
 
@@ -424,12 +567,14 @@ export default function NewSalePage() {
       setTableItems([]);
       setReadyMadeProducts([]);
       setCustomMadeProducts([]);
+      setAccessoryProducts([]);
+      setServiceProducts([]);
+      setMiscProducts([]);
       setModalItems([]);
-      setSelectedSaleTypes({
-        readyMade: false,
-        customMade: false,
-      });
+      setSelectedCategoryCode("");
+      setSelectedClothingSubtype("");
       setPaymentTypeId("");
+      setDiscountPercent("");
       setInstallmentCount("1");
       setDueDate(new Date().toISOString().slice(0, 10));
       setEntryAmount("");
@@ -444,7 +589,9 @@ export default function NewSalePage() {
       setCardFeeAmount("");
       setStep(1);
     } catch (error: unknown) {
-      setSaveMessage(getUserFacingApiErrorMessage(error, "Não foi possível salvar o pedido."));
+      setSaveMessage(
+        getUserFacingApiErrorMessage(error, "Não foi possível salvar o pedido."),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -455,6 +602,13 @@ export default function NewSalePage() {
     setSearch(customer.name);
     setIsDropdownOpen(false);
   };
+
+  const handleCategoryChange = (value: string) => {
+    setSelectedCategoryCode((value as SaleCategoryCode) || "");
+    setSelectedClothingSubtype("");
+  };
+
+  const currentModalType = resolveModalTypeFromSelection();
 
   return (
     <div className="w-full min-w-0 min-h-full bg-white p-3 sm:p-5 md:bg-surface-low">
@@ -562,99 +716,202 @@ export default function NewSalePage() {
                   Passo 2: Tipo de venda
                 </p>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleSaleType("readyMade")}
-                    className={`rounded-lg border p-4 text-left transition-colors ${
-                      selectedSaleTypes.readyMade
-                        ? "border-primary bg-white"
-                        : "border-outline-variant/60 bg-white hover:bg-surface-lowest"
-                    }`}
-                  >
-                    <p className="text-base font-semibold text-primary">
-                      Roupa pronta
-                    </p>
-                    <p className="mt-1 text-sm text-neutral-700">
-                      Selecione peças já finalizadas para venda imediata.
-                    </p>
-                  </button>
+                <div className="grid grid-cols-1 gap-4 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-primary">
+                      Tipo de Produto
+                    </label>
+                    <select
+                      value={selectedCategoryCode}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
+                      className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                    >
+                      <option value="">Selecione...</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.code}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={() => toggleSaleType("customMade")}
-                    className={`rounded-lg border p-4 text-left transition-colors ${
-                      selectedSaleTypes.customMade
-                        ? "border-primary bg-white"
-                        : "border-outline-variant/60 bg-white hover:bg-surface-lowest"
-                    }`}
-                  >
-                    <p className="text-base font-semibold text-primary">
-                      Sob-medida
-                    </p>
-                    <p className="mt-1 text-sm text-neutral-700">
-                      Venda personalizada com medidas e detalhes do cliente.
-                    </p>
-                  </button>
+                  {selectedCategoryCode === "CLOTHING" ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Tipo da roupa
+                      </label>
+                      <select
+                        value={selectedClothingSubtype}
+                        onChange={(e) =>
+                          setSelectedClothingSubtype(e.target.value as ClothingSubtype | "")
+                        }
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="READY_MADE">Roupa pronta</option>
+                        <option value="CUSTOM_MADE">Sob medida</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
+
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={!currentModalType}
+                      onClick={() => setStep(3)}
+                    >
+                      Continuar
+                    </Button>
+                  </div>
                 </div>
-                <div className="overflow-x-auto rounded-lg border border-outline-variant/45 bg-white">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-surface-low">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-primary">
-                          Código
-                        </th>
-                        <th className="px-3 py-2 text-left font-semibold text-primary">
-                          Tipo
-                        </th>
-                        <th className="px-3 py-2 text-left font-semibold text-primary">
-                          Descrição
-                        </th>
-                        <th className="px-3 py-2 text-right font-semibold text-primary">
-                          Valor
-                        </th>
-                        <th className="px-3 py-2 text-right font-semibold text-primary">
-                          Valor com desconto
-                        </th>
-                        <th className="px-3 py-2 text-right font-semibold text-primary">
-                          Valor final
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tableItems.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={6}
-                            className="px-3 py-3 text-center text-neutral-600"
-                          >
-                            Nenhum produto adicionado.
-                          </td>
-                        </tr>
-                      ) : (
-                        tableItems.map((item) => (
-                          <tr
-                            key={item.id}
-                            className="border-t border-outline-variant/30"
-                          >
-                            <td className="px-3 py-2 text-neutral-800">{item.code}</td>
-                            <td className="px-3 py-2 text-neutral-800">{item.type}</td>
-                            <td className="px-3 py-2 text-neutral-800">{item.description}</td>
-                            <td className="px-3 py-2 text-right text-neutral-800">
-                              {formatCurrency(item.value)}
-                            </td>
-                            <td className="px-3 py-2 text-right text-neutral-800">
-                              {formatCurrency(item.discountValue)}
-                            </td>
-                            <td className="px-3 py-2 text-right font-medium text-primary">
-                              {formatCurrency(item.finalValue)}
-                            </td>
+
+                <div className="flex justify-start">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setStep(1)}
+                    >
+                      Voltar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="flex flex-col gap-5">
+                <p className="text-md font-semibold text-primary">
+                  Passo 3: Adicione os produtos
+                </p>
+
+                <div className="grid grid-cols-1 gap-4 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-primary">
+                      Tipo de Produto
+                    </label>
+                    <select
+                      value={selectedCategoryCode}
+                      onChange={(e) => handleCategoryChange(e.target.value)}
+                      className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                    >
+                      <option value="">Selecione...</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.code}>
+                          {category.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedCategoryCode === "CLOTHING" ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Tipo da roupa
+                      </label>
+                      <select
+                        value={selectedClothingSubtype}
+                        onChange={(e) =>
+                          setSelectedClothingSubtype(e.target.value as ClothingSubtype | "")
+                        }
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="READY_MADE">Roupa pronta</option>
+                        <option value="CUSTOM_MADE">Sob medida</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div />
+                  )}
+
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      className="w-full"
+                      disabled={!currentModalType}
+                      onClick={() => currentModalType && openModal(currentModalType)}
+                    >
+                      + Adicionar item
+                    </Button>
+                  </div>
+                </div>
+
+                {tableItems.length > 0 && (
+                  <>
+                    <div className="overflow-x-auto rounded-lg border border-outline-variant/45 bg-white">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-surface-low">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-primary">
+                              Código
+                            </th>
+                            <th className="px-3 py-2 text-left font-semibold text-primary">
+                              Tipo
+                            </th>
+                            <th className="px-3 py-2 text-left font-semibold text-primary">
+                              Descrição
+                            </th>
+                            <th className="px-3 py-2 text-right font-semibold text-primary">
+                              Valor
+                            </th>
+                            <th className="px-3 py-2 text-right font-semibold text-primary">
+                              Valor final
+                            </th>
                           </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {tableItems.map((item) => (
+                            <tr
+                              key={item.id}
+                              className="border-t border-outline-variant/30"
+                            >
+                              <td className="px-3 py-2 text-neutral-800">{item.code}</td>
+                              <td className="px-3 py-2 text-neutral-800">{item.type}</td>
+                              <td className="px-3 py-2 text-neutral-800">{item.description}</td>
+                              <td className="px-3 py-2 text-right text-neutral-800">
+                                {formatCurrency(item.value)}
+                              </td>
+                              <td className="px-3 py-2 text-right font-medium text-primary">
+                                {formatCurrency(item.finalValue)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+
+                <div className="flex justify-start">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setStep(1)}
+                    >
+                      Voltar
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => setStep(4)}
+                      disabled={tableItems.length === 0}
+                    >
+                      Continuar
+                    </Button>
+                  </div>
                 </div>
+              </div>
+            )}
+
+            {step === 4 && (
+              <div className="flex flex-col gap-5">
+                <p className="text-md font-semibold text-primary">
+                  Passo 4: Pagamento
+                </p>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div>
@@ -771,7 +1028,7 @@ export default function NewSalePage() {
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
-                        Referencia
+                        Referência
                       </label>
                       <input
                         value={entryReferenceCode}
@@ -788,43 +1045,103 @@ export default function NewSalePage() {
                       <label className="mb-1 block text-sm font-medium text-primary">
                         Operadora
                       </label>
-                      <input value={cardOperatorLabel} onChange={(e) => setCardOperatorLabel(e.target.value)} className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+                      <input
+                        value={cardOperatorLabel}
+                        onChange={(e) => setCardOperatorLabel(e.target.value)}
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
                         Bandeira
                       </label>
-                      <input value={cardBrand} onChange={(e) => setCardBrand(e.target.value)} className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+                      <input
+                        value={cardBrand}
+                        onChange={(e) => setCardBrand(e.target.value)}
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
-                        Autorizacao
+                        Autorização
                       </label>
-                      <input value={cardAuthorizationCode} onChange={(e) => setCardAuthorizationCode(e.target.value)} className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+                      <input
+                        value={cardAuthorizationCode}
+                        onChange={(e) => setCardAuthorizationCode(e.target.value)}
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
-                        Parcelas no cartao
+                        Parcelas no cartão
                       </label>
-                      <input type="number" min={1} value={cardClientInstallmentCount} onChange={(e) => setCardClientInstallmentCount(e.target.value)} className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+                      <input
+                        type="number"
+                        min={1}
+                        value={cardClientInstallmentCount}
+                        onChange={(e) => setCardClientInstallmentCount(e.target.value)}
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                      />
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
                         Taxa prevista
                       </label>
-                      <input type="number" min="0" step="0.01" value={cardFeeAmount} onChange={(e) => setCardFeeAmount(e.target.value)} className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={cardFeeAmount}
+                        onChange={(e) => setCardFeeAmount(e.target.value)}
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                      />
                     </div>
                   </div>
                 )}
 
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-primary">
+                      Desconto (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={discountPercent}
+                      onChange={(e) => setDiscountPercent(e.target.value)}
+                      placeholder="0"
+                      className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                    />
+                  </div>
+                  <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
+                    Desconto aplicado: {formatCurrency(discountAmount)}
+                  </div>
+                  <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
+                    Valor final com desconto: {formatCurrency(discountedTotalValue)}
+                  </div>
+                </div>
+
                 <div className="rounded-lg border border-outline-variant/45 bg-white p-4 text-sm text-neutral-700">
+                  <p>Subtotal: {formatCurrency(totalValue)}</p>
+                  <p>Desconto: {formatCurrency(discountAmount)}</p>
+                  <p>Valor final: {formatCurrency(discountedTotalValue)}</p>
                   <p>Entrada: {formatCurrency(parsedEntryAmount)}</p>
                   <p>Saldo: {formatCurrency(remainingAmount)}</p>
-                  <p>Destino do saldo: {selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" ? "Operadora" : selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER" ? "Cliente" : "Caixa"}</p>
+                  <p>
+                    Destino do saldo:{" "}
+                    {selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+                      ? "Operadora"
+                      : selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER"
+                        ? "Cliente"
+                        : "Caixa"}
+                  </p>
                   <p>Parcelas previstas: {previewInstallmentCount}</p>
                   {installmentPreview.length > 0 && remainingAmount > 0 && (
                     <p>
-                      Valor presumido: {installmentPreview.map((item) => formatCurrency(item)).join(" / ")}
+                      Valor presumido:{" "}
+                      {installmentPreview.map((item) => formatCurrency(item)).join(" / ")}
                     </p>
                   )}
                 </div>
@@ -834,7 +1151,7 @@ export default function NewSalePage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => setStep(1)}
+                      onClick={() => setStep(3)}
                     >
                       Voltar
                     </Button>
@@ -860,8 +1177,17 @@ export default function NewSalePage() {
             <p className="text-sm text-neutral-700">
               Forma: {selectedPaymentType?.name || "Não definida"}
             </p>
+            <p className="text-sm text-neutral-700">
+              Desconto: {parsedDiscountPercent.toFixed(2)}%
+            </p>
             <p className="mb-3 text-sm text-neutral-700">
               Parcelas: {previewInstallmentCount}
+            </p>
+            <p className="text-sm text-neutral-700">
+              Subtotal: {formatCurrency(totalValue)}
+            </p>
+            <p className="text-sm text-neutral-700">
+              Desconto aplicado: {formatCurrency(discountAmount)}
             </p>
             <p className="text-sm text-neutral-700">
               Entrada: {formatCurrency(parsedEntryAmount)}
@@ -869,11 +1195,9 @@ export default function NewSalePage() {
             <p className="mb-3 text-sm text-neutral-700">
               Saldo: {formatCurrency(remainingAmount)}
             </p>
-            {saveMessage && (
-              <p className="mb-3 text-sm text-neutral-700">{saveMessage}</p>
-            )}
+            {saveMessage && <p className="mb-3 text-sm text-neutral-700">{saveMessage}</p>}
             <p className="mt-4 border-t border-outline-variant/35 pt-3 text-sm font-semibold text-primary">
-              Valor total: {formatCurrency(totalValue)}
+              Valor total: {formatCurrency(discountedTotalValue)}
             </p>
           </div>
         </div>
@@ -881,19 +1205,26 @@ export default function NewSalePage() {
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
           <div className="max-h-[95vh] w-[50%] max-w-6xl overflow-y-auto rounded-xl bg-white p-3 shadow-lg">
-           
-
             {modalType === "Roupa pronta" ? (
               <ReadyMadeClothing
                 key={`ready-${modalSessionKey}`}
                 onSummaryChange={(items) => setModalItems(items)}
                 onProductsChange={(items) => setModalReadyMadeProducts(items)}
               />
-            ) : (
+            ) : modalType === "Sob medida" ? (
               <CustomMadeClothing
                 key={`custom-${modalSessionKey}`}
                 onSummaryChange={(items) => setModalItems(items)}
                 onProductsChange={(items) => setModalCustomMadeProducts(items)}
+              />
+            ) : (
+              <GeneralCatalogItems
+                key={`general-${modalType}-${modalSessionKey}`}
+                title={`Dados de ${modalType.toLowerCase()}`}
+                itemLabel={modalType}
+                defaultSummaryLabel={modalType}
+                onSummaryChange={(items: GeneralCatalogSummaryItem[]) => setModalItems(items)}
+                onProductsChange={(items) => setModalGeneralProducts(items)}
               />
             )}
 

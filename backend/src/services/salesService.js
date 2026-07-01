@@ -140,7 +140,13 @@ function normalizeMeasurementRecord(record = {}) {
 function normalizeSaleItem(item = {}) {
   const itemType = String(item.itemType || "").trim();
 
-  if (itemType !== "READY_MADE" && itemType !== "CUSTOM_MADE") {
+  if (
+    itemType !== "READY_MADE" &&
+    itemType !== "CUSTOM_MADE" &&
+    itemType !== "ACCESSORY" &&
+    itemType !== "SERVICE" &&
+    itemType !== "MISC"
+  ) {
     throw createSalesValidationError("Tipo de item invalido.");
   }
 

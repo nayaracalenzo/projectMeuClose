@@ -7,6 +7,7 @@ const authRoute = require("./routes/authRoute");
 const clientsRoute = require("./routes/clientsRoute.js");
 const usersRoute = require("./routes/usersRoute");
 const productsRoute = require("./routes/productsRoute");
+const dashboardRoute = require("./routes/dashboardRoute");
 const cashRoute = require("./routes/cashRoute");
 const salesRoute = require("./routes/salesRoute");
 const professionsRoute = require("./routes/professionsRoute");
@@ -14,6 +15,10 @@ const adminRoute = require("./routes/adminRoute");
 const paymentTypesRoute = require("./routes/paymentTypesRoute");
 const receivablesRoute = require("./routes/receivablesRoute");
 const payablesRoute = require("./routes/payablesRoute");
+const {
+  scheduleOverdueProductsStatusSync,
+  syncOverdueProductsStatus,
+} = require("./services/overdueProductsService");
 require("dotenv").config();
 
 const app = express();
@@ -40,6 +45,7 @@ app.use("/payment-types", paymentTypesRoute);
 app.use("/receivables", receivablesRoute);
 app.use("/payables", payablesRoute);
 app.use("/products", productsRoute);
+app.use("/dashboard", dashboardRoute);
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // app.use("/users", usersRoute);
 // app.use("/customers", customersRoute);
@@ -55,4 +61,7 @@ app.listen(port, () => {
     environment: process.env.NODE_ENV || "development",
     allowedOriginsCount: allowedOrigins.length,
   });
+
+  syncOverdueProductsStatus().catch(() => {});
+  scheduleOverdueProductsStatusSync();
 });

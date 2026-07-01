@@ -3,7 +3,7 @@ interface SaleStepperProps {
 }
 
 export function SaleStepper({ step }: SaleStepperProps) {
-  const steps = ["Cliente", "Tipo", "Produtos", "Resumo"];
+  const steps = ["Cliente", "Tipo", "Produtos", "Pagamento"];
 
   return (
     <div className="flex gap-6">
