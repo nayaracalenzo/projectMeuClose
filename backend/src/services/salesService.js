@@ -4,6 +4,8 @@ const paymentTypesRepository = require("../repositories/paymentTypesRepository")
 const {
   buildPaymentTypeResponse,
   isCardPaymentType,
+  isImmediateCashPaymentType,
+  isImmediateCheckPaymentType,
   isImmediateEntryPaymentType,
 } = require("../utils/paymentTypeRules");
 
@@ -184,7 +186,7 @@ async function getRequiredPaymentType(idPaymentType, fieldName) {
   const normalizedId = normalizeInteger(idPaymentType, fieldName);
   const paymentType = await paymentTypesRepository.getPaymentTypeById(normalizedId);
 
-  if (!paymentType || !paymentType.active) {
+  if (!paymentType) {
     throw createSalesValidationError(`${fieldName} invalida.`);
   }
 
@@ -262,6 +264,30 @@ function buildReceivablePayload({
   };
 }
 
+function buildIncomingFinancialMovement({ paymentType, amount, paidAt, referenceCode }) {
+  if (!paymentType || Number(amount) <= 0) {
+    return null;
+  }
+
+  if (paymentType.financialFlow !== "IMMEDIATE_CASH") {
+    return null;
+  }
+
+  return {
+    target: isImmediateCashPaymentType(paymentType) ? "CASH" : "BANK",
+    scope: "LOJA",
+    movementType: "IN",
+    category: "VENDA",
+    description: `Recebimento da venda via ${paymentType.name}`,
+    accountLabel: "Banco da Loja",
+    amount: roundCurrency(amount),
+    occurredAt: paidAt || new Date(),
+    paymentTypeId: paymentType.id,
+    referenceCode: referenceCode || null,
+    sourceType: "SALE_RECEIPT",
+  };
+}
+
 async function createSale(body = {}) {
   const customerId = normalizeInteger(body.customerId, "Cliente");
   const items = Array.isArray(body.items) ? body.items.map(normalizeSaleItem) : [];
@@ -301,6 +327,7 @@ async function createSale(body = {}) {
 
   let entryReceipt = null;
   let entryPaymentType = null;
+  let financialMovement = null;
 
   if (entryAmount !== null && entryAmount > 0) {
     entryPaymentType = await getRequiredPaymentType(
@@ -315,21 +342,45 @@ async function createSale(body = {}) {
 
     entryReceipt = {
       paymentTypeId: entryPaymentType.id,
+      receiptType: "ENTRY",
       amount: roundCurrency(entryAmount),
       paidAt: normalizeDate(body.entryPaidAt, "Data da entrada") || new Date(),
       referenceCode: body.entryReferenceCode ? String(body.entryReferenceCode).trim() : null,
     };
+
+    financialMovement = buildIncomingFinancialMovement({
+      paymentType: entryPaymentType,
+      amount: entryReceipt.amount,
+      paidAt: entryReceipt.paidAt,
+      referenceCode: entryReceipt.referenceCode,
+    });
   } else if (body.entryPaymentTypeId || body.entryPaidAt || body.entryReferenceCode) {
     throw createSalesValidationError("Informe um valor de entrada valido para registrar a entrada.");
   }
 
   if (!entryReceipt && mainPaymentType.financialFlow === "IMMEDIATE_CASH") {
+    const paymentReferenceCode = body.paymentReferenceCode
+      ? String(body.paymentReferenceCode).trim()
+      : null;
+
+    if (isImmediateCheckPaymentType(mainPaymentType) && !paymentReferenceCode) {
+      throw createSalesValidationError("Numero do cheque e obrigatorio.");
+    }
+
     entryReceipt = {
       paymentTypeId: mainPaymentType.id,
+      receiptType: "SALE_FULL",
       amount: roundCurrency(finalAmount),
       paidAt: new Date(),
-      referenceCode: body.entryReferenceCode ? String(body.entryReferenceCode).trim() : null,
+      referenceCode: paymentReferenceCode,
     };
+
+    financialMovement = buildIncomingFinancialMovement({
+      paymentType: mainPaymentType,
+      amount: entryReceipt.amount,
+      paidAt: entryReceipt.paidAt,
+      referenceCode: entryReceipt.referenceCode,
+    });
   }
 
   const customerMeasurements = Array.isArray(body.customerMeasurements)
@@ -402,6 +453,7 @@ async function createSale(body = {}) {
     customerMeasurements,
     entryReceipt,
     receivable,
+    financialMovements: financialMovement ? [financialMovement] : [],
   });
 
   return {

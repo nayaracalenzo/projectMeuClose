@@ -1,5 +1,10 @@
 const { notFoundError, validationError } = require("../errors/AppError");
+const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const repository = require("../repositories/receivablesRepository");
+const {
+  buildPaymentTypeResponse,
+  isImmediateCashPaymentType,
+} = require("../utils/paymentTypeRules");
 
 function createReceivablesValidationError(message, statusCode = 400) {
   const error = validationError(message, {
@@ -120,11 +125,34 @@ async function registerReceipt(installmentId, body = {}) {
     throw createReceivablesValidationError("Forma de pagamento invalida.");
   }
 
+  const paymentType = await paymentTypesRepository.getPaymentTypeById(paymentTypeId);
+  if (!paymentType) {
+    throw createReceivablesValidationError("Forma de pagamento invalida.");
+  }
+
+  const normalizedPaymentType = buildPaymentTypeResponse(paymentType);
+  const amount = normalizeAmount(body.amount, "Valor recebido");
+  const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
+  const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
+
   const created = await repository.registerReceipt(normalizedInstallmentId, {
     paymentTypeId,
-    amount: normalizeAmount(body.amount, "Valor recebido"),
-    paidAt: normalizeDate(body.paidAt, "Data de recebimento"),
-    referenceCode: body.referenceCode ? String(body.referenceCode).trim() : null,
+    amount,
+    paidAt,
+    referenceCode,
+    financialMovement: {
+      target: isImmediateCashPaymentType(normalizedPaymentType) ? "CASH" : "BANK",
+      scope: "LOJA",
+      movementType: "IN",
+      category: "RECEBIMENTO",
+      description: `Recebimento de parcela via ${normalizedPaymentType.name}`,
+      accountLabel: "Banco da Loja",
+      amount,
+      occurredAt: paidAt,
+      paymentTypeId,
+      referenceCode,
+      sourceType: "RECEIVABLE_RECEIPT",
+    },
   });
 
   if (created === undefined) {

@@ -15,6 +15,8 @@
     "db:seed:products-types": "node src/scripts/importProductsTypes.js",
     "db:setup:products-types": "npm run db:migrate && npm run db:seed:products-types",
     "db:seed:products": "node src/scripts/importProducts.js",
+    "db:seed:sales": "node src/scripts/importSales.js",
+    "db:seed:sale-items": "node src/scripts/importSaleItems.js",
     "db:fix:products-types": "node src/scripts/fixImportedProductsTypes.js",
     "db:fix:products-financial-values": "node src/scripts/fixImportedProductsFinancialValues.js",
     "db:fix:products-test-dates": "node src/scripts/fixImportedProductsTestDates.js",

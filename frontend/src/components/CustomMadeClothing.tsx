@@ -78,6 +78,7 @@ interface CustomMadeProduct {
   selectedMeasurements: MeasurementField[];
   description: string;
   price: string;
+  discountPercent: string;
   details: string;
   status: string;
   seamstress: string;
@@ -94,6 +95,7 @@ export interface CustomMadeProductDraft {
   selectedMeasurements: MeasurementField[];
   description: string;
   price: string;
+  discountPercent: string;
   details: string;
   status: string;
   seamstress: string;
@@ -105,6 +107,8 @@ export interface CustomMadeSummaryItem {
   type: string;
   quantity: number;
   value: number;
+  discountAmount: number;
+  finalValue: number;
 }
 
 interface CustomMadeClothingProps {
@@ -168,6 +172,7 @@ export default function CustomMadeClothing({
       selectedMeasurements: [],
       description: "",
       price: "",
+      discountPercent: "",
       details: "",
       status: "A PRODUZIR",
       seamstress: "",
@@ -178,6 +183,12 @@ export default function CustomMadeClothing({
 
   const fieldClassName =
     "h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";
+
+  const getDiscountPercent = (value: string) => {
+    const parsed = Number(value.replace(",", "."));
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(100, Math.max(0, parsed));
+  };
 
   const quickCreateConfig = useMemo(
     () => ({
@@ -446,11 +457,19 @@ export default function CustomMadeClothing({
     if (!onSummaryChange) return;
 
     onSummaryChange(
-      products.map((product) => ({
-        type: product.type || "Sob-medida",
-        quantity: 1,
-        value: parseCurrencyToNumber(product.price),
-      })),
+      products.map((product) => {
+        const value = parseCurrencyToNumber(product.price);
+        const discountPercent = getDiscountPercent(product.discountPercent);
+        const discountAmount = Number(((value * discountPercent) / 100).toFixed(2));
+
+        return {
+          type: product.type || "Sob-medida",
+          quantity: 1,
+          value,
+          discountAmount,
+          finalValue: Number((value - discountAmount).toFixed(2)),
+        };
+      }),
     );
   }, [onSummaryChange, products]);
 
@@ -608,6 +627,22 @@ export default function CustomMadeClothing({
                   value={product.price}
                   onChange={(e) => handlePriceChange(product.id, e.target.value)}
                   placeholder="R$ 0,00"
+                  className={`${fieldClassName} max-w-55`}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[110px_1fr] md:items-center">
+                <label htmlFor={`discount-${product.id}`} className="text-sm text-primary">
+                  Desconto %
+                </label>
+                <input
+                  id={`discount-${product.id}`}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={product.discountPercent}
+                  onChange={(e) => updateProduct(product.id, "discountPercent", e.target.value)}
+                  placeholder="0"
                   className={`${fieldClassName} max-w-55`}
                 />
               </div>

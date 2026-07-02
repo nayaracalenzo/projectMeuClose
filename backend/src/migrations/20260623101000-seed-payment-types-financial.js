@@ -3,9 +3,9 @@ module.exports = {
     const paymentTypes = [
       [1, "DINHEIRO", "CASH", false, false, [], false, 1, 1, "IMMEDIATE_CASH"],
       [2, "CHEQUE DIA", "CHECK", false, false, [], false, 1, 1, "IMMEDIATE_CASH"],
-      [3, "CHEQUE PRE", "CHECK", true, false, [], false, 1, 1, "FUTURE_CUSTOMER"],
-      [4, "CARNE", "BOOKLET", true, true, ["CASH", "CHECK"], true, 12, 3, "FUTURE_CUSTOMER"],
-      [5, "DUPLICATA", "INVOICE", true, true, ["CASH", "CHECK"], false, 1, 1, "FUTURE_CUSTOMER"],
+      [3, "CHEQUE PRE", "CHECK", true, true, ["CASH", "CHECK"], true, 12, 1, "FUTURE_CUSTOMER"],
+      [4, "CARNE", "BOOKLET", true, true, ["CASH", "CHECK"], true, 12, 1, "FUTURE_CUSTOMER"],
+      [5, "DUPLICATA", "INVOICE", true, true, ["CASH", "CHECK"], true, 12, 1, "FUTURE_CUSTOMER"],
       [6, "CARTAO CREDITO", "CARD", false, true, ["CASH", "CHECK"], false, 1, 1, "FUTURE_OPERATOR"],
       [7, "CARTAO VISA", "CARD", false, true, ["CASH", "CHECK"], false, 1, 1, "FUTURE_OPERATOR"],
     ];

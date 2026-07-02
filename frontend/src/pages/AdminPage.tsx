@@ -28,18 +28,6 @@ type RoleOption = {
   desc: string;
 };
 
-type PaymentTypeForm = {
-  desc: string;
-  kind: string;
-  active: boolean;
-  requiresDueDate: boolean;
-  allowsEntryAmount: boolean;
-  allowsInstallments: boolean;
-  maxInstallments: string;
-  defaultInstallments: string;
-  financialFlow: string;
-};
-
 type ResourceConfig = {
   key: AdminResourceKey;
   title: string;
@@ -105,9 +93,8 @@ const resourceConfigList: ResourceConfig[] = [
     title: "Formas de Pagamento",
     endpoint: "/admin/payment-types",
     emptyLabel: "Nenhuma forma de pagamento cadastrada.",
-    deleteLabel: "Desativar",
+    deleteLabel: "Excluir",
     primaryKey: "idPaymentType",
-    isSoftDelete: true,
   },
 ];
 
@@ -136,18 +123,6 @@ const employeeInitialForm = {
 
 const simpleInitialForm = {
   desc: "",
-};
-
-const paymentTypeInitialForm: PaymentTypeForm = {
-  desc: "",
-  kind: "CASH",
-  active: true,
-  requiresDueDate: false,
-  allowsEntryAmount: false,
-  allowsInstallments: false,
-  maxInstallments: "1",
-  defaultInstallments: "1",
-  financialFlow: "IMMEDIATE_CASH",
 };
 
 function formatDate(value: Primitive) {
@@ -200,7 +175,6 @@ export default function AdminPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [employeeForm, setEmployeeForm] = useState(employeeInitialForm);
   const [simpleForm, setSimpleForm] = useState(simpleInitialForm);
-  const [paymentTypeForm, setPaymentTypeForm] = useState<PaymentTypeForm>(paymentTypeInitialForm);
 
   const currentConfig = useMemo(
     () => resourceConfigList.find((item) => item.key === selectedResource)!,
@@ -253,7 +227,6 @@ export default function AdminPage() {
     setError("");
     setEmployeeForm(employeeInitialForm);
     setSimpleForm(simpleInitialForm);
-    setPaymentTypeForm(paymentTypeInitialForm);
   }, [selectedResource]);
 
   const employeeRows = useMemo(() => {
@@ -312,21 +285,6 @@ export default function AdminPage() {
       return;
     }
 
-    if (selectedResource === "payment-types") {
-      setPaymentTypeForm({
-        desc: String(row.desc ?? ""),
-        kind: String(row.kind ?? "CASH"),
-        active: Boolean(row.active),
-        requiresDueDate: Boolean(row.requiresDueDate),
-        allowsEntryAmount: Boolean(row.allowsEntryAmount),
-        allowsInstallments: Boolean(row.allowsInstallments),
-        maxInstallments: String(row.maxInstallments ?? 1),
-        defaultInstallments: String(row.defaultInstallments ?? 1),
-        financialFlow: String(row.financialFlow ?? "IMMEDIATE_CASH"),
-      });
-      return;
-    }
-
     setSimpleForm({
       desc: String(row.desc ?? ""),
     });
@@ -337,7 +295,6 @@ export default function AdminPage() {
     setError("");
     setEmployeeForm(employeeInitialForm);
     setSimpleForm(simpleInitialForm);
-    setPaymentTypeForm(paymentTypeInitialForm);
     setIsFormOpen(true);
   }
 
@@ -351,7 +308,6 @@ export default function AdminPage() {
     setError("");
     setEmployeeForm(employeeInitialForm);
     setSimpleForm(simpleInitialForm);
-    setPaymentTypeForm(paymentTypeInitialForm);
     setIsFormOpen(false);
   }
 
@@ -368,17 +324,7 @@ export default function AdminPage() {
               ...employeeForm,
               roleId: employeeForm.roleId ? Number(employeeForm.roleId) : null,
             }
-          : selectedResource === "payment-types"
-            ? {
-                ...paymentTypeForm,
-                maxInstallments: paymentTypeForm.maxInstallments
-                  ? Number(paymentTypeForm.maxInstallments)
-                  : null,
-                defaultInstallments: paymentTypeForm.defaultInstallments
-                  ? Number(paymentTypeForm.defaultInstallments)
-                  : 1,
-              }
-            : simpleForm;
+          : simpleForm;
 
       if (editingId) {
         await updateRequest(`${currentConfig.endpoint}/${editingId}`, payload);
@@ -486,19 +432,17 @@ export default function AdminPage() {
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">ID</th>
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Descricao</th>
-              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Fluxo</th>
-              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Regras</th>
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary text-right">Acoes</th>
             </tr>
           </thead>
           <tbody>
             {(paginatedRows as GenericRecord[]).map((row) => (
               <tr key={String(row.idPaymentType)} className="bg-surface-lowest">
-                <td className="px-4 py-3 text-[14px] font-semibold text-primary">{String(row.idPaymentType ?? "")}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{String(row.desc ?? "")}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{String(row.financialFlow ?? "IMMEDIATE_CASH")}</td>
+                <td className="px-4 py-3 text-[14px] font-semibold text-primary">
+                  {String(row.idPaymentType ?? "")}
+                </td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
-                  {row.allowsEntryAmount ? "Entrada" : "Sem entrada"} • {row.allowsInstallments ? "Parcela" : "Sem parcelas"} • {row.requiresDueDate ? "Com vencimento" : "Sem vencimento"}
+                  {String(row.desc ?? "")}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
@@ -571,10 +515,7 @@ export default function AdminPage() {
               <>
                 <p className="text-base font-semibold text-primary">{String(row.desc ?? "")}</p>
                 <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
-                  ID {String(row.idPaymentType ?? "")} • {String(row.financialFlow ?? "IMMEDIATE_CASH")}
-                </p>
-                <p className="mt-1 text-sm text-neutral-700">
-                  {row.allowsEntryAmount ? "Permite entrada" : "Sem entrada"} • {row.allowsInstallments ? "Permite parcelas" : "Sem parcelas"}
+                  ID {String(row.idPaymentType ?? "")}
                 </p>
               </>
             ) : (
@@ -742,7 +683,7 @@ export default function AdminPage() {
           selectedResource === "employees"
             ? "Preencha os dados da funcionaria e salve para atualizar a tabela."
             : selectedResource === "payment-types"
-              ? "Configure as regras operacionais da forma de pagamento."
+              ? "Edite a descricao da forma de pagamento e confirme para salvar."
               : "Edite a descricao e confirme para salvar o cadastro."
         }
       >
@@ -805,47 +746,7 @@ export default function AdminPage() {
                 </label>
               </>
             ) : selectedResource === "payment-types" ? (
-              <>
-                <input value={paymentTypeForm.desc} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, desc: e.target.value }))} placeholder="Descricao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
-                <div className="grid gap-3 md:grid-cols-2">
-                  <select value={paymentTypeForm.kind} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, kind: e.target.value }))} className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary">
-                    <option value="CASH">Dinheiro</option>
-                    <option value="CHECK">Cheque</option>
-                    <option value="BOOKLET">Carne</option>
-                    <option value="INVOICE">Duplicata</option>
-                    <option value="CARD">Cartao</option>
-                  </select>
-                  <select value={paymentTypeForm.financialFlow} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, financialFlow: e.target.value }))} className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary">
-                    <option value="IMMEDIATE_CASH">Recebimento imediato</option>
-                    <option value="FUTURE_CUSTOMER">A receber do cliente</option>
-                    <option value="FUTURE_OPERATOR">A receber da operadora</option>
-                  </select>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.active} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, active: e.target.checked }))} />
-                    Forma ativa
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.requiresDueDate} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, requiresDueDate: e.target.checked }))} />
-                    Exige vencimento
-                  </label>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.allowsEntryAmount} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, allowsEntryAmount: e.target.checked }))} />
-                    Permite entrada
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.allowsInstallments} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, allowsInstallments: e.target.checked, maxInstallments: e.target.checked ? prev.maxInstallments : "1", defaultInstallments: e.target.checked ? prev.defaultInstallments : "1" }))} />
-                    Permite parcelamento
-                  </label>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <input type="number" min="1" value={paymentTypeForm.defaultInstallments} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, defaultInstallments: e.target.value }))} placeholder="Parcelas padrao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
-                  <input type="number" min="1" value={paymentTypeForm.maxInstallments} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, maxInstallments: e.target.value }))} placeholder="Maximo de parcelas" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" disabled={!paymentTypeForm.allowsInstallments} />
-                </div>
-              </>
+              <input value={simpleForm.desc} onChange={(e) => setSimpleForm({ desc: e.target.value })} placeholder="Descricao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
             ) : (
               <input value={simpleForm.desc} onChange={(e) => setSimpleForm({ desc: e.target.value })} placeholder="Descricao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
             )}

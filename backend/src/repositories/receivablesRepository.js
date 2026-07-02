@@ -8,6 +8,7 @@ const {
   Sales,
   sequelize,
 } = require("../models");
+const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 
 async function createReceivableWithInstallments({ receivable, installments, cardTransaction }, transaction) {
   const createdReceivable = await Receivables.create(receivable, { transaction });
@@ -59,7 +60,14 @@ async function listInstallments() {
       },
       {
         model: PaymentReceipts,
-        attributes: ["idPaymentReceipt", "saleId", "amount", "paidAt", "referenceCode"],
+        attributes: [
+          "idPaymentReceipt",
+          "saleId",
+          "receiptType",
+          "amount",
+          "paidAt",
+          "referenceCode",
+        ],
         required: false,
       },
     ],
@@ -88,6 +96,7 @@ async function registerReceipt(installmentId, payload) {
         saleId: installment.Receivable?.saleId,
         receivableInstallmentId: installment.idReceivableInstallment,
         paymentTypeId: payload.paymentTypeId,
+        receiptType: "INSTALLMENT",
         amount: payload.amount,
         paidAt: payload.paidAt,
         referenceCode: payload.referenceCode,
@@ -121,6 +130,20 @@ async function registerReceipt(installmentId, payload) {
       },
       { transaction }
     );
+
+    if (payload.financialMovement) {
+      const movementPayload = {
+        ...payload.financialMovement,
+        saleId: installment.Receivable?.saleId || null,
+        paymentReceiptId: receipt.idPaymentReceipt,
+      };
+
+      if (payload.financialMovement.target === "CASH") {
+        await createCashEntry(movementPayload, transaction);
+      } else {
+        await createBankEntry(movementPayload, transaction);
+      }
+    }
 
     return {
       receipt,

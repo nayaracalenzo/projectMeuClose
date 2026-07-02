@@ -134,11 +134,33 @@ async function registerPayment(payableId, body = {}) {
     throw createPayablesValidationError("Forma de pagamento invalida.");
   }
 
+  const payable = await repository.getPayableById(normalizedPayableId);
+  if (!payable) {
+    throw notFoundError("Conta a pagar nao encontrada.");
+  }
+
+  const amount = normalizeAmount(body.amount, "Valor pago");
+  const paidAt = normalizeDate(body.paidAt, "Data do pagamento");
+  const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
+
   const created = await repository.registerPayment(normalizedPayableId, {
     paymentTypeId,
-    amount: normalizeAmount(body.amount, "Valor pago"),
-    paidAt: normalizeDate(body.paidAt, "Data do pagamento"),
-    referenceCode: body.referenceCode ? String(body.referenceCode).trim() : null,
+    amount,
+    paidAt,
+    referenceCode,
+    financialMovement: {
+      target: payable.settlementTarget,
+      scope: payable.scope,
+      movementType: "OUT",
+      category: payable.category || "PAGAMENTO",
+      description: payable.description || `Pagamento a ${payable.beneficiary}`,
+      accountLabel: payable.accountLabel || "Banco da Loja",
+      amount,
+      occurredAt: paidAt,
+      paymentTypeId,
+      referenceCode,
+      sourceType: "PAYABLE_PAYMENT",
+    },
   });
 
   if (created === undefined) {

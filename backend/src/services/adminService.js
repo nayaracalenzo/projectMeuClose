@@ -1,10 +1,6 @@
 const { notFoundError, validationError } = require("../errors/AppError");
 const repository = require("../repositories/adminRepository");
 const { getAdminResourceConfig } = require("../utils/adminResourceConfig");
-const {
-  inferFinancialFlowFromKind,
-  normalizeAllowedEntryPaymentKinds,
-} = require("../utils/paymentTypeRules");
 
 function createAdminResourceError(message, statusCode = 400) {
   return validationError(message, {
@@ -55,10 +51,6 @@ function sanitizePayload(resource, body = {}) {
     if (!(field in body)) continue;
 
     switch (field) {
-      case "kind":
-      case "financialFlow":
-        payload[field] = normalizeText(body[field])?.toUpperCase() || null;
-        break;
       case "document":
       case "zipCode":
       case "primaryPhone":
@@ -72,22 +64,6 @@ function sanitizePayload(resource, body = {}) {
         payload[field] = normalizeDate(body[field]);
         break;
       case "roleId":
-        payload[field] =
-          body[field] === "" || body[field] === null || body[field] === undefined
-            ? null
-            : Number(body[field]);
-        break;
-      case "active":
-      case "requiresDueDate":
-      case "allowsEntryAmount":
-      case "allowsInstallments":
-        payload[field] = Boolean(body[field]);
-        break;
-      case "allowedEntryPaymentKinds":
-        payload[field] = normalizeAllowedEntryPaymentKinds(body[field]);
-        break;
-      case "maxInstallments":
-      case "defaultInstallments":
         payload[field] =
           body[field] === "" || body[field] === null || body[field] === undefined
             ? null
@@ -107,58 +83,9 @@ function validatePayload(resource, payload, isCreate) {
     if (isCreate && !payload.desc) {
       throw createAdminResourceError("Descricao e obrigatoria.");
     }
-
-    if (isCreate && !payload.kind) {
-      throw createAdminResourceError("Tipo da forma de pagamento e obrigatorio.");
+    if (!isCreate && "desc" in payload && !payload.desc) {
+      throw createAdminResourceError("Descricao e obrigatoria.");
     }
-
-    const allowedKinds = ["CASH", "CHECK", "BOOKLET", "INVOICE", "CARD"];
-    if (payload.kind && !allowedKinds.includes(payload.kind)) {
-      throw createAdminResourceError("Tipo da forma de pagamento invalido.");
-    }
-
-    payload.financialFlow = payload.financialFlow || inferFinancialFlowFromKind(payload.kind);
-
-    const allowedFlows = ["IMMEDIATE_CASH", "FUTURE_CUSTOMER", "FUTURE_OPERATOR"];
-    if (payload.financialFlow && !allowedFlows.includes(payload.financialFlow)) {
-      throw createAdminResourceError("Fluxo financeiro invalido.");
-    }
-
-    if (payload.defaultInstallments === null || payload.defaultInstallments === undefined) {
-      payload.defaultInstallments = 1;
-    }
-
-    if (!Number.isInteger(payload.defaultInstallments) || payload.defaultInstallments <= 0) {
-      throw createAdminResourceError("Quantidade padrao de parcelas invalida.");
-    }
-
-    if (payload.maxInstallments !== null && payload.maxInstallments !== undefined) {
-      if (!Number.isInteger(payload.maxInstallments) || payload.maxInstallments <= 0) {
-        throw createAdminResourceError("Maximo de parcelas invalido.");
-      }
-    }
-
-    if (payload.allowsInstallments) {
-      payload.maxInstallments = payload.maxInstallments || payload.defaultInstallments;
-
-      if (payload.defaultInstallments > payload.maxInstallments) {
-        throw createAdminResourceError(
-          "Quantidade padrao nao pode ser maior que o maximo de parcelas.",
-        );
-      }
-    } else {
-      payload.maxInstallments = 1;
-      payload.defaultInstallments = 1;
-    }
-
-    if (payload.allowsEntryAmount) {
-      if (!payload.allowedEntryPaymentKinds?.length) {
-        payload.allowedEntryPaymentKinds = ["CASH", "CHECK"];
-      }
-    } else {
-      payload.allowedEntryPaymentKinds = [];
-    }
-
     return;
   }
 

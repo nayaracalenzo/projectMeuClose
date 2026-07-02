@@ -1,4 +1,5 @@
 const { PayablePayments, Payables, PaymentTypes, sequelize } = require("../models");
+const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 
 async function listPayables() {
   return Payables.findAll({
@@ -20,6 +21,10 @@ async function listPayables() {
 
 async function createPayable(payload) {
   return Payables.create(payload);
+}
+
+async function getPayableById(payableId) {
+  return Payables.findByPk(payableId);
 }
 
 async function registerPayment(payableId, payload) {
@@ -56,6 +61,19 @@ async function registerPayment(payableId, payload) {
       { transaction }
     );
 
+    if (payload.financialMovement) {
+      const movementPayload = {
+        ...payload.financialMovement,
+        payablePaymentId: payment.idPayablePayment,
+      };
+
+      if (payload.financialMovement.target === "CAIXA") {
+        await createCashEntry(movementPayload, transaction);
+      } else {
+        await createBankEntry(movementPayload, transaction);
+      }
+    }
+
     return {
       payable,
       payment,
@@ -66,5 +84,6 @@ async function registerPayment(payableId, payload) {
 module.exports = {
   listPayables,
   createPayable,
+  getPayableById,
   registerPayment,
 };

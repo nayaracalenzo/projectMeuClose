@@ -72,20 +72,8 @@ const resourceConfig = {
   "payment-types": {
     modelName: "PaymentTypes",
     primaryKey: "idPaymentType",
-    softDelete: true,
     defaultOrder: [["idPaymentType", "ASC"]],
-    editableFields: [
-      "desc",
-      "kind",
-      "active",
-      "requiresDueDate",
-      "allowsEntryAmount",
-      "allowedEntryPaymentKinds",
-      "allowsInstallments",
-      "maxInstallments",
-      "defaultInstallments",
-      "financialFlow",
-    ],
+    editableFields: ["desc"],
   },
 };
 

@@ -20,6 +20,10 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
+      receiptType: {
+        type: DataTypes.ENUM("ENTRY", "SALE_FULL", "INSTALLMENT"),
+        allowNull: false,
+      },
       amount: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,

@@ -15,6 +15,7 @@ interface ReadyMadeProduct {
   size: string;
   quantity: string;
   price: string;
+  discountPercent: string;
 }
 
 export interface ReadyMadeProductDraft {
@@ -23,12 +24,15 @@ export interface ReadyMadeProductDraft {
   size: string;
   quantity: string;
   price: string;
+  discountPercent: string;
 }
 
 export interface ReadyMadeSummaryItem {
   type: string;
   quantity: number;
   value: number;
+  discountAmount: number;
+  finalValue: number;
 }
 
 interface ReadyMadeClothingProps {
@@ -60,11 +64,18 @@ export default function ReadyMadeClothing({
       size: "",
       quantity: "1",
       price: "",
+      discountPercent: "",
     },
   ]);
 
   const fieldClassName =
     "h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";
+
+  const getDiscountPercent = (value: string) => {
+    const parsed = Number(value.replace(",", "."));
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(100, Math.max(0, parsed));
+  };
 
   useEffect(() => {
     const fetchSizes = async () => {
@@ -185,11 +196,21 @@ export default function ReadyMadeClothing({
     if (!onSummaryChange) return;
 
     onSummaryChange(
-      products.map((product) => ({
-        type: product.name.trim() || "Roupa pronta",
-        quantity: Number(product.quantity) > 0 ? Number(product.quantity) : 1,
-        value: parseCurrencyToNumber(product.price),
-      })),
+      products.map((product) => {
+        const quantity = Number(product.quantity) > 0 ? Number(product.quantity) : 1;
+        const value = parseCurrencyToNumber(product.price);
+        const discountPercent = getDiscountPercent(product.discountPercent);
+        const grossValue = value * quantity;
+        const discountAmount = Number(((grossValue * discountPercent) / 100).toFixed(2));
+
+        return {
+          type: product.name.trim() || "Roupa pronta",
+          quantity,
+          value,
+          discountAmount,
+          finalValue: Number((grossValue - discountAmount).toFixed(2)),
+        };
+      }),
     );
   }, [onSummaryChange, products]);
 
@@ -306,6 +327,26 @@ export default function ReadyMadeClothing({
                   value={product.price}
                   onChange={(e) => handlePriceChange(product.id, e.target.value)}
                   placeholder="R$ 0,00"
+                  className={fieldClassName}
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor={`ready-discount-${product.id}`}
+                  className="mb-1 block text-sm text-primary"
+                >
+                  Desconto (%)
+                </label>
+                <input
+                  id={`ready-discount-${product.id}`}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={product.discountPercent}
+                  onChange={(e) => updateProduct(product.id, "discountPercent", e.target.value)}
+                  placeholder="0"
                   className={fieldClassName}
                 />
               </div>

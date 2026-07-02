@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 
 type Scope = "LOJA" | "PESSOAL";
@@ -21,14 +23,55 @@ export default function BankPage() {
   const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [rows, setRows] = useState<BankRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const rows: BankRow[] = [];
-  const totalIn = 0;
-  const totalOut = 0;
+  useEffect(() => {
+    const fetchRows = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const params = new URLSearchParams({
+          scope,
+        });
+
+        if (search.trim()) params.set("search", search.trim());
+        if (startDate) params.set("startDate", startDate);
+        if (endDate) params.set("endDate", endDate);
+
+        const data = await getRequest(`/bank?${params.toString()}`);
+        setRows(Array.isArray(data) ? (data as BankRow[]) : []);
+      } catch (err: unknown) {
+        setRows([]);
+        setError(getUserFacingApiErrorMessage(err, "Não foi possível carregar o banco."));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRows();
+  }, [endDate, scope, search, startDate]);
+
+  const totalIn = useMemo(
+    () =>
+      rows
+        .filter((row) => row.movement === "ENTRADA")
+        .reduce((acc, row) => acc + Number(row.amount || 0), 0),
+    [rows],
+  );
+  const totalOut = useMemo(
+    () =>
+      rows
+        .filter((row) => row.movement === "SAÍDA")
+        .reduce((acc, row) => acc + Number(row.amount || 0), 0),
+    [rows],
+  );
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-      <h1 className="mb-5 pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">Banco</h1>
+      <h1 className="mb-5 pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">Banco</h1>
 
       <div className="mb-5 border-b border-outline-variant/35">
         <div className="flex gap-2">
@@ -89,6 +132,12 @@ export default function BankPage() {
         </div>
       </div>
 
+      {error ? (
+        <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
+          {error}
+        </div>
+      ) : null}
+
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Entradas</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalIn)}</p></div>
         <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Saídas</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalOut)}</p></div>
@@ -108,32 +157,53 @@ export default function BankPage() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td
-                colSpan={6}
-                className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
-              >
-                Nenhuma movimentação bancária cadastrada.
-              </td>
-            </tr>
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                  Carregando movimentações...
+                </td>
+              </tr>
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                  Nenhuma movimentação bancária cadastrada.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id} className="bg-surface-lowest">
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(row.date)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.bank}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.movement}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.category}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.description}</td>
+                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">{formatCurrency(row.amount)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
-        {rows.length === 0 && (
+        {loading ? (
+          <div className="px-4 py-6 text-center text-sm text-neutral-700">
+            Carregando movimentações...
+          </div>
+        ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
             Nenhuma movimentação bancária cadastrada.
           </div>
+        ) : (
+          rows.map((row) => (
+            <div key={row.id} className="px-4 py-4">
+              <p className="text-sm font-semibold text-primary">{formatDate(row.date)} - {row.bank}</p>
+              <p className="text-xs text-neutral-700">{row.category} - {row.movement}</p>
+              <p className="text-xs text-neutral-700">{row.description}</p>
+              <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(row.amount)}</p>
+            </div>
+          ))
         )}
-        {rows.map((row) => (
-          <div key={row.id} className="px-4 py-4">
-            <p className="text-sm font-semibold text-primary">{formatDate(row.date)} - {row.bank}</p>
-            <p className="text-xs text-neutral-700">{row.category} - {row.movement}</p>
-            <p className="text-xs text-neutral-700">{row.description}</p>
-            <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(row.amount)}</p>
-          </div>
-        ))}
       </div>
     </div>
   );
