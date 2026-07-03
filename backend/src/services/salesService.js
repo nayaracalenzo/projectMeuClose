@@ -1,4 +1,4 @@
-const { validationError } = require("../errors/AppError");
+const { notFoundError, validationError } = require("../errors/AppError");
 const repository = require("../repositories/salesRepository");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const {
@@ -288,6 +288,159 @@ function buildIncomingFinancialMovement({ paymentType, amount, paidAt, reference
   };
 }
 
+function mapSaleItem(item) {
+  const product = item.Product || item.Products;
+  const employee = product?.Employee || product?.Employees;
+  const status = product?.Status;
+  const quantity = Number(item.quantity || 0);
+  const unitPrice = Number(item.unitPrice || 0);
+  const subtotal = Number(item.subtotal || 0);
+  const grossAmount = Number((quantity * unitPrice).toFixed(2));
+  const discountAmount = Number(Math.max(0, grossAmount - subtotal).toFixed(2));
+
+  return {
+    id: item.idSaleItem,
+    productId: item.productId || null,
+    itemType: item.itemType,
+    description: item.description,
+    quantity,
+    unitPrice,
+    discountType: item.discountType || null,
+    discountValue:
+      item.discountValue === null || item.discountValue === undefined
+        ? null
+        : Number(item.discountValue),
+    grossAmount,
+    discountAmount,
+    subtotal,
+    metadata: item.metadata || null,
+    productStatus: status?.desc || null,
+    seamstress: employee?.shortName || employee?.fullName || null,
+    fittingDate: product?.testDate || null,
+  };
+}
+
+function mapPaymentReceipt(receipt) {
+  const paymentType = receipt.PaymentType || receipt.PaymentTypes;
+
+  return {
+    id: receipt.idPaymentReceipt,
+    saleId: receipt.saleId,
+    receivableInstallmentId: receipt.receivableInstallmentId || null,
+    receiptType: receipt.receiptType,
+    amount: Number(receipt.amount || 0),
+    paidAt: receipt.paidAt,
+    referenceCode: receipt.referenceCode || null,
+    paymentType: paymentType
+      ? {
+          id: paymentType.idPaymentType,
+          name: paymentType.desc,
+        }
+      : null,
+  };
+}
+
+function mapReceivableInstallment(installment) {
+  const paymentType = installment.PaymentType || installment.PaymentTypes;
+
+  return {
+    id: installment.idReceivableInstallment,
+    installmentNumber: Number(installment.installmentNumber || 0),
+    totalInstallments: Number(installment.totalInstallments || 0),
+    dueDate: installment.dueDate,
+    amount: Number(installment.amount || 0),
+    paidAmount: Number(installment.paidAmount || 0),
+    openAmount: Number((Number(installment.amount || 0) - Number(installment.paidAmount || 0)).toFixed(2)),
+    status: installment.status,
+    paymentType: paymentType
+      ? {
+          id: paymentType.idPaymentType,
+          name: paymentType.desc,
+        }
+      : null,
+  };
+}
+
+function mapSaleDetails(sale) {
+  const customer = sale.Customer || sale.Customers;
+  const user = sale.User || sale.Users;
+  const paymentType = sale.PaymentType || sale.PaymentTypes;
+  const receivable = sale.Receivable || sale.Receivables;
+  const cardTransaction = sale.CardTransaction || sale.CardTransactions || receivable?.CardTransaction || receivable?.CardTransactions || null;
+  const items = Array.isArray(sale.SaleItems) ? sale.SaleItems.map(mapSaleItem) : [];
+  const receipts = Array.isArray(sale.PaymentReceipts)
+    ? sale.PaymentReceipts.map(mapPaymentReceipt)
+    : [];
+  const measurementsCount = Array.isArray(sale.CustomerMeasurements)
+    ? sale.CustomerMeasurements.length
+    : 0;
+
+  return {
+    id: sale.idSale,
+    status: sale.status,
+    customer: customer
+      ? {
+          id: customer.idCustomer,
+          name: customer.fullName || customer.companyName || "Sem cliente",
+        }
+      : null,
+    user: user
+      ? {
+          id: Number(user.idUser),
+          name: user.name || user.username,
+        }
+      : null,
+    paymentType: paymentType
+      ? {
+          id: paymentType.idPaymentType,
+          name: paymentType.desc,
+        }
+      : null,
+    discountType: sale.discountType || null,
+    discountValue:
+      sale.discountValue === null || sale.discountValue === undefined
+        ? null
+        : Number(sale.discountValue),
+    totalAmount: Number(sale.totalAmount || 0),
+    finalAmount: Number(sale.finalAmount || 0),
+    dueDate: sale.dueDate,
+    installmentCount: Number(sale.installmentCount || 1),
+    createdAt: sale.createdAt,
+    updatedAt: sale.updatedAt,
+    items,
+    receipts,
+    measurementsCount,
+    receivable: receivable
+      ? {
+          id: receivable.idReceivable,
+          debtorType: receivable.debtorType,
+          operatorLabel: receivable.operatorLabel || null,
+          originalAmount: Number(receivable.originalAmount || 0),
+          openAmount: Number(receivable.openAmount || 0),
+          status: receivable.status,
+          installments: Array.isArray(receivable.ReceivableInstallments)
+            ? receivable.ReceivableInstallments.map(mapReceivableInstallment)
+            : [],
+        }
+      : null,
+    cardTransaction: cardTransaction
+      ? {
+          id: cardTransaction.idCardTransaction,
+          operatorLabel: cardTransaction.operatorLabel || null,
+          cardBrand: cardTransaction.cardBrand || null,
+          authorizationCode: cardTransaction.authorizationCode || null,
+          clientInstallmentCount: Number(cardTransaction.clientInstallmentCount || 1),
+          grossAmount: Number(cardTransaction.grossAmount || 0),
+          entryAmount: Number(cardTransaction.entryAmount || 0),
+          netReceivableAmount: Number(cardTransaction.netReceivableAmount || 0),
+          feeAmount: Number(cardTransaction.feeAmount || 0),
+          expectedSettlementDate: cardTransaction.expectedSettlementDate || null,
+          settlementStatus: cardTransaction.settlementStatus,
+        }
+      : null,
+  };
+}
+
 async function createSale(body = {}) {
   const customerId = normalizeInteger(body.customerId, "Cliente");
   const items = Array.isArray(body.items) ? body.items.map(normalizeSaleItem) : [];
@@ -484,8 +637,25 @@ async function createSale(body = {}) {
   };
 }
 
+async function getSaleById(id) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const sale = await repository.getSaleById(normalizedId);
+
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  return mapSaleDetails(sale);
+}
+
 module.exports = {
   MEASUREMENT_FIELDS,
   createSalesValidationError,
   createSale,
+  getSaleById,
 };

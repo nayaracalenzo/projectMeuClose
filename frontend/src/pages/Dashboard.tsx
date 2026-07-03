@@ -229,7 +229,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="rounded-2xl p-5">
+    <div className=" p-5 bg-white md:bg-surface-low">
       <h1 className="mb-5 font-editorial text-4xl font-extralight leading-none tracking-tight text-primary">
         Olá, Lia. Bem-vinda de volta!
       </h1>

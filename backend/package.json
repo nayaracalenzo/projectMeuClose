@@ -17,6 +17,7 @@
     "db:seed:products": "node src/scripts/importProducts.js",
     "db:seed:sales": "node src/scripts/importSales.js",
     "db:seed:sale-items": "node src/scripts/importSaleItems.js",
+    "db:seed:sale-financials": "node src/scripts/importSaleFinancials.js",
     "db:fix:products-types": "node src/scripts/fixImportedProductsTypes.js",
     "db:fix:products-financial-values": "node src/scripts/fixImportedProductsFinancialValues.js",
     "db:fix:products-test-dates": "node src/scripts/fixImportedProductsTestDates.js",

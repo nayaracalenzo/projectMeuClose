@@ -11,6 +11,12 @@ function normalizeInteger(value) {
   return Number.isInteger(normalized) ? normalized : null;
 }
 
+function normalizeLegacyPaymentTypeId(value) {
+  const normalized = normalizeInteger(value);
+  if (!normalized || normalized <= 0) return null;
+  return normalized;
+}
+
 function normalizeDecimal(value) {
   if (value === undefined || value === null || value === "") return null;
 
@@ -34,8 +40,8 @@ function roundCurrency(value) {
 function resolveMainPaymentTypeId(row, validPaymentTypeIds) {
   const immediateAmount = normalizeDecimal(row.vlrVis) || 0;
   const futureAmount = normalizeDecimal(row.vlrPra) || 0;
-  const immediatePaymentTypeId = normalizeInteger(row.idTipDocVis);
-  const futurePaymentTypeId = normalizeInteger(row.idTipDocPra);
+  const immediatePaymentTypeId = normalizeLegacyPaymentTypeId(row.idTipDocVis);
+  const futurePaymentTypeId = normalizeLegacyPaymentTypeId(row.idTipDocPra);
 
   if (futureAmount > 0 && futurePaymentTypeId && validPaymentTypeIds.has(futurePaymentTypeId)) {
     return futurePaymentTypeId;

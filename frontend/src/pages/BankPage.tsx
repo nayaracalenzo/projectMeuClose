@@ -18,6 +18,16 @@ interface BankRow {
 const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
 
+const getCategoryBadgeClassName = (category?: string) => {
+  const normalized = String(category || "").trim().toUpperCase();
+
+  if (normalized === "TRANSFERENCIA") {
+    return "bg-[#E8F1FF] text-[#1E4FA3]";
+  }
+
+  return "bg-surface text-neutral-700";
+};
+
 export default function BankPage() {
   const [scope, setScope] = useState<Scope>("LOJA");
   const [search, setSearch] = useState("");
@@ -175,7 +185,15 @@ export default function BankPage() {
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(row.date)}</td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{row.bank}</td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{row.movement}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.category}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                        row.category,
+                      )}`}
+                    >
+                      {row.category}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{row.description}</td>
                   <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">{formatCurrency(row.amount)}</td>
                 </tr>
@@ -198,7 +216,16 @@ export default function BankPage() {
           rows.map((row) => (
             <div key={row.id} className="px-4 py-4">
               <p className="text-sm font-semibold text-primary">{formatDate(row.date)} - {row.bank}</p>
-              <p className="text-xs text-neutral-700">{row.category} - {row.movement}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                    row.category,
+                  )}`}
+                >
+                  {row.category}
+                </span>
+                <span className="text-xs text-neutral-700">{row.movement}</span>
+              </div>
               <p className="text-xs text-neutral-700">{row.description}</p>
               <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(row.amount)}</p>
             </div>

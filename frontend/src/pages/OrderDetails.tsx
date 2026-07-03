@@ -33,6 +33,13 @@ type ProductDetails = {
   dressmakerValue: number;
   finalValue: number;
   remainingValue: number;
+  saleItemQuantity: number;
+  saleItemUnitPrice: number;
+  saleItemDiscountType: "PERCENTAGE" | "FIXED" | null;
+  saleItemDiscountValue: number | null;
+  saleItemGrossValue: number;
+  saleItemDiscountAmount: number;
+  saleItemSubtotal: number;
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -166,6 +173,22 @@ function InfoCard({
       <p className="mt-1 text-sm font-medium text-primary">{value}</p>
     </div>
   );
+}
+
+function formatDiscountLabel(product: ProductDetails) {
+  if (!product.saleId || !product.saleItemDiscountType || !product.saleItemDiscountValue) {
+    return product.saleItemDiscountAmount > 0
+      ? formatCurrency(product.saleItemDiscountAmount)
+      : "Sem desconto";
+  }
+
+  if (product.saleItemDiscountType === "PERCENTAGE") {
+    return `${product.saleItemDiscountValue.toFixed(2)}% (${formatCurrency(
+      product.saleItemDiscountAmount,
+    )})`;
+  }
+
+  return formatCurrency(product.saleItemDiscountValue);
 }
 
 export default function OrderDetails() {
@@ -645,6 +668,25 @@ export default function OrderDetails() {
                   {formatCurrency(remainingValuePreview)}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <InfoCard
+                label="Valor bruto do item"
+                value={formatCurrency(product.saleItemGrossValue || product.finalValue)}
+              />
+              <InfoCard
+                label="Desconto do item"
+                value={formatDiscountLabel(product)}
+              />
+              <InfoCard
+                label="Valor final do item"
+                value={formatCurrency(product.saleItemSubtotal || product.finalValue)}
+              />
+              <InfoCard
+                label="Qtd. na venda"
+                value={String(product.saleItemQuantity || product.qtyStock || 1)}
+              />
             </div>
           </section>
 

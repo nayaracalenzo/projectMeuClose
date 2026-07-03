@@ -65,6 +65,16 @@ const formatDateTime = (dateString: string) =>
     timeStyle: "short",
   }).format(new Date(dateString));
 
+const getCategoryBadgeClassName = (category?: string) => {
+  const normalized = String(category || "").trim().toUpperCase();
+
+  if (normalized === "TRANSFERENCIA") {
+    return "bg-[#E8F1FF] text-[#1E4FA3]";
+  }
+
+  return "bg-surface text-neutral-700";
+};
+
 export default function Registers() {
   const [scope, setScope] = useState<Scope>("LOJA");
   const [search, setSearch] = useState("");
@@ -78,9 +88,16 @@ export default function Registers() {
   const [sessionActionLoading, setSessionActionLoading] = useState(false);
   const [openSessionModal, setOpenSessionModal] = useState(false);
   const [closeSessionModal, setCloseSessionModal] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [openingBalanceInput, setOpeningBalanceInput] = useState("");
   const [countedBalanceInput, setCountedBalanceInput] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
+  const [transferAmountInput, setTransferAmountInput] = useState("");
+  const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [transferDescription, setTransferDescription] = useState(
+    "Transferência do caixa para o banco",
+  );
+  const [transferReferenceCode, setTransferReferenceCode] = useState("");
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   const fetchRows = async () => {
@@ -177,6 +194,14 @@ export default function Registers() {
     setCloseSessionModal(false);
   };
 
+  const resetTransferModal = () => {
+    setTransferAmountInput("");
+    setTransferDate(new Date().toISOString().slice(0, 10));
+    setTransferDescription("Transferência do caixa para o banco");
+    setTransferReferenceCode("");
+    setTransferModalOpen(false);
+  };
+
   async function handleOpenSession() {
     try {
       setSessionActionLoading(true);
@@ -225,6 +250,38 @@ export default function Registers() {
         tone: "error",
         title: "Nao foi possivel fechar",
         message: getUserFacingApiErrorMessage(err, "Nao foi possivel fechar o caixa."),
+      });
+    } finally {
+      setSessionActionLoading(false);
+    }
+  }
+
+  async function handleTransferToBank() {
+    try {
+      setSessionActionLoading(true);
+      await postRequest("/cash/transfers/to-bank", {
+        amount: parseCurrencyToNumber(transferAmountInput),
+        occurredAt: transferDate,
+        description: transferDescription.trim(),
+        referenceCode: transferReferenceCode.trim() || null,
+      });
+      resetTransferModal();
+      await Promise.all([fetchRows(), fetchSessionStatus()]);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Transferência registrada",
+        message: "A saída do caixa e a entrada no banco foram registradas com sucesso.",
+      });
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Não foi possível transferir",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Não foi possível registrar a transferência para o banco.",
+        ),
       });
     } finally {
       setSessionActionLoading(false);
@@ -304,17 +361,26 @@ export default function Registers() {
                   Abrir Caixa
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCountedBalanceInput(formatCurrencyInput(String(currentSession.expectedBalance)));
-                    setSessionNotes(currentSession.notes || "");
-                    setCloseSessionModal(true);
-                  }}
-                  className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
-                >
-                  Fechar Caixa
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setTransferModalOpen(true)}
+                    className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm font-medium text-primary"
+                  >
+                    Transferir para banco
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCountedBalanceInput(formatCurrencyInput(String(currentSession.expectedBalance)));
+                      setSessionNotes(currentSession.notes || "");
+                      setCloseSessionModal(true);
+                    }}
+                    className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+                  >
+                    Fechar Caixa
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -448,7 +514,11 @@ export default function Registers() {
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     <p>{row.description}</p>
-                    <p className="text-xs uppercase tracking-[0.08em] text-neutral-500">
+                    <p
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                        row.category,
+                      )}`}
+                    >
                       {row.category}
                     </p>
                   </td>
@@ -482,7 +552,11 @@ export default function Registers() {
             <div key={row.id} className="px-4 py-4">
               <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
               <p className="text-xs text-neutral-700">{row.description}</p>
-              <p className="text-xs uppercase tracking-[0.08em] text-neutral-500">
+              <p
+                className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                  row.category,
+                )}`}
+              >
                 {row.category}
               </p>
               <p className="text-xs text-neutral-700">
@@ -498,6 +572,72 @@ export default function Registers() {
           ))
         )}
       </div>
+
+      <CustomerModal
+        open={transferModalOpen}
+        onClose={resetTransferModal}
+        title="Transferir Caixa para Banco"
+        subtitle="Registre a saída do caixa da loja e a entrada correspondente no banco."
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">Valor</label>
+            <input
+              value={transferAmountInput}
+              onChange={(e) => setTransferAmountInput(formatCurrencyInput(e.target.value))}
+              placeholder="R$ 0,00"
+              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">Data</label>
+            <input
+              type="date"
+              value={transferDate}
+              onChange={(e) => setTransferDate(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">Descrição</label>
+            <input
+              value={transferDescription}
+              onChange={(e) => setTransferDescription(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">Referência</label>
+            <input
+              value={transferReferenceCode}
+              onChange={(e) => setTransferReferenceCode(e.target.value)}
+              placeholder="Opcional"
+              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleTransferToBank}
+              disabled={sessionActionLoading}
+              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {sessionActionLoading ? "Transferindo..." : "Confirmar transferência"}
+            </button>
+            <button
+              type="button"
+              onClick={resetTransferModal}
+              className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </CustomerModal>
 
       <CustomerModal
         open={openSessionModal}

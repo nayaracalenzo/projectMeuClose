@@ -1,4 +1,19 @@
-const { CustomerMeasurements, SaleItems, Sales, sequelize } = require("../models");
+const {
+  CardTransactions,
+  CustomerMeasurements,
+  Customers,
+  Employees,
+  PaymentReceipts,
+  PaymentTypes,
+  Products,
+  ReceivableInstallments,
+  Receivables,
+  SaleItems,
+  Sales,
+  Status,
+  Users,
+  sequelize,
+} = require("../models");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 const productsRepository = require("./productsRepository");
 const receivablesRepository = require("./receivablesRepository");
@@ -111,6 +126,80 @@ async function createSale({
   });
 }
 
+async function getSaleById(idSale) {
+  return Sales.findOne({
+    where: {
+      idSale,
+    },
+    include: [
+      {
+        model: Customers,
+      },
+      {
+        model: Users,
+      },
+      {
+        model: PaymentTypes,
+      },
+      {
+        model: SaleItems,
+        include: [
+          {
+            model: Products,
+            include: [
+              {
+                model: Employees,
+                attributes: ["idEmployee", "shortName", "fullName"],
+              },
+              {
+                model: Status,
+                attributes: ["id", "desc"],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        model: PaymentReceipts,
+        include: [
+          {
+            model: PaymentTypes,
+          },
+        ],
+      },
+      {
+        model: Receivables,
+        include: [
+          {
+            model: ReceivableInstallments,
+            include: [
+              {
+                model: PaymentTypes,
+              },
+            ],
+          },
+          {
+            model: CardTransactions,
+          },
+        ],
+      },
+      {
+        model: CardTransactions,
+      },
+      {
+        model: CustomerMeasurements,
+      },
+    ],
+    order: [
+      [SaleItems, "idSaleItem", "ASC"],
+      [PaymentReceipts, "paidAt", "ASC"],
+      [Receivables, ReceivableInstallments, "installmentNumber", "ASC"],
+      [CustomerMeasurements, "idCustomerMeasurements", "ASC"],
+    ],
+  });
+}
+
 module.exports = {
   createSale,
+  getSaleById,
 };

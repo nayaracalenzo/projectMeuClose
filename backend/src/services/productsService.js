@@ -37,6 +37,13 @@ function mapProductDetails(product) {
   const fabric = product.Fabric || product.Fabrics;
   const size = product.Size || product.Sizes;
   const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
+  const saleItemQuantity = Number(saleItem?.quantity || 0);
+  const saleItemUnitPrice = Number(saleItem?.unitPrice || 0);
+  const saleItemSubtotal = Number(saleItem?.subtotal || 0);
+  const saleItemGrossValue = Number((saleItemQuantity * saleItemUnitPrice).toFixed(2));
+  const saleItemDiscountAmount = Number(
+    Math.max(0, saleItemGrossValue - saleItemSubtotal).toFixed(2),
+  );
 
   return {
     id: product.id,
@@ -66,6 +73,16 @@ function mapProductDetails(product) {
     dressmakerValue: Number(product.dressmakerValue || 0),
     finalValue: Number(product.finalValue || 0),
     remainingValue: Number(product.remainingValue || 0),
+    saleItemQuantity,
+    saleItemUnitPrice,
+    saleItemDiscountType: saleItem?.discountType || null,
+    saleItemDiscountValue:
+      saleItem?.discountValue === null || saleItem?.discountValue === undefined
+        ? null
+        : Number(saleItem.discountValue),
+    saleItemGrossValue,
+    saleItemDiscountAmount,
+    saleItemSubtotal,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };

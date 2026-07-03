@@ -9,6 +9,16 @@ async function createSaleController(req, res, next) {
   }
 }
 
+async function getSaleByIdController(req, res, next) {
+  try {
+    const data = await service.getSaleById(req.params.id);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   createSaleController,
+  getSaleByIdController,
 };
