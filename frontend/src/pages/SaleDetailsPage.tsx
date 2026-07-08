@@ -155,6 +155,14 @@ function formatReceiptType(receiptType: SaleReceipt["receiptType"]) {
   return "Parcela";
 }
 
+function formatSaleStatus(value?: string | null) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "BUDGET") return "Orçamento";
+  if (normalized === "COMPLETED") return "Concluído";
+  if (normalized === "CANCELLED") return "Cancelado";
+  return value || "-";
+}
+
 export default function SaleDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -252,7 +260,7 @@ export default function SaleDetailsPage() {
         <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <InfoCard label="Venda" value={`#${sale.id}`} />
           <InfoCard label="Cliente" value={sale.customer?.name || "Sem cliente"} />
-          <InfoCard label="Status" value={sale.status} />
+          <InfoCard label="Status" value={formatSaleStatus(sale.status)} />
           <InfoCard label="Forma principal" value={sale.paymentType?.name || "-"} />
           <InfoCard label="Valor final" value={formatCurrency(sale.finalAmount)} />
           <InfoCard label="Recebido" value={formatCurrency(totalReceived)} />

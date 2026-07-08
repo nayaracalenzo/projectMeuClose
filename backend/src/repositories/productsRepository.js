@@ -207,6 +207,16 @@ async function listProducts(filters = {}) {
   const normalizedPage = Math.max(1, Number(filters.page) || 1);
   const normalizedPageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 20));
   const normalizedSortBy = String(filters.sortBy || "createdAtDesc");
+  const statusWhere =
+    normalizedStatusId && Number.isInteger(normalizedStatusId)
+      ? normalizedStatusId === 1
+        ? { statusId: [1, 5] }
+        : { statusId: normalizedStatusId }
+      : {};
+  const where = {
+    dsbl: false,
+    ...statusWhere,
+  };
 
   const orderMap = {
     createdAtDesc: [
@@ -225,18 +235,20 @@ async function listProducts(filters = {}) {
     ],
   };
 
-  const statusWhere =
-    normalizedStatusId && Number.isInteger(normalizedStatusId)
-      ? normalizedStatusId === 1
-        ? { statusId: [1, 5] }
-        : { statusId: normalizedStatusId }
-      : {};
+  if (filters.startDate || filters.endDate) {
+    where.testDate = {};
+
+    if (filters.startDate) {
+      where.testDate[Sequelize.Op.gte] = filters.startDate;
+    }
+
+    if (filters.endDate) {
+      where.testDate[Sequelize.Op.lte] = filters.endDate;
+    }
+  }
 
   return Products.findAndCountAll({
-    where: {
-      dsbl: false,
-      ...statusWhere,
-    },
+    where,
     include: getProductInclude(),
     order: orderMap[normalizedSortBy] || orderMap.createdAtDesc,
     limit: normalizedPageSize,

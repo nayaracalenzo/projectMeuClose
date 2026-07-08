@@ -8,6 +8,9 @@ function mapProductRow(product) {
   const category = product.Category || product.Categories;
   const productType = product.ProductsType || product.ProductsTypes;
   const clothingType = product.ClothingsType;
+  const color = product.Color || product.Colors;
+  const fabric = product.Fabric || product.Fabrics;
+  const size = product.Size || product.Sizes;
   const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
 
   return {
@@ -23,6 +26,11 @@ function mapProductRow(product) {
     finalValue: Number(product.finalValue || 0),
     testDate: product.testDate,
     createdAt: product.createdAt,
+    qtyStock: Number(product.qtyStock || 0),
+    fabric: fabric?.desc || null,
+    color: color?.desc || null,
+    size: size?.desc || null,
+    details: product.details || "",
   };
 }
 
@@ -150,6 +158,20 @@ function normalizeNullableDate(value) {
   return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
+function normalizeFilterDate(value) {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) {
+    throw validationError("Filtro de data invÃ¡lido.");
+  }
+
+  return raw;
+}
+
 function normalizeProductPayload(body = {}) {
   const desc = normalizeText(body.desc, { allowEmpty: false });
   if (!desc) {
@@ -243,7 +265,9 @@ function validateDependencies(payload, dependencies) {
 async function listProducts(filters = {}) {
   const page = Math.max(1, Number(filters.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 20));
-  const result = await repository.listProducts({ ...filters, page, pageSize });
+  const startDate = normalizeFilterDate(filters.startDate);
+  const endDate = normalizeFilterDate(filters.endDate);
+  const result = await repository.listProducts({ ...filters, page, pageSize, startDate, endDate });
   const items = result.rows.map(mapProductRow);
   const total = Number(result.count || 0);
 

@@ -15,6 +15,7 @@ const {
   Users,
   sequelize,
 } = require("../models");
+const { Op } = require("sequelize");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 const productsRepository = require("./productsRepository");
 const receivablesRepository = require("./receivablesRepository");
@@ -127,6 +128,125 @@ async function createSale({
   });
 }
 
+async function getSaleForFinalization(idSale, transaction) {
+  return Sales.findOne({
+    where: {
+      idSale,
+    },
+    include: [
+      {
+        model: SaleItems,
+        attributes: [
+          "idSaleItem",
+          "itemType",
+          "description",
+          "quantity",
+          "unitPrice",
+          "discountType",
+          "discountValue",
+          "subtotal",
+          "metadata",
+        ],
+      },
+      {
+        model: PaymentReceipts,
+        attributes: ["idPaymentReceipt"],
+      },
+      {
+        model: Receivables,
+        attributes: ["idReceivable"],
+      },
+    ],
+    transaction,
+    lock: transaction ? transaction.LOCK.UPDATE : undefined,
+  });
+}
+
+async function finalizeSale(
+  idSale,
+  {
+    sale,
+    entryReceipt,
+    receivable,
+    financialMovements,
+  },
+) {
+  return sequelize.transaction(async (transaction) => {
+    const existingSale = await getSaleForFinalization(idSale, transaction);
+
+    if (!existingSale) {
+      return null;
+    }
+
+    await existingSale.update(sale, { transaction });
+
+    let createdReceivable = null;
+    let createdEntryReceipt = null;
+
+    if (entryReceipt) {
+      createdEntryReceipt = await receivablesRepository.createStandaloneReceipt(
+        {
+          saleId: existingSale.idSale,
+          receivableInstallmentId: null,
+          paymentTypeId: entryReceipt.paymentTypeId,
+          receiptType: entryReceipt.receiptType,
+          amount: entryReceipt.amount,
+          paidAt: entryReceipt.paidAt,
+          referenceCode: entryReceipt.referenceCode,
+        },
+        transaction,
+      );
+    }
+
+    if (Array.isArray(financialMovements) && financialMovements.length) {
+      for (const movement of financialMovements) {
+        const payload = {
+          ...movement,
+          saleId: existingSale.idSale,
+          paymentReceiptId: createdEntryReceipt?.idPaymentReceipt || null,
+        };
+
+        if (movement.target === "CASH") {
+          await createCashEntry(payload, transaction);
+          continue;
+        }
+
+        await createBankEntry(payload, transaction);
+      }
+    }
+
+    if (receivable) {
+      createdReceivable = await receivablesRepository.createReceivableWithInstallments(
+        {
+          receivable: {
+            saleId: existingSale.idSale,
+            customerId: receivable.customerId,
+            originalAmount: receivable.originalAmount,
+            openAmount: receivable.originalAmount,
+            status: "OPEN",
+            debtorType: receivable.debtorType,
+            operatorLabel: receivable.operatorLabel,
+          },
+          installments: receivable.installments,
+          cardTransaction: receivable.cardTransaction
+            ? {
+                ...receivable.cardTransaction,
+                saleId: existingSale.idSale,
+              }
+            : null,
+        },
+        transaction,
+      );
+    }
+
+    return {
+      sale: existingSale,
+      entryReceipt: createdEntryReceipt,
+      receivable: createdReceivable,
+    };
+  });
+}
+
 async function getSaleById(idSale) {
   return Sales.findOne({
     where: {
@@ -205,7 +325,50 @@ async function getSaleById(idSale) {
   });
 }
 
+async function listSales({ page = 1, pageSize = 10, status, search } = {}) {
+  const where = {};
+
+  if (status) {
+    where.status = status;
+  }
+
+  return Sales.findAndCountAll({
+    where,
+    include: [
+      {
+        model: Customers,
+        attributes: ["idCustomer", "fullName", "companyName"],
+        where: search
+          ? {
+              [Op.or]: [
+                { fullName: { [Op.iLike]: `%${search}%` } },
+                { companyName: { [Op.iLike]: `%${search}%` } },
+              ],
+            }
+          : undefined,
+        required: Boolean(search),
+      },
+      {
+        model: PaymentTypes,
+        attributes: ["idPaymentType", "desc"],
+        required: false,
+      },
+      {
+        model: SaleItems,
+        attributes: ["idSaleItem", "description", "itemType", "subtotal"],
+      },
+    ],
+    order: [["createdAt", "DESC"], ["idSale", "DESC"]],
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    distinct: true,
+  });
+}
+
 module.exports = {
   createSale,
+  finalizeSale,
   getSaleById,
+  getSaleForFinalization,
+  listSales,
 };

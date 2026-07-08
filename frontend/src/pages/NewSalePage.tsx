@@ -15,7 +15,7 @@ import ReadyMadeClothing, {
 } from "../components/ReadyMadeClothing";
 import { SaleStepper } from "../components/SaleStepper";
 import type { ICustomer } from "../interfaces/ICustomer";
-import { getRequest, postRequest } from "../services/request";
+import { getRequest, postRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import {
   formatCurrencyInput,
@@ -168,6 +168,7 @@ export default function NewSalePage() {
   >([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [draftSaleId, setDraftSaleId] = useState<number | null>(null);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
@@ -418,6 +419,7 @@ export default function NewSalePage() {
     return installments;
   }, [previewInstallmentCount, remainingAmount]);
   const canSaveSale =
+    draftSaleId !== null &&
     !isSaving &&
     !!selectedCustomer &&
     tableItems.length > 0 &&
@@ -443,6 +445,8 @@ export default function NewSalePage() {
       selectedPaymentType?.allowsEntryAmount,
     ],
   );
+  const canCreateQuote = !isSaving && !!selectedCustomer && tableItems.length > 0;
+  const hasGeneratedQuote = draftSaleId !== null;
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
@@ -832,6 +836,230 @@ export default function NewSalePage() {
     }
   };
 
+  const buildSaleItemsPayload = () => {
+    const readyMadeItems = readyMadeProducts.map((product) => {
+      const quantity = Number(product.quantity) > 0 ? Number(product.quantity) : 1;
+      const unitPrice = parseCurrencyToNumber(product.price);
+      const discountPercent = Math.min(
+        100,
+        Math.max(0, Number(product.discountPercent.replace(",", ".")) || 0),
+      );
+
+      return {
+        itemType: "READY_MADE",
+        description: product.name.trim() || "Roupa pronta",
+        quantity,
+        unitPrice,
+        discountType: discountPercent > 0 ? "PERCENTAGE" : null,
+        discountValue: discountPercent > 0 ? discountPercent : null,
+        subtotal: Number((unitPrice * quantity * (1 - discountPercent / 100)).toFixed(2)),
+        metadata: {
+          size: product.size || null,
+        },
+      };
+    });
+
+    const customItems = customMadeProducts.map((product) => {
+      const unitPrice = parseCurrencyToNumber(product.price);
+      const seamstressCost = parseCurrencyToNumber(product.seamstressCost);
+      const discountPercent = Math.min(
+        100,
+        Math.max(0, Number(product.discountPercent.replace(",", ".")) || 0),
+      );
+
+      return {
+        itemType: "CUSTOM_MADE",
+        description: product.type.trim() || "Sob medida",
+        quantity: 1,
+        unitPrice,
+        discountType: discountPercent > 0 ? "PERCENTAGE" : null,
+        discountValue: discountPercent > 0 ? discountPercent : null,
+        subtotal: Number((unitPrice * (1 - discountPercent / 100)).toFixed(2)),
+        metadata: {
+          fabric: product.fabric || null,
+          color: product.color || null,
+          details: product.details || null,
+          status: product.status || null,
+          seamstress: product.seamstress || null,
+          fittingDate: product.fittingDate || null,
+          seamstressCost: seamstressCost || null,
+          selectedMeasurements: product.selectedMeasurements,
+        },
+      };
+    });
+
+    const accessoryItems = buildGenericSaleItems(accessoryProducts, "ACCESSORY", "Acessório");
+    const serviceItems = buildGenericSaleItems(serviceProducts, "SERVICE", "Serviço");
+    const miscItems = buildGenericSaleItems(miscProducts, "MISC", "Diversos");
+
+    return [
+      ...readyMadeItems,
+      ...customItems,
+      ...accessoryItems,
+      ...serviceItems,
+      ...miscItems,
+    ];
+  };
+
+  const buildCustomerMeasurementsPayload = () =>
+    customMadeProducts.map((product) => ({
+      ...product.measurements,
+    }));
+
+  const resetSaleForm = async () => {
+    setDraftSaleId(null);
+    setSelectedCustomer(null);
+    setSearch("");
+    setSaveMessage("");
+    setTableItems([]);
+    setReadyMadeProducts([]);
+    setCustomMadeProducts([]);
+    setAccessoryProducts([]);
+    setServiceProducts([]);
+    setMiscProducts([]);
+    setModalItems([]);
+    setSelectedCategoryCode("");
+    setSelectedClothingSubtype("");
+    setPaymentTypeId("");
+    setInstallmentCount("1");
+    setDueDate(new Date().toISOString().slice(0, 10));
+    setEntryAmount("");
+    setEntryPaymentTypeId("");
+    setEntryPaidAt(new Date().toISOString().slice(0, 10));
+    setEntryReferenceCode("");
+    setPaymentReferenceCode("");
+    setCashReceivedAmount("");
+    setCardOperatorLabel("");
+    setCardBrand("");
+    setCardAuthorizationCode("");
+    setCardExpectedSettlementDate(new Date().toISOString().slice(0, 10));
+    setCardClientInstallmentCount("1");
+    setCardFeeAmount("");
+    setStep(1);
+    const updatedCashSessionStatus = await getRequest("/cash/session-status");
+    setCashSessionStatus((updatedCashSessionStatus as CashSessionStatusResponse) || null);
+  };
+
+  const handleCreateQuote = async () => {
+    if (!selectedCustomer || tableItems.length === 0) {
+      return;
+    }
+
+    if (hasGeneratedQuote) {
+      setStep(4);
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveMessage("");
+
+      const created = await postRequest("/sales", {
+        customerId: selectedCustomer.id,
+        totalAmount: totalValue,
+        finalAmount: discountedTotalValue,
+        discountType: null,
+        discountValue: null,
+        items: buildSaleItemsPayload(),
+        customerMeasurements: buildCustomerMeasurementsPayload(),
+      });
+
+      setDraftSaleId(Number((created as { id?: number }).id));
+      setSaveMessage(
+        "Orçamento gerado com sucesso. Agora informe a forma de pagamento para concluir o pedido.",
+      );
+      setStep(4);
+    } catch (error: unknown) {
+      setSaveMessage(
+        getUserFacingApiErrorMessage(error, "Não foi possível gerar o orçamento."),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleFinalizeQuote = async () => {
+    if (!selectedCustomer || tableItems.length === 0 || !draftSaleId) {
+      return;
+    }
+
+    if (cashSessionStatus?.currentSession?.pendingPreviousDay) {
+      setCashSessionNotes(cashSessionStatus.currentSession.notes || "");
+      setCountedBalanceInput(
+        formatCurrencyInput(String(cashSessionStatus.currentSession.expectedBalance || 0)),
+      );
+      setCloseCashModalOpen(true);
+      setSaveMessage(
+        `Existe um caixa da loja aberto de ${formatDate(
+          cashSessionStatus.currentSession.openedAt,
+        )}. Feche o caixa antes de concluir o pedido.`,
+      );
+      return;
+    }
+
+    if (requiresStoreCashSession && !cashSessionStatus?.hasOpenSession) {
+      setSaveMessage("Abra o caixa da loja antes de concluir um pedido com recebimento em dinheiro.");
+      setOpeningBalanceInput(formatCurrencyInput("0"));
+      setCashSessionNotes("");
+      setOpenCashModalOpen(true);
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveMessage("");
+
+      await updateRequest(`/sales/${draftSaleId}/finalize`, {
+        paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
+        installmentCount: previewInstallmentCount,
+        dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
+        entryAmount:
+          selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
+            ? parsedEntryAmount
+            : null,
+        entryPaymentTypeId: entryPaymentTypeId ? Number(entryPaymentTypeId) : null,
+        entryPaidAt: parsedEntryAmount > 0 ? entryPaidAt : null,
+        entryReferenceCode: entryReferenceCode || null,
+        paymentReferenceCode: paymentReferenceCode || null,
+        cardOperatorLabel:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+            ? cardOperatorLabel || null
+            : null,
+        cardBrand:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+            ? cardBrand || null
+            : null,
+        cardAuthorizationCode:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+            ? cardAuthorizationCode || null
+            : null,
+        cardExpectedSettlementDate:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+            ? cardExpectedSettlementDate || null
+            : null,
+        cardClientInstallmentCount:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
+            ? Number(cardClientInstallmentCount) || 1
+            : null,
+        cardFeeAmount:
+          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" && cardFeeAmount
+            ? Number(cardFeeAmount.replace(",", "."))
+            : null,
+      });
+
+      await resetSaleForm();
+      setSaveMessage("Pedido concluído com sucesso.");
+    } catch (error: unknown) {
+      setSaveMessage(
+        getUserFacingApiErrorMessage(error, "Não foi possível concluir o pedido."),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  void handleSaveSale;
+
   const currentModalType = resolveModalTypeFromSelection();
 
   return (
@@ -948,6 +1176,7 @@ export default function NewSalePage() {
                     <select
                       value={selectedCategoryCode}
                       onChange={(e) => handleCategoryChange(e.target.value)}
+                      disabled={hasGeneratedQuote}
                       className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
                     >
                       <option value="">Selecione...</option>
@@ -969,6 +1198,7 @@ export default function NewSalePage() {
                         onChange={(e) =>
                           setSelectedClothingSubtype(e.target.value as ClothingSubtype | "")
                         }
+                        disabled={hasGeneratedQuote}
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
                       >
                         <option value="">Selecione...</option>
@@ -1056,13 +1286,20 @@ export default function NewSalePage() {
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!currentModalType}
+                      disabled={!currentModalType || hasGeneratedQuote}
                       onClick={() => currentModalType && openModal(currentModalType)}
                     >
                       + Adicionar item
                     </Button>
                   </div>
                 </div>
+
+                {hasGeneratedQuote ? (
+                  <div className="rounded-lg border border-outline-variant/45 bg-white px-4 py-3 text-sm text-neutral-700">
+                    Este orçamento já foi gerado. Para manter os dados consistentes, os itens
+                    ficaram bloqueados e agora falta apenas concluir o pagamento.
+                  </div>
+                ) : null}
 
                 {tableItems.length > 0 && (
                   <>
@@ -1122,15 +1359,16 @@ export default function NewSalePage() {
                       type="button"
                       variant="secondary"
                       onClick={() => setStep(1)}
+                      disabled={hasGeneratedQuote}
                     >
                       Voltar
                     </Button>
                     <Button
                       type="button"
-                      onClick={() => setStep(4)}
-                      disabled={tableItems.length === 0}
+                      onClick={handleCreateQuote}
+                      disabled={!canCreateQuote}
                     >
-                      Continuar
+                      {isSaving ? "Gerando..." : hasGeneratedQuote ? "Ir para pagamento" : "Gerar orçamento"}
                     </Button>
                   </div>
                 </div>
@@ -1140,7 +1378,7 @@ export default function NewSalePage() {
             {step === 4 && (
               <div className="flex flex-col gap-5">
                 <p className="text-md font-semibold text-primary">
-                  Passo 4: Pagamento
+                  Passo 4: Pagamento e conclusão
                 </p>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -1428,10 +1666,10 @@ export default function NewSalePage() {
                     </Button>
                     <Button
                       type="button"
-                      onClick={handleSaveSale}
+                      onClick={handleFinalizeQuote}
                       disabled={!canSaveSale}
                     >
-                      {isSaving ? "Salvando..." : "Salvar pedido"}
+                      {isSaving ? "Concluindo..." : "Gerar pedido"}
                     </Button>
                   </div>
                 </div>
@@ -1447,6 +1685,9 @@ export default function NewSalePage() {
             <p className="mb-3 text-sm text-neutral-700">Tipo: {selectedTypesLabel}</p>
             <p className="text-sm text-neutral-700">
               Forma: {selectedPaymentType?.name || "Não definida"}
+            </p>
+            <p className="text-sm text-neutral-700">
+              Status: {hasGeneratedQuote ? "Orçamento" : "Em montagem"}
             </p>
             <p className="mb-3 text-sm text-neutral-700">
               Parcelas: {previewInstallmentCount}

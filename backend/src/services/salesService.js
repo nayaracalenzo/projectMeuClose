@@ -481,7 +481,29 @@ function mapSaleDetails(sale) {
   };
 }
 
+function mapSaleListItem(sale) {
+  const customer = sale.Customer || sale.Customers;
+  const paymentType = sale.PaymentType || sale.PaymentTypes;
+  const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
+
+  return {
+    id: sale.idSale,
+    status: sale.status,
+    customerName: customer?.fullName || customer?.companyName || "Sem cliente",
+    paymentTypeName: paymentType?.desc || null,
+    itemsCount: items.length,
+    firstItemDescription: items[0]?.description || null,
+    finalAmount: Number(sale.finalAmount || 0),
+    createdAt: sale.createdAt,
+    updatedAt: sale.updatedAt,
+  };
+}
+
 async function createSale(body = {}) {
+  return finalizeSaleFromScratch(body);
+}
+
+function normalizeQuoteBase(body = {}) {
   const customerId = normalizeInteger(body.customerId, "Cliente");
   const items = Array.isArray(body.items) ? body.items.map(normalizeSaleItem) : [];
 
@@ -496,6 +518,30 @@ async function createSale(body = {}) {
     throw createSalesValidationError("Valores totais sao obrigatorios.");
   }
 
+  const customerMeasurements = Array.isArray(body.customerMeasurements)
+    ? body.customerMeasurements.map(normalizeMeasurementRecord).filter(Boolean)
+    : [];
+
+  return {
+    customerId,
+    items,
+    totalAmount,
+    finalAmount,
+    customerMeasurements,
+    userId: body.userId ? normalizeInteger(body.userId, "Usuario") : null,
+    discountType:
+      body.discountType === "PERCENTAGE" || body.discountType === "FIXED"
+        ? body.discountType
+        : null,
+    discountValue: normalizeDecimal(body.discountValue, "Desconto da venda"),
+  };
+}
+
+function deriveSaleStatusFromItems() {
+  return "COMPLETED";
+}
+
+async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount }) {
   const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
   const installmentCount =
     body.installmentCount === null || body.installmentCount === undefined || body.installmentCount === ""
@@ -576,10 +622,6 @@ async function createSale(body = {}) {
     });
   }
 
-  const customerMeasurements = Array.isArray(body.customerMeasurements)
-    ? body.customerMeasurements.map(normalizeMeasurementRecord).filter(Boolean)
-    : [];
-
   const remainingAmount = roundCurrency(finalAmount - (entryReceipt?.amount || 0));
   const cardClientInstallmentCount =
     body.cardClientInstallmentCount === null ||
@@ -623,58 +665,173 @@ async function createSale(body = {}) {
     cardData,
   });
 
-  const created = await repository.createSale({
-    sale: {
-      customerId,
-      userId: body.userId ? normalizeInteger(body.userId, "Usuario") : null,
-      discountType:
-        body.discountType === "PERCENTAGE" || body.discountType === "FIXED"
-          ? body.discountType
-          : null,
-      discountValue: normalizeDecimal(body.discountValue, "Desconto da venda"),
-      totalAmount,
-      finalAmount,
-      status:
-        body.status === "COMPLETED" || body.status === "CANCELLED"
-          ? body.status
-          : "OPEN",
-      dueDate: dueDate || cardData.expectedSettlementDate,
-      paymentTypeId: mainPaymentType.id,
-      installmentCount,
-    },
-    items,
-    customerMeasurements,
+  return {
+    mainPaymentType,
+    installmentCount,
+    dueDate,
     entryReceipt,
+    financialMovement: financialMovement ? [financialMovement] : [],
     receivable,
-    financialMovements: financialMovement ? [financialMovement] : [],
-  });
+    remainingAmount,
+  };
+}
 
+function buildSaleResponse(created, extra = {}) {
   return {
     id: created.sale.idSale,
     customerId: created.sale.customerId,
     totalAmount: Number(created.sale.totalAmount),
     finalAmount: Number(created.sale.finalAmount),
     status: created.sale.status,
-    productsCount: created.products.length,
-    itemsCount: created.items.length,
-    measurementsCount: created.measurements.length,
+    productsCount: created.products?.length || 0,
+    itemsCount: created.items?.length || created.sale.SaleItems?.length || 0,
+    measurementsCount: created.measurements?.length || 0,
     entryReceiptId: created.entryReceipt?.idPaymentReceipt || null,
-    receivableId: created.receivable?.receivable?.idReceivable || null,
+    receivableId: created.receivable?.receivable?.idReceivable || created.receivable?.idReceivable || null,
+    ...extra,
+  };
+}
+
+async function createQuote(body = {}) {
+  const normalized = normalizeQuoteBase(body);
+
+  const created = await repository.createSale({
+    sale: {
+      customerId: normalized.customerId,
+      userId: normalized.userId,
+      discountType: normalized.discountType,
+      discountValue: normalized.discountValue,
+      totalAmount: normalized.totalAmount,
+      finalAmount: normalized.finalAmount,
+      status: "BUDGET",
+      dueDate: null,
+      paymentTypeId: null,
+      installmentCount: 1,
+    },
+    items: normalized.items,
+    customerMeasurements: normalized.customerMeasurements,
+    entryReceipt: null,
+    receivable: null,
+    financialMovements: [],
+  });
+
+  return buildSaleResponse(created, {
+    quote: true,
+  });
+}
+
+async function finalizeSale(id, body = {}) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const sale = await repository.getSaleForFinalization(normalizedId);
+
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  if (sale.status !== "BUDGET") {
+    throw createSalesValidationError("Somente vendas em orcamento podem ser concluidas.");
+  }
+
+  const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
+
+  if (!items.length) {
+    throw createSalesValidationError("Nao foi possivel concluir um orcamento sem itens.");
+  }
+
+  if (sale.PaymentReceipts?.length || sale.Receivable) {
+    throw createSalesValidationError("Este orcamento ja possui registros financeiros vinculados.");
+  }
+
+  const finalization = await normalizeFinalizationPayload(body, {
+    customerId: sale.customerId,
+    finalAmount: Number(sale.finalAmount || 0),
+  });
+
+  const finalStatus = deriveSaleStatusFromItems(items);
+
+  const finalized = await repository.finalizeSale(normalizedId, {
+    sale: {
+      status: finalStatus,
+      dueDate: finalization.dueDate || finalization.receivable?.cardTransaction?.expectedSettlementDate || null,
+      paymentTypeId: finalization.mainPaymentType.id,
+      installmentCount: finalization.installmentCount,
+    },
+    entryReceipt: finalization.entryReceipt,
+    receivable: finalization.receivable,
+    financialMovements: finalization.financialMovement,
+  });
+
+  if (!finalized) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  return buildSaleResponse(finalized, {
     paymentPreview: {
-      paymentTypeId: mainPaymentType.id,
-      paymentTypeName: mainPaymentType.name,
-      entryAmount: roundCurrency(entryReceipt?.amount || 0),
-      remainingAmount,
-      debtorType: receivable?.debtorType || null,
+      paymentTypeId: finalization.mainPaymentType.id,
+      paymentTypeName: finalization.mainPaymentType.name,
+      entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
+      remainingAmount: finalization.remainingAmount,
+      debtorType: finalization.receivable?.debtorType || null,
       installments:
-        receivable?.installments.map((installment) => ({
+        finalization.receivable?.installments.map((installment) => ({
           installmentNumber: installment.installmentNumber,
           totalInstallments: installment.totalInstallments,
           dueDate: installment.dueDate,
           amount: installment.amount,
         })) || [],
     },
-  };
+  });
+}
+
+async function finalizeSaleFromScratch(body = {}) {
+  const normalized = normalizeQuoteBase(body);
+  const finalization = await normalizeFinalizationPayload(body, {
+    customerId: normalized.customerId,
+    finalAmount: normalized.finalAmount,
+  });
+  const finalStatus = deriveSaleStatusFromItems(normalized.items);
+
+  const created = await repository.createSale({
+    sale: {
+      customerId: normalized.customerId,
+      userId: normalized.userId,
+      discountType: normalized.discountType,
+      discountValue: normalized.discountValue,
+      totalAmount: normalized.totalAmount,
+      finalAmount: normalized.finalAmount,
+      status: finalStatus,
+      dueDate: finalization.dueDate || finalization.receivable?.cardTransaction?.expectedSettlementDate || null,
+      paymentTypeId: finalization.mainPaymentType.id,
+      installmentCount: finalization.installmentCount,
+    },
+    items: normalized.items,
+    customerMeasurements: normalized.customerMeasurements,
+    entryReceipt: finalization.entryReceipt,
+    receivable: finalization.receivable,
+    financialMovements: finalization.financialMovement,
+  });
+
+  return buildSaleResponse(created, {
+    paymentPreview: {
+      paymentTypeId: finalization.mainPaymentType.id,
+      paymentTypeName: finalization.mainPaymentType.name,
+      entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
+      remainingAmount: finalization.remainingAmount,
+      debtorType: finalization.receivable?.debtorType || null,
+      installments:
+        finalization.receivable?.installments.map((installment) => ({
+          installmentNumber: installment.installmentNumber,
+          totalInstallments: installment.totalInstallments,
+          dueDate: installment.dueDate,
+          amount: installment.amount,
+        })) || [],
+    },
+  });
 }
 
 async function getSaleById(id) {
@@ -693,9 +850,34 @@ async function getSaleById(id) {
   return mapSaleDetails(sale);
 }
 
+async function listSales({ page, pageSize, status, search } = {}) {
+  const normalizedPage = Math.max(1, Number(page) || 1);
+  const normalizedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 10));
+  const normalizedSearch = search ? String(search).trim() : undefined;
+  const normalizedStatus = status ? String(status).trim().toUpperCase() : undefined;
+  const result = await repository.listSales({
+    page: normalizedPage,
+    pageSize: normalizedPageSize,
+    status: normalizedStatus,
+    search: normalizedSearch,
+  });
+  const total = Number(result.count || 0);
+
+  return {
+    items: result.rows.map(mapSaleListItem),
+    total,
+    page: normalizedPage,
+    pageSize: normalizedPageSize,
+    totalPages: Math.max(1, Math.ceil(total / normalizedPageSize)),
+  };
+}
+
 module.exports = {
   MEASUREMENT_FIELDS,
   createSalesValidationError,
   createSale,
+  createQuote,
+  finalizeSale,
   getSaleById,
+  listSales,
 };
