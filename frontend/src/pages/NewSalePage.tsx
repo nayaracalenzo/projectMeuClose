@@ -299,18 +299,6 @@ export default function NewSalePage() {
         const data = await getRequest("/cash/session-status");
         const parsed = (data as CashSessionStatusResponse) || null;
         setCashSessionStatus(parsed);
-
-        if (parsed?.currentSession?.pendingPreviousDay) {
-          setCashSessionNotes(parsed.currentSession.notes || "");
-          setCountedBalanceInput(
-            formatCurrencyInput(String(parsed.currentSession.expectedBalance || 0)),
-          );
-          setCloseCashModalOpen(true);
-        } else if (!parsed?.hasOpenSession) {
-          setOpeningBalanceInput(formatCurrencyInput("0"));
-          setCashSessionNotes("");
-          setOpenCashModalOpen(true);
-        }
       } catch {
         setCashSessionStatus(null);
       }
@@ -432,19 +420,6 @@ export default function NewSalePage() {
     (!isImmediateCheckPayment || !!paymentReferenceCode.trim()) &&
     parsedEntryAmount < discountedTotalValue &&
     (selectedPaymentType?.financialFlow !== "FUTURE_OPERATOR" || !!cardExpectedSettlementDate);
-  const requiresStoreCashSession = useMemo(
-    () =>
-      isImmediateCashPayment ||
-      (selectedPaymentType?.allowsEntryAmount === true &&
-        parsedEntryAmount > 0 &&
-        entryPaymentTypeId === "1"),
-    [
-      entryPaymentTypeId,
-      isImmediateCashPayment,
-      parsedEntryAmount,
-      selectedPaymentType?.allowsEntryAmount,
-    ],
-  );
   const canCreateQuote = !isSaving && !!selectedCustomer && tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
 
@@ -475,6 +450,71 @@ export default function NewSalePage() {
     if (selectedCategoryCode === "SERVICE") return "Serviço";
     if (selectedCategoryCode === "MISC") return "Diversos";
     return null;
+  };
+
+  const ensureCashSessionBeforeCashPayment = async (message: string) => {
+    try {
+      const data = await getRequest("/cash/session-status");
+      const parsed = (data as CashSessionStatusResponse) || null;
+      setCashSessionStatus(parsed);
+
+      if (parsed?.currentSession?.pendingPreviousDay) {
+        setCashSessionNotes(parsed.currentSession.notes || "");
+        setCountedBalanceInput(formatCurrencyInput("0"));
+        setCloseCashModalOpen(true);
+        setSaveMessage(message);
+        return false;
+      }
+
+      if (!parsed?.hasOpenSession) {
+        setOpeningBalanceInput(formatCurrencyInput("0"));
+        setCashSessionNotes("");
+        setOpenCashModalOpen(true);
+        setSaveMessage("Abra o caixa da loja antes de usar dinheiro no pagamento.");
+        return false;
+      }
+
+      setSaveMessage("");
+      return true;
+    } catch {
+      setCashSessionStatus(null);
+      return false;
+    }
+  };
+
+  const handlePaymentTypeChange = async (value: string) => {
+    setPaymentTypeId(value);
+
+    if (!value) {
+      setSaveMessage("");
+      return;
+    }
+
+    const nextPaymentType = paymentTypes.find((item) => String(item.id) === value) || null;
+    const requiresCashSession =
+      nextPaymentType?.kind === "CASH" && nextPaymentType.financialFlow === "IMMEDIATE_CASH";
+
+    if (!requiresCashSession) {
+      setSaveMessage("");
+      return;
+    }
+
+    await ensureCashSessionBeforeCashPayment(
+      "Existe um caixa da loja pendente. Regularize o caixa antes de continuar com pagamento em dinheiro.",
+    );
+  };
+
+  const handleEntryPaymentTypeChange = async (value: string) => {
+    setEntryPaymentTypeId(value);
+
+    if (value !== "1") {
+      setSaveMessage("");
+      return;
+    }
+
+    await ensureCashSessionBeforeCashPayment(
+      "Existe um caixa da loja pendente. Regularize o caixa antes de usar dinheiro na entrada.",
+    );
   };
 
   useEffect(() => {
@@ -585,28 +625,6 @@ export default function NewSalePage() {
 
   const handleSaveSale = async () => {
     if (!selectedCustomer || tableItems.length === 0) {
-      return;
-    }
-
-    if (cashSessionStatus?.currentSession?.pendingPreviousDay) {
-      setCashSessionNotes(cashSessionStatus.currentSession.notes || "");
-      setCountedBalanceInput(
-        formatCurrencyInput(String(cashSessionStatus.currentSession.expectedBalance || 0)),
-      );
-      setCloseCashModalOpen(true);
-      setSaveMessage(
-        `Existe um caixa da loja aberto de ${formatDate(
-          cashSessionStatus.currentSession.openedAt,
-        )}. Feche o caixa antes de salvar o pedido.`,
-      );
-      return;
-    }
-
-    if (requiresStoreCashSession && !cashSessionStatus?.hasOpenSession) {
-      setSaveMessage("Abra o caixa da loja antes de salvar um pedido com recebimento em dinheiro.");
-      setOpeningBalanceInput(formatCurrencyInput("0"));
-      setCashSessionNotes("");
-      setOpenCashModalOpen(true);
       return;
     }
 
@@ -980,28 +998,6 @@ export default function NewSalePage() {
 
   const handleFinalizeQuote = async () => {
     if (!selectedCustomer || tableItems.length === 0 || !draftSaleId) {
-      return;
-    }
-
-    if (cashSessionStatus?.currentSession?.pendingPreviousDay) {
-      setCashSessionNotes(cashSessionStatus.currentSession.notes || "");
-      setCountedBalanceInput(
-        formatCurrencyInput(String(cashSessionStatus.currentSession.expectedBalance || 0)),
-      );
-      setCloseCashModalOpen(true);
-      setSaveMessage(
-        `Existe um caixa da loja aberto de ${formatDate(
-          cashSessionStatus.currentSession.openedAt,
-        )}. Feche o caixa antes de concluir o pedido.`,
-      );
-      return;
-    }
-
-    if (requiresStoreCashSession && !cashSessionStatus?.hasOpenSession) {
-      setSaveMessage("Abra o caixa da loja antes de concluir um pedido com recebimento em dinheiro.");
-      setOpeningBalanceInput(formatCurrencyInput("0"));
-      setCashSessionNotes("");
-      setOpenCashModalOpen(true);
       return;
     }
 
@@ -1388,7 +1384,7 @@ export default function NewSalePage() {
                     </label>
                     <select
                       value={paymentTypeId}
-                      onChange={(e) => setPaymentTypeId(e.target.value)}
+                      onChange={(e) => void handlePaymentTypeChange(e.target.value)}
                       className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
                     >
                       <option value="">Selecione...</option>
@@ -1516,7 +1512,7 @@ export default function NewSalePage() {
                       </label>
                       <select
                         value={entryPaymentTypeId}
-                        onChange={(e) => setEntryPaymentTypeId(e.target.value)}
+                        onChange={(e) => void handleEntryPaymentTypeChange(e.target.value)}
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                       >
                         <option value="">Selecione...</option>

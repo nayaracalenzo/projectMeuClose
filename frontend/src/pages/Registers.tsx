@@ -374,7 +374,7 @@ export default function Registers() {
                   <button
                     type="button"
                     onClick={() => {
-                      setCountedBalanceInput(formatCurrencyInput(String(currentSession.expectedBalance)));
+                      setCountedBalanceInput(formatCurrencyInput("0"));
                       setSessionNotes(currentSession.notes || "");
                       setCloseSessionModal(true);
                     }}
@@ -397,9 +397,7 @@ export default function Registers() {
                 <button
                   type="button"
                   onClick={() => {
-                    setCountedBalanceInput(
-                      formatCurrencyInput(String(currentSession!.expectedBalance)),
-                    );
+                    setCountedBalanceInput(formatCurrencyInput("0"));
                     setSessionNotes(currentSession?.notes || "");
                     setCloseSessionModal(true);
                   }}
