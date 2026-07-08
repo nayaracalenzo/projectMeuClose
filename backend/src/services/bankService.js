@@ -7,7 +7,7 @@ function normalizeDate(value, fieldName, options = {}) {
   const base = String(value).trim().split("T")[0];
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
   if (!match) {
-    throw validationError(`${fieldName} inválida.`);
+    throw validationError(`${fieldName} invalida.`);
   }
 
   return new Date(
@@ -24,25 +24,49 @@ function normalizeDate(value, fieldName, options = {}) {
 async function listEntries(query = {}) {
   const scope = query.scope ? String(query.scope).trim() : undefined;
   const search = query.search ? String(query.search).trim() : undefined;
+  const page = Math.max(1, Number(query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 10));
+  const startDate = normalizeDate(query.startDate, "Data inicial");
+  const endDate = normalizeDate(query.endDate, "Data final", { endOfDay: true });
 
-  const entries = await repository.listEntries({
+  const result = await repository.listEntries({
     scope,
     search,
-    startDate: normalizeDate(query.startDate, "Data inicial"),
-    endDate: normalizeDate(query.endDate, "Data final", { endOfDay: true }),
+    page,
+    pageSize,
+    startDate,
+    endDate,
   });
 
-  return entries.map((item) => ({
-    id: item.idBankEntry,
-    date: item.occurredAt,
-    scope: item.scope,
-    bank: item.accountLabel || "Banco da Loja",
-    movement: item.movementType === "IN" ? "ENTRADA" : "SAÍDA",
-    category: item.category,
-    description: item.description,
-    amount: Number(item.amount),
-    referenceCode: item.referenceCode,
-  }));
+  const summary = await repository.summarizeEntries({
+    scope,
+    search,
+    startDate,
+    endDate,
+  });
+
+  return {
+    items: result.rows.map((item) => ({
+      id: item.idBankEntry,
+      date: item.occurredAt,
+      scope: item.scope,
+      bank: item.accountLabel || "Banco da Loja",
+      movement: item.movementType === "IN" ? "ENTRADA" : "SAIDA",
+      category: item.category,
+      description: item.description,
+      amount: Number(item.amount),
+      referenceCode: item.referenceCode,
+    })),
+    total: Number(result.count || 0),
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(Number(result.count || 0) / pageSize)),
+    summary: {
+      totalIn: Number(Number(summary.totalIn || 0).toFixed(2)),
+      totalOut: Number(Number(summary.totalOut || 0).toFixed(2)),
+      balance: Number((Number(summary.totalIn || 0) - Number(summary.totalOut || 0)).toFixed(2)),
+    },
+  };
 }
 
 module.exports = {

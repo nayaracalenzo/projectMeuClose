@@ -10,7 +10,7 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
       },
       saleId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       receivableInstallmentId: {
         type: DataTypes.INTEGER,

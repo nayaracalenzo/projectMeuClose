@@ -10,9 +10,13 @@ const ReceivablesSchema = (sequelize, DataTypes) => {
       },
       saleId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       customerId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      supplierId: {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
@@ -51,6 +55,9 @@ const ReceivablesSchema = (sequelize, DataTypes) => {
     });
     Receivables.belongsTo(models.Customers, {
       foreignKey: "customerId",
+    });
+    Receivables.belongsTo(models.Suppliers, {
+      foreignKey: "supplierId",
     });
     Receivables.hasMany(models.ReceivableInstallments, {
       foreignKey: "receivableId",

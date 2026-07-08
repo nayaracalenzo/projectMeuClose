@@ -13,6 +13,7 @@ import { getUserFacingApiErrorMessage } from "../utils/apiError";
 
 type AdminResourceKey =
   | "employees"
+  | "suppliers"
   | "roles"
   | "colors"
   | "sizes"
@@ -47,6 +48,14 @@ const resourceConfigList: ResourceConfig[] = [
     deleteLabel: "Desativar",
     primaryKey: "idEmployee",
     isSoftDelete: true,
+  },
+  {
+    key: "suppliers",
+    title: "Fornecedores",
+    endpoint: "/admin/suppliers",
+    emptyLabel: "Nenhum fornecedor cadastrado.",
+    deleteLabel: "Excluir",
+    primaryKey: "idSupplier",
   },
   {
     key: "roles",
@@ -125,6 +134,27 @@ const simpleInitialForm = {
   desc: "",
 };
 
+const supplierInitialForm = {
+  fullName: "",
+  tradeName: "",
+  contactName: "",
+  document: "",
+  rg: "",
+  street: "",
+  neighborhood: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  phoneCommercial1: "",
+  phoneCommercial2: "",
+  fax: "",
+  phoneMobile: "",
+  email: "",
+  comment: "",
+  active: true,
+  blocked: false,
+};
+
 function formatDate(value: Primitive) {
   if (!value || typeof value !== "string") return "-";
 
@@ -158,6 +188,7 @@ export default function AdminPage() {
     useState<AdminResourceKey>("employees");
   const [resourceRows, setResourceRows] = useState<Record<AdminResourceKey, GenericRecord[]>>({
     employees: [],
+    suppliers: [],
     roles: [],
     colors: [],
     sizes: [],
@@ -174,6 +205,7 @@ export default function AdminPage() {
   const [pageSize, setPageSize] = useState(5);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [employeeForm, setEmployeeForm] = useState(employeeInitialForm);
+  const [supplierForm, setSupplierForm] = useState(supplierInitialForm);
   const [simpleForm, setSimpleForm] = useState(simpleInitialForm);
 
   const currentConfig = useMemo(
@@ -226,6 +258,7 @@ export default function AdminPage() {
     setEditingId(null);
     setError("");
     setEmployeeForm(employeeInitialForm);
+    setSupplierForm(supplierInitialForm);
     setSimpleForm(simpleInitialForm);
   }, [selectedResource]);
 
@@ -285,6 +318,30 @@ export default function AdminPage() {
       return;
     }
 
+    if (selectedResource === "suppliers") {
+      setSupplierForm({
+        fullName: String(row.fullName ?? ""),
+        tradeName: String(row.tradeName ?? ""),
+        contactName: String(row.contactName ?? ""),
+        document: String(row.document ?? ""),
+        rg: String(row.rg ?? ""),
+        street: String(row.street ?? ""),
+        neighborhood: String(row.neighborhood ?? ""),
+        city: String(row.city ?? ""),
+        state: String(row.state ?? ""),
+        zipCode: String(row.zipCode ?? ""),
+        phoneCommercial1: String(row.phoneCommercial1 ?? ""),
+        phoneCommercial2: String(row.phoneCommercial2 ?? ""),
+        fax: String(row.fax ?? ""),
+        phoneMobile: String(row.phoneMobile ?? ""),
+        email: String(row.email ?? ""),
+        comment: String(row.comment ?? ""),
+        active: Boolean(row.active),
+        blocked: Boolean(row.blocked),
+      });
+      return;
+    }
+
     setSimpleForm({
       desc: String(row.desc ?? ""),
     });
@@ -294,6 +351,7 @@ export default function AdminPage() {
     setEditingId(null);
     setError("");
     setEmployeeForm(employeeInitialForm);
+    setSupplierForm(supplierInitialForm);
     setSimpleForm(simpleInitialForm);
     setIsFormOpen(true);
   }
@@ -307,6 +365,7 @@ export default function AdminPage() {
     setEditingId(null);
     setError("");
     setEmployeeForm(employeeInitialForm);
+    setSupplierForm(supplierInitialForm);
     setSimpleForm(simpleInitialForm);
     setIsFormOpen(false);
   }
@@ -324,6 +383,8 @@ export default function AdminPage() {
               ...employeeForm,
               roleId: employeeForm.roleId ? Number(employeeForm.roleId) : null,
             }
+          : selectedResource === "suppliers"
+            ? supplierForm
           : simpleForm;
 
       if (editingId) {
@@ -350,6 +411,8 @@ export default function AdminPage() {
     const label =
       selectedResource === "employees"
         ? String(row.fullName ?? row.shortName ?? id)
+        : selectedResource === "suppliers"
+          ? String(row.tradeName ?? row.fullName ?? id)
         : String(row.desc ?? id);
 
     const confirmed = window.confirm(
@@ -462,6 +525,63 @@ export default function AdminPage() {
     );
   }
 
+  function renderSuppliersTable() {
+    return (
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full border-separate border-spacing-y-2">
+          <thead>
+            <tr className="text-left">
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Nome</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Contato</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Cidade</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Telefone</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Status</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary text-right">Acoes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(paginatedRows as GenericRecord[]).map((row) => (
+              <tr key={String(row.idSupplier)} className="bg-surface-lowest">
+                <td className="px-4 py-3">
+                  <p className="text-[15px] font-semibold text-primary">
+                    {String(row.tradeName || row.fullName || "")}
+                  </p>
+                  <p className="text-[12px] uppercase tracking-[0.08em] text-neutral-700">
+                    {String(row.fullName ?? "")}
+                  </p>
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {String(row.contactName ?? "-")}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {String(row.city ?? "-")} {row.state ? `/ ${String(row.state)}` : ""}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {formatPhone(row.phoneCommercial1) !== "-"
+                    ? formatPhone(row.phoneCommercial1)
+                    : formatPhone(row.phoneMobile)}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {row.blocked ? "Bloqueado" : row.active ? "Ativo" : "Inativo"}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => startEdit(row)}>
+                      <Pencil size={14} />
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(row)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   function renderSimpleTable() {
     return (
       <div className="hidden overflow-x-auto lg:block">
@@ -509,6 +629,18 @@ export default function AdminPage() {
                 </p>
                 <p className="mt-1 text-sm text-neutral-700">
                   {formatPhone(row.primaryPhone)} • {String(row.email ?? "sem email")}
+                </p>
+              </>
+            ) : selectedResource === "suppliers" ? (
+              <>
+                <p className="text-base font-semibold text-primary">
+                  {String(row.tradeName || row.fullName || "")}
+                </p>
+                <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                  {String(row.fullName ?? "")}
+                </p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  {String(row.city ?? "sem cidade")} {row.state ? `/ ${String(row.state)}` : ""}
                 </p>
               </>
             ) : selectedResource === "payment-types" ? (
@@ -613,9 +745,11 @@ export default function AdminPage() {
                   <>
                     {selectedResource === "employees"
                       ? renderEmployeeTable()
-                      : selectedResource === "payment-types"
-                        ? renderPaymentTypesTable()
-                        : renderSimpleTable()}
+                      : selectedResource === "suppliers"
+                        ? renderSuppliersTable()
+                        : selectedResource === "payment-types"
+                          ? renderPaymentTypesTable()
+                          : renderSimpleTable()}
                     {renderMobileCards()}
                     <div className="mt-4 hidden items-center justify-between md:flex">
                       <p className="text-[13px] tracking-[0.04em] text-neutral-700">
@@ -682,6 +816,8 @@ export default function AdminPage() {
         subtitle={
           selectedResource === "employees"
             ? "Preencha os dados da funcionaria e salve para atualizar a tabela."
+            : selectedResource === "suppliers"
+              ? "Preencha os dados do fornecedor e confirme para salvar."
             : selectedResource === "payment-types"
               ? "Edite a descricao da forma de pagamento e confirme para salvar."
               : "Edite a descricao e confirme para salvar o cadastro."
@@ -744,6 +880,47 @@ export default function AdminPage() {
                   <input type="checkbox" checked={employeeForm.active} onChange={(e) => setEmployeeForm((prev) => ({ ...prev, active: e.target.checked }))} />
                   Funcionaria ativa
                 </label>
+              </>
+            ) : selectedResource === "suppliers" ? (
+              <>
+                <input value={supplierForm.fullName} onChange={(e) => setSupplierForm((prev) => ({ ...prev, fullName: e.target.value }))} placeholder="Nome completo / razao social" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
+                <input value={supplierForm.tradeName} onChange={(e) => setSupplierForm((prev) => ({ ...prev, tradeName: e.target.value }))} placeholder="Nome fantasia" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.contactName} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contactName: e.target.value }))} placeholder="Contato" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.email} onChange={(e) => setSupplierForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.document} onChange={(e) => setSupplierForm((prev) => ({ ...prev, document: e.target.value }))} placeholder="CPF/CNPJ" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.rg} onChange={(e) => setSupplierForm((prev) => ({ ...prev, rg: e.target.value }))} placeholder="RG/IE" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.phoneCommercial1} onChange={(e) => setSupplierForm((prev) => ({ ...prev, phoneCommercial1: e.target.value }))} placeholder="Telefone comercial 1" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.phoneCommercial2} onChange={(e) => setSupplierForm((prev) => ({ ...prev, phoneCommercial2: e.target.value }))} placeholder="Telefone comercial 2" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.phoneMobile} onChange={(e) => setSupplierForm((prev) => ({ ...prev, phoneMobile: e.target.value }))} placeholder="Celular" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.fax} onChange={(e) => setSupplierForm((prev) => ({ ...prev, fax: e.target.value }))} placeholder="Fax" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.zipCode} onChange={(e) => setSupplierForm((prev) => ({ ...prev, zipCode: e.target.value }))} placeholder="CEP" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.state} onChange={(e) => setSupplierForm((prev) => ({ ...prev, state: e.target.value }))} placeholder="UF" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <input value={supplierForm.street} onChange={(e) => setSupplierForm((prev) => ({ ...prev, street: e.target.value }))} placeholder="Endereco" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.neighborhood} onChange={(e) => setSupplierForm((prev) => ({ ...prev, neighborhood: e.target.value }))} placeholder="Bairro" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.city} onChange={(e) => setSupplierForm((prev) => ({ ...prev, city: e.target.value }))} placeholder="Cidade" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <textarea value={supplierForm.comment} onChange={(e) => setSupplierForm((prev) => ({ ...prev, comment: e.target.value }))} placeholder="Observacoes" className="min-h-24 w-full border border-outline-variant/50 bg-white px-3 py-2 text-sm text-primary" />
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-primary">
+                    <input type="checkbox" checked={supplierForm.active} onChange={(e) => setSupplierForm((prev) => ({ ...prev, active: e.target.checked }))} />
+                    Fornecedor ativo
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-primary">
+                    <input type="checkbox" checked={supplierForm.blocked} onChange={(e) => setSupplierForm((prev) => ({ ...prev, blocked: e.target.checked }))} />
+                    Fornecedor bloqueado
+                  </label>
+                </div>
               </>
             ) : selectedResource === "payment-types" ? (
               <input value={simpleForm.desc} onChange={(e) => setSimpleForm({ desc: e.target.value })} placeholder="Descricao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />

@@ -14,6 +14,7 @@ const {
   Sizes,
   Status,
 } = require("../models");
+const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const parseDate = require("../utils/parseDate");
 
 const ACCESSORY_CLOTHING_TYPE_ID = 39;
@@ -45,19 +46,6 @@ function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
   const normalized = Number(String(value).trim());
   return Number.isInteger(normalized) ? normalized : null;
-}
-
-function normalizeDecimal(value) {
-  if (value === undefined || value === null || value === "") return null;
-  const normalizedText = String(value)
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/^R\$/i, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-  const normalized = Number(normalizedText);
-  if (!Number.isFinite(normalized)) return null;
-  return Number(normalized.toFixed(2));
 }
 
 function inferCategoryId(clothingTypeId, productTypeId) {
@@ -215,8 +203,8 @@ async function importProducts() {
           const resolvedColorId = colorId && colorMap.has(colorId) ? colorId : null;
           const resolvedFabricId = fabricId && fabricMap.has(fabricId) ? fabricId : null;
           const resolvedSizeId = sizeId && sizeMap.has(sizeId) ? sizeId : null;
-          const finalValue = normalizeDecimal(row.pre) || 0;
-          const dressmakerValue = normalizeDecimal(row.pgCos) ?? 0;
+          const finalValue = normalizeLegacyCurrency(row.pre) || 0;
+          const dressmakerValue = normalizeLegacyCurrency(row.pgCos) ?? 0;
           const remainingValue = Number((finalValue - dressmakerValue).toFixed(2));
 
           productsToInsert.push({

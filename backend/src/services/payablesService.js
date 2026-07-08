@@ -32,6 +32,28 @@ function normalizeDate(value, fieldName) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
 }
 
+function normalizeOptionalDate(value, fieldName, options = {}) {
+  if (!value) {
+    return null;
+  }
+
+  const base = String(value).trim().split("T")[0];
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  if (!match) {
+    throw createPayablesValidationError(`${fieldName} invalida.`);
+  }
+
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    options.endOfDay ? 23 : 0,
+    options.endOfDay ? 59 : 0,
+    options.endOfDay ? 59 : 0,
+    options.endOfDay ? 999 : 0,
+  );
+}
+
 function deriveFilter(status, dueDate, openAmount) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -45,19 +67,46 @@ function deriveFilter(status, dueDate, openAmount) {
   return "A_VENCER";
 }
 
-async function listPayables({ status, scope }) {
-  const payables = await repository.listPayables();
+async function listPayables({
+  status,
+  scope,
+  page: rawPage,
+  pageSize: rawPageSize,
+  startDate: rawStartDate,
+  endDate: rawEndDate,
+} = {}) {
+  const page = Math.max(1, Number(rawPage) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(rawPageSize) || 10));
+  const startDate = normalizeOptionalDate(rawStartDate, "Data inicial");
+  const endDate = normalizeOptionalDate(rawEndDate, "Data final", { endOfDay: true });
+  const result = await repository.listPayables({
+    status,
+    scope,
+    page,
+    pageSize,
+    startDate,
+    endDate,
+  });
+  const summary = await repository.summarizePayables({
+    status,
+    scope,
+    startDate,
+    endDate,
+  });
 
-  return payables
-    .map((item) => {
+  const items = result.rows.map((item) => {
+      const supplier = item.Supplier || item.Suppliers || null;
       const paymentType = item.PaymentType || item.PaymentTypes || null;
+      const supplierName = supplier?.tradeName || supplier?.fullName || null;
 
       return {
         id: item.idPayable,
         scope: item.scope,
         description: item.description,
         category: item.category,
-        beneficiary: item.beneficiary,
+        beneficiary: supplierName || item.beneficiary,
+        supplierId: supplier?.idSupplier || item.supplierId || null,
+        supplierName,
         amount: Number(item.amount),
         openAmount: Number(item.openAmount),
         dueDate: item.dueDate,
@@ -69,17 +118,21 @@ async function listPayables({ status, scope }) {
         plannedPaymentTypeName: paymentType?.desc || null,
         filter: deriveFilter(item.status, item.dueDate, item.openAmount),
       };
-    })
-    .filter((item) => {
-      const matchesScope = scope ? item.scope === scope : true;
-      const matchesStatus =
-        !status || status === "TODAS"
-          ? true
-          : status === "EM_ABERTO"
-            ? item.status !== "PAID"
-            : item.filter === status;
-      return matchesScope && matchesStatus;
     });
+
+  const total = Number(result.count || 0);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    summary: {
+      totalAmount: Number(Number(summary.totalAmount || 0).toFixed(2)),
+      totalOpen: Number(Number(summary.totalOpen || 0).toFixed(2)),
+    },
+  };
 }
 
 async function createPayable(body = {}) {
@@ -95,7 +148,13 @@ async function createPayable(body = {}) {
 
   const description = String(body.description || "").trim();
   const category = String(body.category || "").trim();
-  const beneficiary = String(body.beneficiary || "").trim();
+  const rawBeneficiary = String(body.beneficiary || "").trim();
+  const supplierId = body.supplierId ? Number(body.supplierId) : null;
+  const supplier =
+    Number.isInteger(supplierId) && supplierId > 0
+      ? await repository.getSupplierById(supplierId)
+      : null;
+  const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
 
   if (!description || !category || !beneficiary) {
     throw createPayablesValidationError("Descricao, categoria e favorecido sao obrigatorios.");
@@ -108,6 +167,7 @@ async function createPayable(body = {}) {
     description,
     category,
     beneficiary,
+    supplierId: supplier?.idSupplier || null,
     amount,
     openAmount: amount,
     dueDate: normalizeDate(body.dueDate, "Data de vencimento"),

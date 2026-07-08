@@ -3,27 +3,12 @@ const fs = require("fs");
 const path = require("path");
 const csv = require("csv-parser");
 const { Products, SaleItems, Sales } = require("../models");
+const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
   const normalized = Number(String(value).trim());
   return Number.isInteger(normalized) ? normalized : null;
-}
-
-function normalizeDecimal(value) {
-  if (value === undefined || value === null || value === "") return null;
-
-  const normalizedText = String(value)
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/^R\$/i, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-
-  const normalized = Number(normalizedText);
-  if (!Number.isFinite(normalized)) return null;
-
-  return Number(normalized.toFixed(2));
 }
 
 function roundCurrency(value) {
@@ -110,8 +95,8 @@ async function importSaleItems() {
           const productId = normalizeInteger(row.idPro);
           const product = productId ? productsMap.get(productId) : null;
           const quantity = normalizeInteger(row.qtd) || 1;
-          const unitPrice = normalizeDecimal(row.valUni);
-          const subtotal = normalizeDecimal(row.valTot);
+          const unitPrice = normalizeLegacyCurrency(row.valUni);
+          const subtotal = normalizeLegacyCurrency(row.valTot);
           const createdAt = sale.createdAt || product?.createdAt || new Date();
 
           if (unitPrice === null || subtotal === null) {

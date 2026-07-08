@@ -82,6 +82,11 @@ type SaleDetailsResponse = {
     id: number;
     debtorType: string;
     operatorLabel: string | null;
+    supplierId: number | null;
+    supplierName: string | null;
+    originType: "CUSTOMER" | "SUPPLIER" | "CARD_OPERATOR";
+    originLabel: string;
+    originName: string;
     originalAmount: number;
     openAmount: number;
     status: string;
@@ -388,7 +393,8 @@ export default function SaleDetailsPage() {
             ) : (
               <>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  <InfoCard label="Devedor" value={sale.receivable.debtorType === "CARD_OPERATOR" ? "Operadora" : "Cliente"} />
+                  <InfoCard label="Perfil" value={sale.receivable.originLabel} />
+                  <InfoCard label="Origem" value={sale.receivable.originName} />
                   <InfoCard label="Status" value={sale.receivable.status} />
                   <InfoCard label="Valor original" value={formatCurrency(sale.receivable.originalAmount)} />
                   <InfoCard label="Saldo aberto" value={formatCurrency(sale.receivable.openAmount)} />

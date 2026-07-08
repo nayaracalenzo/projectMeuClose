@@ -6,9 +6,12 @@ const {
   ReceivableInstallments,
   Receivables,
   Sales,
+  Sequelize,
+  Suppliers,
   sequelize,
 } = require("../models");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
+const { Op } = require("sequelize");
 
 async function createReceivableWithInstallments({ receivable, installments, cardTransaction }, transaction) {
   const createdReceivable = await Receivables.create(receivable, { transaction });
@@ -42,37 +45,201 @@ async function createStandaloneReceipt(payload, transaction) {
   return PaymentReceipts.create(payload, { transaction });
 }
 
-async function listInstallments() {
-  return ReceivableInstallments.findAll({
-    include: [
+function buildInstallmentsWhere({ startDate, endDate, search } = {}) {
+  const where = {};
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(today);
+  endOfToday.setHours(23, 59, 59, 999);
+
+  if (startDate || endDate) {
+    where.dueDate = {};
+
+    if (startDate) {
+      where.dueDate[Op.gte] = startDate;
+    }
+
+    if (endDate) {
+      where.dueDate[Op.lte] = endDate;
+    }
+  }
+
+  if (search) {
+    const term = `%${search}%`;
+    where[Op.or] = [
+      Sequelize.where(Sequelize.cast(Sequelize.col("ReceivableInstallments.installmentNumber"), "TEXT"), {
+        [Op.iLike]: term,
+      }),
+      Sequelize.where(Sequelize.cast(Sequelize.col("ReceivableInstallments.totalInstallments"), "TEXT"), {
+        [Op.iLike]: term,
+      }),
       {
-        model: Receivables,
-        include: [
-          { model: Customers, attributes: ["idCustomer", "fullName", "companyName"] },
-          { model: Sales, attributes: ["idSale"] },
-          { model: CardTransactions, attributes: ["operatorLabel"], required: false },
-        ],
+        "$PaymentType.desc$": {
+          [Op.iLike]: term,
+        },
       },
       {
-        model: PaymentTypes,
-        attributes: ["idPaymentType", "desc"],
-        required: false,
+        "$Receivable.Customer.fullName$": {
+          [Op.iLike]: term,
+        },
       },
       {
-        model: PaymentReceipts,
-        attributes: [
-          "idPaymentReceipt",
-          "saleId",
-          "receiptType",
-          "amount",
-          "paidAt",
-          "referenceCode",
-        ],
-        required: false,
+        "$Receivable.Customer.companyName$": {
+          [Op.iLike]: term,
+        },
       },
-    ],
+      {
+        "$Receivable.Supplier.fullName$": {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        "$Receivable.Supplier.tradeName$": {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        "$Receivable.CardTransaction.operatorLabel$": {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        "$Receivable.operatorLabel$": {
+          [Op.iLike]: term,
+        },
+      },
+    ];
+  }
+
+  return where;
+}
+
+function buildStatusWhere(status, currentWhere = {}) {
+  const where = { ...currentWhere };
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endOfToday = new Date(today);
+  endOfToday.setHours(23, 59, 59, 999);
+  const dueDate = { ...(where.dueDate || {}) };
+
+  switch (status) {
+    case "A_RECEBER":
+      where.status = {
+        [Op.ne]: "PAID",
+      };
+      break;
+    case "RECEBIDAS":
+      where.status = "PAID";
+      break;
+    case "ATRASADAS":
+      where.status = {
+        [Op.ne]: "PAID",
+      };
+      dueDate[Op.lt] = today;
+      where.dueDate = dueDate;
+      break;
+    case "VENCE_HOJE":
+      where.status = {
+        [Op.ne]: "PAID",
+      };
+      dueDate[Op.gte] = today;
+      dueDate[Op.lte] = endOfToday;
+      where.dueDate = dueDate;
+      break;
+    case "A_VENCER":
+      where.status = {
+        [Op.ne]: "PAID",
+      };
+      dueDate[Op.gt] = endOfToday;
+      where.dueDate = dueDate;
+      break;
+    default:
+      break;
+  }
+
+  return where;
+}
+
+function buildReceivablesInclude({ customerId, summary = false } = {}) {
+  const baseAttributes = summary ? [] : ["idSale"];
+  const customerAttributes = summary ? [] : ["idCustomer", "fullName", "companyName"];
+  const supplierAttributes = summary ? [] : ["idSupplier", "fullName", "tradeName"];
+  const cardTransactionAttributes = summary ? [] : ["operatorLabel"];
+  const paymentTypeAttributes = summary ? [] : ["idPaymentType", "desc"];
+
+  return [
+    {
+      model: Receivables,
+      attributes: summary ? [] : undefined,
+      where:
+        customerId && Number(customerId) > 0
+          ? {
+              customerId: Number(customerId),
+            }
+          : undefined,
+      include: [
+        { model: Customers, attributes: customerAttributes },
+        { model: Suppliers, attributes: supplierAttributes, required: false },
+        { model: Sales, attributes: baseAttributes },
+        { model: CardTransactions, attributes: cardTransactionAttributes, required: false },
+      ],
+    },
+    {
+      model: PaymentTypes,
+      attributes: paymentTypeAttributes,
+      required: false,
+    },
+  ];
+}
+
+async function listInstallments({
+  page,
+  pageSize,
+  startDate,
+  endDate,
+  search,
+  status,
+  customerId,
+} = {}) {
+  const where = buildStatusWhere(status, buildInstallmentsWhere({ startDate, endDate, search }));
+
+  return ReceivableInstallments.findAndCountAll({
+    where,
+    include: buildReceivablesInclude({ customerId }),
     order: [["dueDate", "ASC"], ["installmentNumber", "ASC"]],
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    distinct: true,
   });
+}
+
+async function summarizeInstallments({ startDate, endDate, search, status, customerId } = {}) {
+  const where = buildStatusWhere(status, buildInstallmentsWhere({ startDate, endDate, search }));
+
+  const [totals] = await ReceivableInstallments.findAll({
+    where,
+    include: buildReceivablesInclude({ customerId, summary: true }),
+    attributes: [
+      [sequelize.fn("COALESCE", sequelize.fn("SUM", sequelize.col("ReceivableInstallments.paidAmount")), 0), "totalReceived"],
+      [
+        sequelize.fn(
+          "COALESCE",
+          sequelize.fn(
+            "SUM",
+            sequelize.literal('"ReceivableInstallments"."amount" - "ReceivableInstallments"."paidAmount"'),
+          ),
+          0,
+        ),
+        "totalOpen",
+      ],
+    ],
+    raw: true,
+  });
+
+  return {
+    totalReceived: Number(totals?.totalReceived || 0),
+    totalOpen: Number(totals?.totalOpen || 0),
+  };
 }
 
 async function registerReceipt(installmentId, payload) {
@@ -157,5 +324,6 @@ module.exports = {
   createReceivableWithInstallments,
   createStandaloneReceipt,
   listInstallments,
+  summarizeInstallments,
   registerReceipt,
 };

@@ -3,27 +3,12 @@ const fs = require("fs");
 const path = require("path");
 const csv = require("csv-parser");
 const { Products } = require("../models");
+const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
   const normalized = Number(String(value).trim());
   return Number.isInteger(normalized) ? normalized : null;
-}
-
-function normalizeDecimal(value) {
-  if (value === undefined || value === null || value === "") return null;
-
-  const normalizedText = String(value)
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/^R\$/i, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-
-  const normalized = Number(normalizedText);
-  if (!Number.isFinite(normalized)) return null;
-
-  return Number(normalized.toFixed(2));
 }
 
 async function fixImportedProductsFinancialValues() {
@@ -38,8 +23,8 @@ async function fixImportedProductsFinancialValues() {
           const productId = normalizeInteger(row.id);
           if (!productId) return;
 
-          const finalValue = normalizeDecimal(row.pre) || 0;
-          const dressmakerValue = normalizeDecimal(row.pgCos) ?? 0;
+          const finalValue = normalizeLegacyCurrency(row.pre) || 0;
+          const dressmakerValue = normalizeLegacyCurrency(row.pgCos) ?? 0;
           const remainingValue = Number((finalValue - dressmakerValue).toFixed(2));
 
           updates.push({

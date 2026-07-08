@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Button } from "../components/Button";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { getCategoryBadgeClassName } from "../utils/categoryBadge";
 import { formatCurrency } from "../utils/currency";
 
 type Scope = "LOJA" | "PESSOAL";
@@ -15,18 +17,23 @@ interface BankRow {
   amount: number;
 }
 
+interface BankListResponse {
+  items: BankRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  summary: {
+    totalIn: number;
+    totalOut: number;
+    balance: number;
+  };
+}
+
+const PAGE_SIZE = 10;
+
 const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
-
-const getCategoryBadgeClassName = (category?: string) => {
-  const normalized = String(category || "").trim().toUpperCase();
-
-  if (normalized === "TRANSFERENCIA") {
-    return "bg-[#E8F1FF] text-[#1E4FA3]";
-  }
-
-  return "bg-surface text-neutral-700";
-};
 
 export default function BankPage() {
   const [scope, setScope] = useState<Scope>("LOJA");
@@ -34,8 +41,16 @@ export default function BankPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<BankRow[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, balance: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setPage(1);
+  }, [scope, search, startDate, endDate]);
 
   useEffect(() => {
     const fetchRows = async () => {
@@ -45,16 +60,28 @@ export default function BankPage() {
 
         const params = new URLSearchParams({
           scope,
+          page: String(page),
+          pageSize: String(PAGE_SIZE),
         });
 
         if (search.trim()) params.set("search", search.trim());
         if (startDate) params.set("startDate", startDate);
         if (endDate) params.set("endDate", endDate);
 
-        const data = await getRequest(`/bank?${params.toString()}`);
-        setRows(Array.isArray(data) ? (data as BankRow[]) : []);
+        const data = (await getRequest(`/bank?${params.toString()}`)) as BankListResponse;
+        setRows(Array.isArray(data.items) ? data.items : []);
+        setTotalRows(Number(data.total) || 0);
+        setTotalPages(Number(data.totalPages) || 1);
+        setSummary({
+          totalIn: Number(data.summary?.totalIn || 0),
+          totalOut: Number(data.summary?.totalOut || 0),
+          balance: Number(data.summary?.balance || 0),
+        });
       } catch (err: unknown) {
         setRows([]);
+        setTotalRows(0);
+        setTotalPages(1);
+        setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
         setError(getUserFacingApiErrorMessage(err, "Não foi possível carregar o banco."));
       } finally {
         setLoading(false);
@@ -62,22 +89,7 @@ export default function BankPage() {
     };
 
     fetchRows();
-  }, [endDate, scope, search, startDate]);
-
-  const totalIn = useMemo(
-    () =>
-      rows
-        .filter((row) => row.movement === "ENTRADA")
-        .reduce((acc, row) => acc + Number(row.amount || 0), 0),
-    [rows],
-  );
-  const totalOut = useMemo(
-    () =>
-      rows
-        .filter((row) => row.movement === "SAÍDA")
-        .reduce((acc, row) => acc + Number(row.amount || 0), 0),
-    [rows],
-  );
+  }, [endDate, page, scope, search, startDate]);
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
@@ -149,10 +161,23 @@ export default function BankPage() {
       ) : null}
 
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Entradas</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalIn)}</p></div>
-        <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Saídas</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalOut)}</p></div>
-        <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Saldo</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalIn - totalOut)}</p></div>
+        <div className="bg-surface-lowest p-4">
+          <p className="text-xs uppercase text-neutral-700">Entradas</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalIn)}</p>
+        </div>
+        <div className="bg-surface-lowest p-4">
+          <p className="text-xs uppercase text-neutral-700">Saídas</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalOut)}</p>
+        </div>
+        <div className="bg-surface-lowest p-4">
+          <p className="text-xs uppercase text-neutral-700">Saldo</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.balance)}</p>
+        </div>
       </div>
+
+      <p className="mb-3 text-sm text-neutral-700">
+        {loading ? "Carregando movimentações..." : `${totalRows} movimentação(ões) encontrada(s).`}
+      </p>
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
@@ -231,6 +256,30 @@ export default function BankPage() {
             </div>
           ))
         )}
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-neutral-700">
+          Página {page} de {totalPages}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={loading || page <= 1}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={loading || page >= totalPages}
+          >
+            Próxima
+          </Button>
+        </div>
       </div>
     </div>
   );

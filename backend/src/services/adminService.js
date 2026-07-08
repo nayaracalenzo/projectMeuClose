@@ -22,6 +22,16 @@ function normalizeDigits(value) {
   return digits || null;
 }
 
+function normalizeBoolean(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "boolean") return value;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  return null;
+}
+
 function normalizeDate(value) {
   if (!value) return null;
 
@@ -55,6 +65,10 @@ function sanitizePayload(resource, body = {}) {
       case "zipCode":
       case "primaryPhone":
       case "secondaryPhone":
+      case "phoneCommercial1":
+      case "phoneCommercial2":
+      case "fax":
+      case "phoneMobile":
         payload[field] = normalizeDigits(body[field]);
         break;
       case "email":
@@ -68,6 +82,10 @@ function sanitizePayload(resource, body = {}) {
           body[field] === "" || body[field] === null || body[field] === undefined
             ? null
             : Number(body[field]);
+        break;
+      case "active":
+      case "blocked":
+        payload[field] = normalizeBoolean(body[field]);
         break;
       default:
         payload[field] = normalizeText(body[field]);
@@ -85,6 +103,16 @@ function validatePayload(resource, payload, isCreate) {
     }
     if (!isCreate && "desc" in payload && !payload.desc) {
       throw createAdminResourceError("Descricao e obrigatoria.");
+    }
+    return;
+  }
+
+  if (resource === "suppliers") {
+    if (isCreate && !payload.fullName) {
+      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
+    }
+    if (!isCreate && "fullName" in payload && !payload.fullName) {
+      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
     }
     return;
   }

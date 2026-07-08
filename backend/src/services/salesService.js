@@ -361,12 +361,47 @@ function mapReceivableInstallment(installment) {
   };
 }
 
+function resolveReceivableOrigin(receivable, customer) {
+  const supplier = receivable?.Supplier || receivable?.Suppliers || null;
+  const supplierName = supplier?.tradeName || supplier?.fullName || null;
+  const customerName = customer?.fullName || customer?.companyName || null;
+
+  if (receivable?.debtorType === "CARD_OPERATOR") {
+    return {
+      originType: "CARD_OPERATOR",
+      originLabel: "Operadora",
+      originName: receivable.operatorLabel || "Operadora",
+      supplierId: supplier?.idSupplier || receivable?.supplierId || null,
+      supplierName,
+    };
+  }
+
+  if (supplierName) {
+    return {
+      originType: "SUPPLIER",
+      originLabel: "Fornecedor",
+      originName: supplierName,
+      supplierId: supplier?.idSupplier || receivable?.supplierId || null,
+      supplierName,
+    };
+  }
+
+  return {
+    originType: "CUSTOMER",
+    originLabel: "Cliente",
+    originName: customerName || "Cliente",
+    supplierId: supplier?.idSupplier || receivable?.supplierId || null,
+    supplierName,
+  };
+}
+
 function mapSaleDetails(sale) {
   const customer = sale.Customer || sale.Customers;
   const user = sale.User || sale.Users;
   const paymentType = sale.PaymentType || sale.PaymentTypes;
   const receivable = sale.Receivable || sale.Receivables;
   const cardTransaction = sale.CardTransaction || sale.CardTransactions || receivable?.CardTransaction || receivable?.CardTransactions || null;
+  const receivableOrigin = receivable ? resolveReceivableOrigin(receivable, customer) : null;
   const items = Array.isArray(sale.SaleItems) ? sale.SaleItems.map(mapSaleItem) : [];
   const receipts = Array.isArray(sale.PaymentReceipts)
     ? sale.PaymentReceipts.map(mapPaymentReceipt)
@@ -411,10 +446,15 @@ function mapSaleDetails(sale) {
     receipts,
     measurementsCount,
     receivable: receivable
-      ? {
+        ? {
           id: receivable.idReceivable,
           debtorType: receivable.debtorType,
           operatorLabel: receivable.operatorLabel || null,
+          supplierId: receivableOrigin?.supplierId || null,
+          supplierName: receivableOrigin?.supplierName || null,
+          originType: receivableOrigin?.originType || "CUSTOMER",
+          originLabel: receivableOrigin?.originLabel || "Cliente",
+          originName: receivableOrigin?.originName || customer?.fullName || customer?.companyName || "Cliente",
           originalAmount: Number(receivable.originalAmount || 0),
           openAmount: Number(receivable.openAmount || 0),
           status: receivable.status,

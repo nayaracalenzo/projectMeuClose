@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
 import { getRequest, postRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { getCategoryBadgeClassName } from "../utils/categoryBadge";
 import {
   formatCurrency,
   formatCurrencyInput,
@@ -20,6 +21,20 @@ interface CashRow {
   movementType: "IN" | "OUT";
   amountIn: number;
   amountOut: number;
+  balance: number;
+}
+
+interface CashListResponse {
+  items: CashRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  summary: {
+    totalIn: number;
+    totalOut: number;
+    balance: number;
+  };
 }
 
 interface CashSessionSummary {
@@ -65,22 +80,17 @@ const formatDateTime = (dateString: string) =>
     timeStyle: "short",
   }).format(new Date(dateString));
 
-const getCategoryBadgeClassName = (category?: string) => {
-  const normalized = String(category || "").trim().toUpperCase();
-
-  if (normalized === "TRANSFERENCIA") {
-    return "bg-[#E8F1FF] text-[#1E4FA3]";
-  }
-
-  return "bg-surface text-neutral-700";
-};
-
 export default function Registers() {
+  const pageSize = 10;
   const [scope, setScope] = useState<Scope>("LOJA");
   const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<CashRow[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, balance: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sessionStatus, setSessionStatus] = useState<CashSessionStatusResponse | null>(null);
@@ -103,14 +113,23 @@ export default function Registers() {
   const fetchRows = async () => {
     const params = new URLSearchParams({
       scope,
+      page: String(page),
+      pageSize: String(pageSize),
     });
 
     if (search.trim()) params.set("search", search.trim());
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
 
-    const data = await getRequest(`/cash?${params.toString()}`);
-    setRows(Array.isArray(data) ? (data as CashRow[]) : []);
+    const data = (await getRequest(`/cash?${params.toString()}`)) as CashListResponse;
+    setRows(Array.isArray(data.items) ? data.items : []);
+    setTotalRows(Number(data.total) || 0);
+    setTotalPages(Number(data.totalPages) || 1);
+    setSummary({
+      totalIn: Number(data.summary?.totalIn || 0),
+      totalOut: Number(data.summary?.totalOut || 0),
+      balance: Number(data.summary?.balance || 0),
+    });
   };
 
   const fetchSessionStatus = async () => {
@@ -137,6 +156,10 @@ export default function Registers() {
   };
 
   useEffect(() => {
+    setPage(1);
+  }, [scope, search, startDate, endDate]);
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -144,6 +167,9 @@ export default function Registers() {
         await Promise.all([fetchRows(), fetchSessionStatus()]);
       } catch (err: unknown) {
         setRows([]);
+        setTotalRows(0);
+        setTotalPages(1);
+        setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
         setError(getUserFacingApiErrorMessage(err, "Nao foi possivel carregar o caixa."));
       } finally {
         setLoading(false);
@@ -151,31 +177,7 @@ export default function Registers() {
     };
 
     fetchData();
-  }, [endDate, scope, search, startDate]);
-
-  const rowsWithBalance = useMemo(() => {
-    const ordered = [...rows].reverse();
-    let balance = 0;
-
-    const computed = ordered.map((row) => {
-      balance += Number(row.amountIn || 0) - Number(row.amountOut || 0);
-      return {
-        ...row,
-        balance,
-      };
-    });
-
-    return computed.reverse();
-  }, [rows]);
-
-  const totalIn = useMemo(
-    () => rows.reduce((acc, row) => acc + Number(row.amountIn || 0), 0),
-    [rows],
-  );
-  const totalOut = useMemo(
-    () => rows.reduce((acc, row) => acc + Number(row.amountOut || 0), 0),
-    [rows],
-  );
+  }, [endDate, page, scope, search, startDate]);
 
   const currentSession = sessionStatus?.currentSession || null;
 
@@ -454,16 +456,16 @@ export default function Registers() {
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Entradas</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(totalIn)}</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalIn)}</p>
         </div>
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Saidas</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(totalOut)}</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalOut)}</p>
         </div>
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Saldo</p>
           <p className="text-lg font-semibold text-primary">
-            {formatCurrency(totalIn - totalOut)}
+            {formatCurrency(summary.balance)}
           </p>
         </div>
       </div>
@@ -497,7 +499,7 @@ export default function Registers() {
                   Carregando lancamentos...
                 </td>
               </tr>
-            ) : rowsWithBalance.length === 0 ? (
+            ) : rows.length === 0 ? (
               <tr>
                 <td
                   colSpan={5}
@@ -507,7 +509,7 @@ export default function Registers() {
                 </td>
               </tr>
             ) : (
-              rowsWithBalance.map((row) => (
+              rows.map((row) => (
                 <tr key={row.id} className="bg-surface-lowest">
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(row.date)}
@@ -543,12 +545,12 @@ export default function Registers() {
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
             Carregando lancamentos...
           </div>
-        ) : rowsWithBalance.length === 0 ? (
+        ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
             Nenhum lancamento de caixa cadastrado.
           </div>
         ) : (
-          rowsWithBalance.map((row) => (
+          rows.map((row) => (
             <div key={row.id} className="px-4 py-4">
               <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
               <p className="text-xs text-neutral-700">{row.description}</p>
@@ -571,6 +573,30 @@ export default function Registers() {
             </div>
           ))
         )}
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-neutral-700">
+          {loading ? "Carregando..." : `${totalRows} lançamento(s) | Página ${page} de ${totalPages}`}
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={loading || page <= 1}
+            className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm text-primary disabled:opacity-60"
+          >
+            Anterior
+          </button>
+          <button
+            type="button"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={loading || page >= totalPages}
+            className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm text-primary disabled:opacity-60"
+          >
+            Próxima
+          </button>
+        </div>
       </div>
 
       <CustomerModal

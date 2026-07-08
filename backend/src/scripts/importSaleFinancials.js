@@ -14,6 +14,7 @@ const {
   sequelize,
 } = require("../models");
 const { buildPaymentTypeResponse } = require("../utils/paymentTypeRules");
+const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const parseDate = require("../utils/parseDate");
 
 function normalizeInteger(value) {
@@ -26,22 +27,6 @@ function normalizeLegacyPaymentTypeId(value) {
   const normalized = normalizeInteger(value);
   if (!normalized || normalized <= 0) return null;
   return normalized;
-}
-
-function normalizeDecimal(value) {
-  if (value === undefined || value === null || value === "") return null;
-
-  const normalizedText = String(value)
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/^R\$/i, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-
-  const normalized = Number(normalizedText);
-  if (!Number.isFinite(normalized)) return null;
-
-  return Number(normalized.toFixed(2));
 }
 
 function roundCurrency(value) {
@@ -133,8 +118,8 @@ async function importSaleFinancials() {
             continue;
           }
 
-          const immediateAmount = normalizeDecimal(row.vlrVis) || 0;
-          const futureAmount = normalizeDecimal(row.vlrPra) || 0;
+          const immediateAmount = normalizeLegacyCurrency(row.vlrVis) || 0;
+          const futureAmount = normalizeLegacyCurrency(row.vlrPra) || 0;
           const immediatePaymentTypeId = normalizeLegacyPaymentTypeId(row.idTipDocVis);
           const futurePaymentTypeId = normalizeLegacyPaymentTypeId(row.idTipDocPra);
           const immediatePaymentType = immediatePaymentTypeId

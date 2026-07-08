@@ -24,6 +24,10 @@ const PayablesSchema = (sequelize, DataTypes) => {
         type: DataTypes.STRING(150),
         allowNull: false,
       },
+      supplierId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       amount: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
@@ -61,6 +65,9 @@ const PayablesSchema = (sequelize, DataTypes) => {
   );
 
   Payables.associate = (models) => {
+    Payables.belongsTo(models.Suppliers, {
+      foreignKey: "supplierId",
+    });
     Payables.belongsTo(models.PaymentTypes, {
       foreignKey: "plannedPaymentTypeId",
     });

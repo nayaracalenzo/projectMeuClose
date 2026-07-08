@@ -1,5 +1,5 @@
-const { Op } = require("sequelize");
-const { BankEntries } = require("../models");
+const { Op, Sequelize } = require("sequelize");
+const { BankEntries, sequelize } = require("../models");
 
 function buildWhere({ scope, search, startDate, endDate } = {}) {
   const where = {};
@@ -48,13 +48,52 @@ async function createEntry(payload, transaction) {
 }
 
 async function listEntries(filters = {}) {
-  return BankEntries.findAll({
+  return BankEntries.findAndCountAll({
     where: buildWhere(filters),
     order: [["occurredAt", "DESC"], ["idBankEntry", "DESC"]],
+    limit: filters.pageSize,
+    offset: (filters.page - 1) * filters.pageSize,
   });
+}
+
+async function summarizeEntries(filters = {}) {
+  const [summary] = await BankEntries.findAll({
+    where: buildWhere(filters),
+    attributes: [
+      [
+        sequelize.fn(
+          "COALESCE",
+          sequelize.fn(
+            "SUM",
+            sequelize.literal(`CASE WHEN "BankEntries"."movementType" = 'IN' THEN "BankEntries"."amount" ELSE 0 END`),
+          ),
+          0,
+        ),
+        "totalIn",
+      ],
+      [
+        sequelize.fn(
+          "COALESCE",
+          sequelize.fn(
+            "SUM",
+            sequelize.literal(`CASE WHEN "BankEntries"."movementType" = 'OUT' THEN "BankEntries"."amount" ELSE 0 END`),
+          ),
+          0,
+        ),
+        "totalOut",
+      ],
+    ],
+    raw: true,
+  });
+
+  return {
+    totalIn: Number(summary?.totalIn || 0),
+    totalOut: Number(summary?.totalOut || 0),
+  };
 }
 
 module.exports = {
   createEntry,
   listEntries,
+  summarizeEntries,
 };

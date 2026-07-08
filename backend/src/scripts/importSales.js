@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const csv = require("csv-parser");
 const { Customers, PaymentTypes, Sales, Users } = require("../models");
+const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const parseDate = require("../utils/parseDate");
 
 function normalizeInteger(value) {
@@ -17,29 +18,13 @@ function normalizeLegacyPaymentTypeId(value) {
   return normalized;
 }
 
-function normalizeDecimal(value) {
-  if (value === undefined || value === null || value === "") return null;
-
-  const normalizedText = String(value)
-    .trim()
-    .replace(/\s/g, "")
-    .replace(/^R\$/i, "")
-    .replace(/\./g, "")
-    .replace(",", ".");
-
-  const normalized = Number(normalizedText);
-  if (!Number.isFinite(normalized)) return null;
-
-  return Number(normalized.toFixed(2));
-}
-
 function roundCurrency(value) {
   return Number(Number(value).toFixed(2));
 }
 
 function resolveMainPaymentTypeId(row, validPaymentTypeIds) {
-  const immediateAmount = normalizeDecimal(row.vlrVis) || 0;
-  const futureAmount = normalizeDecimal(row.vlrPra) || 0;
+  const immediateAmount = normalizeLegacyCurrency(row.vlrVis) || 0;
+  const futureAmount = normalizeLegacyCurrency(row.vlrPra) || 0;
   const immediatePaymentTypeId = normalizeLegacyPaymentTypeId(row.idTipDocVis);
   const futurePaymentTypeId = normalizeLegacyPaymentTypeId(row.idTipDocPra);
 
@@ -117,9 +102,9 @@ async function importSales() {
           const resolvedUserId = userId && validUserIds.has(userId) ? userId : null;
           const createdAt = parseDate(row.dt) || new Date();
 
-          const totalAmountFromLegacy = normalizeDecimal(row.totVen);
-          const immediateAmount = normalizeDecimal(row.vlrVis) || 0;
-          const futureAmount = normalizeDecimal(row.vlrPra) || 0;
+          const totalAmountFromLegacy = normalizeLegacyCurrency(row.totVen);
+          const immediateAmount = normalizeLegacyCurrency(row.vlrVis) || 0;
+          const futureAmount = normalizeLegacyCurrency(row.vlrPra) || 0;
           const derivedFinalAmount = roundCurrency(immediateAmount + futureAmount);
           const finalAmount =
             derivedFinalAmount > 0

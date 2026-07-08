@@ -10,9 +10,9 @@ async function getBirthdaysOfMonthController(req, res, next) {
   }
 }
 
-async function getAllClients(_req, res, next) {
+async function getAllClients(req, res, next) {
   try {
-    const clients = await service.getAllClients();
+    const clients = await service.getAllClients(req.query);
     return res.status(200).json(clients);
   } catch (error) {
     return next(error);

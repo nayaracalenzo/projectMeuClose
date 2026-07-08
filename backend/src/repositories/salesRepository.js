@@ -11,6 +11,7 @@ const {
   SaleItems,
   Sales,
   Status,
+  Suppliers,
   Users,
   sequelize,
 } = require("../models");
@@ -170,6 +171,11 @@ async function getSaleById(idSale) {
       {
         model: Receivables,
         include: [
+          {
+            model: Suppliers,
+            attributes: ["idSupplier", "fullName", "tradeName"],
+            required: false,
+          },
           {
             model: ReceivableInstallments,
             include: [

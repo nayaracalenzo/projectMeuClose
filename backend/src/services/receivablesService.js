@@ -56,20 +56,103 @@ function getInstallmentFilter(status, dueDate, paidAmount, amount) {
   return "A_VENCER";
 }
 
-async function listInstallments({ status, customerId }) {
-  const installments = await repository.listInstallments();
+function resolveReceivableOrigin({ debtorType, operatorLabel, supplier, customer }) {
+  const supplierName = supplier?.tradeName || supplier?.fullName || null;
+  const customerName = customer?.fullName || customer?.companyName || null;
 
-  return installments
+  if (debtorType === "CARD_OPERATOR") {
+    return {
+      originType: "CARD_OPERATOR",
+      originName: operatorLabel || "Operadora",
+      supplierName,
+      customerName,
+    };
+  }
+
+  if (supplierName) {
+    return {
+      originType: "SUPPLIER",
+      originName: supplierName,
+      supplierName,
+      customerName,
+    };
+  }
+
+  return {
+    originType: "CUSTOMER",
+    originName: customerName || "Cliente",
+    supplierName,
+    customerName,
+  };
+}
+
+function normalizeOptionalDate(value, fieldName, options = {}) {
+  if (!value) return null;
+
+  const raw = String(value).trim();
+  const base = raw.includes("T") ? raw.split("T")[0] : raw;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+
+  if (!match) {
+    throw createReceivablesValidationError(`${fieldName} invalida.`);
+  }
+
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    options.endOfDay ? 23 : 0,
+    options.endOfDay ? 59 : 0,
+    options.endOfDay ? 59 : 0,
+    options.endOfDay ? 999 : 0,
+  );
+}
+
+async function listInstallments({
+  status,
+  customerId,
+  page: rawPage,
+  pageSize: rawPageSize,
+  startDate: rawStartDate,
+  endDate: rawEndDate,
+  search: rawSearch,
+} = {}) {
+  const page = Math.max(1, Number(rawPage) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(rawPageSize) || 10));
+  const startDate = normalizeOptionalDate(rawStartDate, "Data inicial");
+  const endDate = normalizeOptionalDate(rawEndDate, "Data final", { endOfDay: true });
+  const search = rawSearch ? String(rawSearch).trim() : undefined;
+  const result = await repository.listInstallments({
+    page,
+    pageSize,
+    startDate,
+    endDate,
+    search,
+    status,
+    customerId,
+  });
+  const summary = await repository.summarizeInstallments({
+    startDate,
+    endDate,
+    search,
+    status,
+    customerId,
+  });
+
+  const items = result.rows
     .map((item) => {
       const customer = item.Receivable?.Customer || item.Receivable?.Customers || null;
+      const supplier = item.Receivable?.Supplier || item.Receivable?.Suppliers || null;
       const debtorType = item.Receivable?.debtorType || "CUSTOMER";
       const operatorLabel =
         item.Receivable?.operatorLabel || item.Receivable?.CardTransaction?.operatorLabel || null;
       const paymentType = item.PaymentType || item.PaymentTypes || null;
-      const customerName =
-        debtorType === "CARD_OPERATOR"
-          ? operatorLabel || "Operadora"
-          : customer?.fullName || customer?.companyName || "Cliente";
+      const origin = resolveReceivableOrigin({
+        debtorType,
+        operatorLabel,
+        supplier,
+        customer,
+      });
       const filter = getInstallmentFilter(
         item.status,
         item.dueDate,
@@ -83,9 +166,13 @@ async function listInstallments({ status, customerId }) {
         receivableId: item.receivableId,
         saleId: item.Receivable?.Sale?.idSale || null,
         customerId: customer?.idCustomer || null,
+        supplierId: supplier?.idSupplier || item.Receivable?.supplierId || null,
         debtorType,
         operatorLabel,
-        customerName,
+        customerName: origin.originName,
+        supplierName: origin.supplierName,
+        originType: origin.originType,
+        originName: origin.originName,
         parcela: `${String(item.installmentNumber).padStart(3, "0")}/${String(
           item.totalInstallments,
         ).padStart(3, "0")}`,
@@ -100,17 +187,21 @@ async function listInstallments({ status, customerId }) {
         paidAmount: Number(item.paidAmount),
         openAmount: openBalance,
       };
-    })
-    .filter((item) => {
-      const matchesCustomer = customerId ? Number(item.customerId) === Number(customerId) : true;
-      const matchesStatus =
-        !status || status === "TODAS"
-          ? true
-          : status === "A_RECEBER"
-            ? item.status !== "PAID"
-            : item.filter === status;
-      return matchesCustomer && matchesStatus;
     });
+
+  const total = Number(result.count || 0);
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    summary: {
+      totalOpen: Number(Number(summary.totalOpen || 0).toFixed(2)),
+      totalReceived: Number(Number(summary.totalReceived || 0).toFixed(2)),
+    },
+  };
 }
 
 async function registerReceipt(installmentId, body = {}) {

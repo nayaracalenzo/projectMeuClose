@@ -32,7 +32,8 @@
     "db:setup:fabrics": "npm run db:migrate && npm run db:seed:fabrics",
     "db:seed:roles": "node src/scripts/importRoles.js",
     "db:setup:roles": "npm run db:migrate && npm run db:seed:roles",
-    "db:seed:employees": "node src/scripts/importEmployees.js"
+    "db:seed:employees": "node src/scripts/importEmployees.js",
+    "db:seed:suppliers": "node src/scripts/importSuppliers.js"
   },
   "keywords": [],
   "author": "",
