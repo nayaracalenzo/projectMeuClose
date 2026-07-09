@@ -46,7 +46,6 @@ interface SaleCategoryOption {
 
 interface SaleTableItem {
   id: number;
-  code: string;
   type: ModalType;
   description: string;
   value: number;
@@ -116,14 +115,6 @@ const DEFAULT_CATEGORIES: SaleCategoryOption[] = [
   { id: 4, code: "ACCESSORY", label: "Acessórios" },
   { id: 5, code: "MISC", label: "Diversos" },
 ];
-
-const MODAL_PREFIX: Record<ModalType, string> = {
-  "Roupa pronta": "RP",
-  "Sob medida": "SM",
-  "Acessório": "AC",
-  "Serviço": "SV",
-  "Diversos": "DV",
-};
 
 function getCategoryLabelByCode(code: SaleCategoryCode) {
   return DEFAULT_CATEGORIES.find((item) => item.code === code)?.label || "Categoria";
@@ -196,6 +187,7 @@ export default function NewSalePage() {
   const [countedBalanceInput, setCountedBalanceInput] = useState("");
   const [cashSessionNotes, setCashSessionNotes] = useState("");
   const [cashSessionLoading, setCashSessionLoading] = useState(false);
+  const [cancelSaleModalOpen, setCancelSaleModalOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   const formatDate = (dateString: string) =>
@@ -211,8 +203,21 @@ export default function NewSalePage() {
     const fetchCustomers = async () => {
       try {
         setLoadingCustomers(true);
-        const data = await getRequest("/clients");
-        const parsedCustomers = data.map((customer: ICustomer) => ({
+        const params = new URLSearchParams({
+          page: "1",
+          pageSize: "20",
+          status: "ativo",
+        });
+
+        if (search.trim()) {
+          params.set("search", search.trim());
+        }
+
+        const data = (await getRequest(`/clients?${params.toString()}`)) as {
+          items?: ICustomer[];
+        };
+        const items = Array.isArray(data?.items) ? data.items : [];
+        const parsedCustomers = items.map((customer: ICustomer) => ({
           id: Number(customer.id),
           name: customer.fullName || customer.companyName || "Sem nome",
           document: formatDocument(customer.document),
@@ -221,13 +226,14 @@ export default function NewSalePage() {
         setCustomers(parsedCustomers);
       } catch (error) {
         console.error("Erro ao buscar clientes", error);
+        setCustomers([]);
       } finally {
         setLoadingCustomers(false);
       }
     };
 
     fetchCustomers();
-  }, []);
+  }, [search]);
 
   useEffect(() => {
     const fetchPaymentTypes = async () => {
@@ -307,21 +313,7 @@ export default function NewSalePage() {
     fetchCashSessionStatus();
   }, []);
 
-  const filteredCustomers = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-
-    if (!normalizedSearch) {
-      return customers.slice(0, 8);
-    }
-
-    return customers
-      .filter(
-        (customer) =>
-          customer.name.toLowerCase().includes(normalizedSearch) ||
-          customer.document.toLowerCase().includes(normalizedSearch),
-      )
-      .slice(0, 8);
-  }, [customers, search]);
+  const filteredCustomers = useMemo(() => customers, [customers]);
 
   const selectedTypesLabel = useMemo(() => {
     const labels = Array.from(new Set(tableItems.map((item) => item.type)));
@@ -576,14 +568,10 @@ export default function NewSalePage() {
 
     setTableItems((prev) => {
       const next = [...prev];
-      const prefix = MODAL_PREFIX[modalType];
 
       modalItems.forEach((item) => {
-        const code = `${prefix}-${next.length + 1}`;
-
         next.push({
           id: Date.now() + next.length,
-          code,
           type: modalType,
           description: item.type || modalType,
           value: Number((item.value * Math.max(1, item.quantity)).toFixed(2)),
@@ -596,6 +584,7 @@ export default function NewSalePage() {
     });
 
     setIsModalOpen(false);
+    setStep(3);
   };
 
   const buildGenericSaleItems = (
@@ -958,14 +947,31 @@ export default function NewSalePage() {
     setCashSessionStatus((updatedCashSessionStatus as CashSessionStatusResponse) || null);
   };
 
-  const handleCreateQuote = async () => {
-    if (!selectedCustomer || tableItems.length === 0) {
+  const handleBackToStart = () => {
+    if (tableItems.length > 0 || draftSaleId !== null) {
+      setCancelSaleModalOpen(true);
       return;
     }
 
+    setStep(1);
+  };
+
+  const handleContinueOpenSale = () => {
+    setCancelSaleModalOpen(false);
+  };
+
+  const handleCancelOpenSale = async () => {
+    setCancelSaleModalOpen(false);
+    await resetSaleForm();
+  };
+
+  const createDraftSale = async () => {
+    if (!selectedCustomer || tableItems.length === 0) {
+      return null;
+    }
+
     if (hasGeneratedQuote) {
-      setStep(4);
-      return;
+      return draftSaleId;
     }
 
     try {
@@ -982,11 +988,12 @@ export default function NewSalePage() {
         customerMeasurements: buildCustomerMeasurementsPayload(),
       });
 
-      setDraftSaleId(Number((created as { id?: number }).id));
+      const nextDraftSaleId = Number((created as { id?: number }).id);
+      setDraftSaleId(nextDraftSaleId);
       setSaveMessage(
         "Orçamento gerado com sucesso. Agora informe a forma de pagamento para concluir o pedido.",
       );
-      setStep(4);
+      return nextDraftSaleId;
     } catch (error: unknown) {
       setSaveMessage(
         getUserFacingApiErrorMessage(error, "Não foi possível gerar o orçamento."),
@@ -994,6 +1001,29 @@ export default function NewSalePage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCreateQuote = async () => {
+    const createdDraftSaleId = await createDraftSale();
+
+    if (!createdDraftSaleId) {
+      return;
+    }
+
+    setSaveMessage("OrÃ§amento gerado com sucesso.");
+  };
+
+  const handleStartFinalizeSale = async () => {
+    const createdDraftSaleId = await createDraftSale();
+
+    if (!createdDraftSaleId) {
+      return;
+    }
+
+    setSaveMessage(
+      "OrÃ§amento gerado com sucesso. Agora informe a forma de pagamento para concluir o pedido.",
+    );
+    setStep(4);
   };
 
   const handleFinalizeQuote = async () => {
@@ -1126,13 +1156,21 @@ export default function NewSalePage() {
                             onClick={() => handleSelectCustomer(customer)}
                             className="block w-full border-b border-outline-variant/30 px-3 py-2 text-left transition-colors last:border-0 hover:bg-surface-low"
                           >
-                            <p className="font-medium text-primary">{customer.name}</p>
-                            <p className="text-sm text-neutral-600">{customer.document}</p>
+                            <p className="font-medium text-primary">
+                              {customer.name}
+                            </p>
+                            <p className="text-sm text-neutral-600">
+                              {customer.document}
+                            </p>
                           </button>
                         ))
-                      ) : (
+                      ) : search.trim() ? (
                         <p className="px-3 py-2 text-sm text-neutral-600">
                           Nenhum cliente encontrado.
+                        </p>
+                      ) : (
+                        <p className="px-3 py-2 text-sm text-neutral-600">
+                          Digite o nome ou CPF/CNPJ do cliente.
                         </p>
                       )}
                     </div>
@@ -1141,9 +1179,15 @@ export default function NewSalePage() {
 
                 {selectedCustomer && (
                   <div className="rounded-lg border border-secondary/50 bg-surface-low p-3">
-                    <p className="text-sm text-neutral-700">Cliente selecionado</p>
-                    <p className="font-semibold text-primary">{selectedCustomer.name}</p>
-                    <p className="text-sm text-neutral-700">{selectedCustomer.document}</p>
+                    <p className="text-sm text-neutral-700">
+                      Cliente selecionado
+                    </p>
+                    <p className="font-semibold text-primary">
+                      {selectedCustomer.name}
+                    </p>
+                    <p className="text-sm text-neutral-700">
+                      {selectedCustomer.document}
+                    </p>
                   </div>
                 )}
 
@@ -1192,7 +1236,9 @@ export default function NewSalePage() {
                       <select
                         value={selectedClothingSubtype}
                         onChange={(e) =>
-                          setSelectedClothingSubtype(e.target.value as ClothingSubtype | "")
+                          setSelectedClothingSubtype(
+                            e.target.value as ClothingSubtype | "",
+                          )
                         }
                         disabled={hasGeneratedQuote}
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
@@ -1210,10 +1256,12 @@ export default function NewSalePage() {
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!currentModalType}
-                      onClick={() => setStep(3)}
+                      disabled={!currentModalType || hasGeneratedQuote}
+                      onClick={() =>
+                        currentModalType && openModal(currentModalType)
+                      }
                     >
-                      Continuar
+                      + Adicionar item
                     </Button>
                   </div>
                 </div>
@@ -1223,7 +1271,7 @@ export default function NewSalePage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => setStep(1)}
+                      onClick={handleBackToStart}
                     >
                       Voltar
                     </Button>
@@ -1265,7 +1313,9 @@ export default function NewSalePage() {
                       <select
                         value={selectedClothingSubtype}
                         onChange={(e) =>
-                          setSelectedClothingSubtype(e.target.value as ClothingSubtype | "")
+                          setSelectedClothingSubtype(
+                            e.target.value as ClothingSubtype | "",
+                          )
                         }
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
                       >
@@ -1283,7 +1333,9 @@ export default function NewSalePage() {
                       type="button"
                       className="w-full"
                       disabled={!currentModalType || hasGeneratedQuote}
-                      onClick={() => currentModalType && openModal(currentModalType)}
+                      onClick={() =>
+                        currentModalType && openModal(currentModalType)
+                      }
                     >
                       + Adicionar item
                     </Button>
@@ -1292,8 +1344,9 @@ export default function NewSalePage() {
 
                 {hasGeneratedQuote ? (
                   <div className="rounded-lg border border-outline-variant/45 bg-white px-4 py-3 text-sm text-neutral-700">
-                    Este orçamento já foi gerado. Para manter os dados consistentes, os itens
-                    ficaram bloqueados e agora falta apenas concluir o pagamento.
+                    Este orçamento já foi gerado. Para manter os dados
+                    consistentes, os itens ficaram bloqueados e agora falta
+                    apenas concluir o pagamento.
                   </div>
                 ) : null}
 
@@ -1303,9 +1356,6 @@ export default function NewSalePage() {
                       <table className="min-w-full text-sm">
                         <thead className="bg-surface-low">
                           <tr>
-                            <th className="px-3 py-2 text-left font-semibold text-primary">
-                              Código
-                            </th>
                             <th className="px-3 py-2 text-left font-semibold text-primary">
                               Tipo
                             </th>
@@ -1324,14 +1374,21 @@ export default function NewSalePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {tableItems.map((item) => (
+                          {tableItems.map((item, index) => (
                             <tr
                               key={item.id}
-                              className="border-t border-outline-variant/30"
+                              className={`border-t border-outline-variant/30 ${
+                                index % 2 === 1
+                                  ? "bg-surface-lowest/50"
+                                  : "bg-white"
+                              }`}
                             >
-                              <td className="px-3 py-2 text-neutral-800">{item.code}</td>
-                              <td className="px-3 py-2 text-neutral-800">{item.type}</td>
-                              <td className="px-3 py-2 text-neutral-800">{item.description}</td>
+                              <td className="px-3 py-2 text-neutral-800">
+                                {item.type}
+                              </td>
+                              <td className="px-3 py-2 text-neutral-800">
+                                {item.description}
+                              </td>
                               <td className="px-3 py-2 text-right text-neutral-800">
                                 {formatCurrency(item.value)}
                               </td>
@@ -1349,23 +1406,37 @@ export default function NewSalePage() {
                   </>
                 )}
 
-                <div className="flex justify-start">
-                  <div className="flex gap-2">
+                <div className="flex w-full">
+                  <div className="flex w-full justify-between gap-2">
                     <Button
                       type="button"
                       variant="secondary"
-                      onClick={() => setStep(1)}
+                      onClick={handleBackToStart}
                       disabled={hasGeneratedQuote}
                     >
                       Voltar
                     </Button>
-                    <Button
-                      type="button"
-                      onClick={handleCreateQuote}
-                      disabled={!canCreateQuote}
-                    >
-                      {isSaving ? "Gerando..." : hasGeneratedQuote ? "Ir para pagamento" : "Gerar orçamento"}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="tertiary"
+                        type="button"
+                        onClick={handleCreateQuote}
+                        disabled={!canCreateQuote || hasGeneratedQuote}
+                      >
+                        {isSaving
+                          ? "Gerando..."
+                          : hasGeneratedQuote
+                            ? "Ir para pagamento"
+                            : "Gerar orçamento"}
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={handleStartFinalizeSale}
+                        disabled={!canCreateQuote}
+                      >
+                        {isSaving ? "Preparando..." : "Finalizar venda"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1384,7 +1455,9 @@ export default function NewSalePage() {
                     </label>
                     <select
                       value={paymentTypeId}
-                      onChange={(e) => void handlePaymentTypeChange(e.target.value)}
+                      onChange={(e) =>
+                        void handlePaymentTypeChange(e.target.value)
+                      }
                       className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
                     >
                       <option value="">Selecione...</option>
@@ -1428,7 +1501,8 @@ export default function NewSalePage() {
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
                       />
                     </div>
-                  ) : selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" ? (
+                  ) : selectedPaymentType?.financialFlow ===
+                    "FUTURE_OPERATOR" ? (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
                         Data prevista de repasse
@@ -1436,7 +1510,9 @@ export default function NewSalePage() {
                       <input
                         type="date"
                         value={cardExpectedSettlementDate}
-                        onChange={(e) => setCardExpectedSettlementDate(e.target.value)}
+                        onChange={(e) =>
+                          setCardExpectedSettlementDate(e.target.value)
+                        }
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
                       />
                     </div>
@@ -1455,7 +1531,9 @@ export default function NewSalePage() {
                       </label>
                       <input
                         value={paymentReferenceCode}
-                        onChange={(e) => setPaymentReferenceCode(e.target.value)}
+                        onChange={(e) =>
+                          setPaymentReferenceCode(e.target.value)
+                        }
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                         placeholder="Digite o número do cheque"
                       />
@@ -1512,7 +1590,9 @@ export default function NewSalePage() {
                       </label>
                       <select
                         value={entryPaymentTypeId}
-                        onChange={(e) => void handleEntryPaymentTypeChange(e.target.value)}
+                        onChange={(e) =>
+                          void handleEntryPaymentTypeChange(e.target.value)
+                        }
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                       >
                         <option value="">Selecione...</option>
@@ -1575,7 +1655,9 @@ export default function NewSalePage() {
                       </label>
                       <input
                         value={cardAuthorizationCode}
-                        onChange={(e) => setCardAuthorizationCode(e.target.value)}
+                        onChange={(e) =>
+                          setCardAuthorizationCode(e.target.value)
+                        }
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                       />
                     </div>
@@ -1587,7 +1669,9 @@ export default function NewSalePage() {
                         type="number"
                         min={1}
                         value={cardClientInstallmentCount}
-                        onChange={(e) => setCardClientInstallmentCount(e.target.value)}
+                        onChange={(e) =>
+                          setCardClientInstallmentCount(e.target.value)
+                        }
                         className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                       />
                     </div>
@@ -1615,7 +1699,8 @@ export default function NewSalePage() {
                     Desconto dos itens: {formatCurrency(discountAmount)}
                   </div>
                   <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
-                    Valor final dos itens: {formatCurrency(discountedTotalValue)}
+                    Valor final dos itens:{" "}
+                    {formatCurrency(discountedTotalValue)}
                   </div>
                 </div>
 
@@ -1625,7 +1710,10 @@ export default function NewSalePage() {
                   <p>Valor final: {formatCurrency(discountedTotalValue)}</p>
                   {isImmediateCashPayment && (
                     <>
-                      <p>Valor recebido: {formatCurrency(parsedCashReceivedAmount)}</p>
+                      <p>
+                        Valor recebido:{" "}
+                        {formatCurrency(parsedCashReceivedAmount)}
+                      </p>
                       <p>Troco: {formatCurrency(changeAmount)}</p>
                     </>
                   )}
@@ -1646,7 +1734,9 @@ export default function NewSalePage() {
                   {installmentPreview.length > 0 && remainingAmount > 0 && (
                     <p>
                       Valor presumido:{" "}
-                      {installmentPreview.map((item) => formatCurrency(item)).join(" / ")}
+                      {installmentPreview
+                        .map((item) => formatCurrency(item))
+                        .join(" / ")}
                     </p>
                   )}
                 </div>
@@ -1678,7 +1768,9 @@ export default function NewSalePage() {
             <p className="text-sm text-neutral-700">
               Cliente: {selectedCustomer?.name ?? "Não selecionado"}
             </p>
-            <p className="mb-3 text-sm text-neutral-700">Tipo: {selectedTypesLabel}</p>
+            <p className="mb-3 text-sm text-neutral-700">
+              Tipo: {selectedTypesLabel}
+            </p>
             <p className="text-sm text-neutral-700">
               Forma: {selectedPaymentType?.name || "Não definida"}
             </p>
@@ -1700,7 +1792,9 @@ export default function NewSalePage() {
             <p className="mb-3 text-sm text-neutral-700">
               Saldo: {formatCurrency(remainingAmount)}
             </p>
-            {saveMessage && <p className="mb-3 text-sm text-neutral-700">{saveMessage}</p>}
+            {saveMessage && (
+              <p className="mb-3 text-sm text-neutral-700">{saveMessage}</p>
+            )}
             <p className="mt-4 border-t border-outline-variant/35 pt-3 text-sm font-semibold text-primary">
               Valor total: {formatCurrency(discountedTotalValue)}
             </p>
@@ -1728,7 +1822,9 @@ export default function NewSalePage() {
                 title={`Dados de ${modalType.toLowerCase()}`}
                 itemLabel={modalType}
                 defaultSummaryLabel={modalType}
-                onSummaryChange={(items: GeneralCatalogSummaryItem[]) => setModalItems(items)}
+                onSummaryChange={(items: GeneralCatalogSummaryItem[]) =>
+                  setModalItems(items)
+                }
                 onProductsChange={(items) => setModalGeneralProducts(items)}
               />
             )}
@@ -1766,7 +1862,9 @@ export default function NewSalePage() {
             </label>
             <input
               value={openingBalanceInput}
-              onChange={(e) => setOpeningBalanceInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setOpeningBalanceInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
@@ -1823,7 +1921,9 @@ export default function NewSalePage() {
               </p>
               <p>
                 Saldo esperado:{" "}
-                {formatCurrency(cashSessionStatus.currentSession.expectedBalance)}
+                {formatCurrency(
+                  cashSessionStatus.currentSession.expectedBalance,
+                )}
               </p>
             </div>
           ) : null}
@@ -1834,7 +1934,9 @@ export default function NewSalePage() {
             </label>
             <input
               value={countedBalanceInput}
-              onChange={(e) => setCountedBalanceInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setCountedBalanceInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
@@ -1865,6 +1967,37 @@ export default function NewSalePage() {
               onClick={() => setCloseCashModalOpen(false)}
             >
               Voltar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={cancelSaleModalOpen}
+        onClose={handleContinueOpenSale}
+        title="Venda em andamento"
+        subtitle="Esta venda ainda esta aberta."
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-700">
+            Tem certeza que deseja voltar? Os produtos adicionados e os dados da
+            venda em andamento serão descartados.
+          </p>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={handleContinueOpenSale}
+            >
+              Continuar venda
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void handleCancelOpenSale()}
+            >
+              Cancelar venda
             </Button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { getRequest } from "../services/request.ts";
 import type { ICustomer } from "../interfaces/ICustomer.ts";
 import { ChevronRight } from "lucide-react";
@@ -14,7 +14,6 @@ type CustomerRow = {
   "CPF/CNPJ": string;
   Contato: string;
   Ativo: boolean;
-  Bloqueado: boolean;
   email: string;
 };
 
@@ -34,6 +33,7 @@ export default function CustomersPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("ativo");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
@@ -53,7 +53,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter]);
+  }, [deferredSearch, statusFilter]);
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -65,8 +65,8 @@ export default function CustomersPage() {
           status: statusFilter,
         });
 
-        if (search.trim()) {
-          params.set("search", search.trim());
+        if (deferredSearch.trim()) {
+          params.set("search", deferredSearch.trim());
         }
 
         const data = (await getRequest(`/clients?${params.toString()}`)) as CustomersResponse;
@@ -77,7 +77,6 @@ export default function CustomersPage() {
           "CPF/CNPJ": formatDocument(customer.document),
           Contato: formatContact(customer.phone),
           Ativo: customer.active,
-          Bloqueado: Boolean(customer.blocked),
           email: customer.email?.trim() ?? "",
         }));
 
@@ -95,7 +94,7 @@ export default function CustomersPage() {
     };
 
     fetchCustomers();
-  }, [currentPage, search, statusFilter]);
+  }, [currentPage, deferredSearch, statusFilter]);
 
   const catchIdFromTable = (id: number) => {
     if (selectedId === id) {
@@ -107,13 +106,13 @@ export default function CustomersPage() {
   };
 
   return (
-    <>
-      {loading ? (
+    <div className="w-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
+      {loading && customers.length === 0 ? (
         <div className="mt-50 flex w-full items-center justify-center">
           <CircularProgress />
         </div>
       ) : (
-        <div className="w-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
+        <>
           <div>
             <div className="mb-5 flex justify-center gap-4 md:justify-between">
               <h1 className="pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">
@@ -166,7 +165,6 @@ export default function CustomersPage() {
                   >
                     <MenuItem value="ativo">Clientes Ativos</MenuItem>
                     <MenuItem value="inativo">Clientes Inativos</MenuItem>
-                    <MenuItem value="bloqueado">Clientes Bloqueados</MenuItem>
                     <MenuItem value="todos">Todos</MenuItem>
                   </Select>
                 </FormControl>
@@ -177,6 +175,13 @@ export default function CustomersPage() {
           <p className="mb-4 mt-4 text-[13px] tracking-[0.04em] text-neutral-700">
             {totalCustomers} cliente(s) encontrado(s).
           </p>
+
+          {loading ? (
+            <div className="mb-4 flex items-center gap-2 text-sm text-neutral-700">
+              <CircularProgress size={18} />
+              Atualizando clientes...
+            </div>
+          ) : null}
 
           <div className="hidden overflow-x-auto md:block">
             <table className="mt-2 w-full border-separate border-spacing-y-2">
@@ -230,18 +235,12 @@ export default function CustomersPage() {
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${
-                          customer.Bloqueado
-                            ? "bg-[#F8D7DA] text-[#7A1717]"
-                            : customer.Ativo
-                              ? "bg-secondary text-primary"
-                              : "bg-gray-200 text-neutral-700"
+                          customer.Ativo
+                            ? "bg-secondary text-primary"
+                            : "bg-gray-200 text-neutral-700"
                         }`}
                       >
-                        {customer.Bloqueado
-                          ? "Bloqueado"
-                          : customer.Ativo
-                            ? "Ativo"
-                            : "Inativo"}
+                        {customer.Ativo ? "Ativo" : "Inativo"}
                       </span>
                     </td>
                   </tr>
@@ -264,18 +263,12 @@ export default function CustomersPage() {
                   </p>
                   <span
                     className={`inline-flex rounded-full px-2.5 py-1 text-sm font-semibold uppercase tracking-[0.08em] ${
-                      customer.Bloqueado
-                        ? "bg-[#F8D7DA] text-[#7A1717]"
-                        : customer.Ativo
-                          ? "bg-secondary text-primary"
-                          : "bg-gray-200 text-neutral-700"
+                      customer.Ativo
+                        ? "bg-secondary text-primary"
+                        : "bg-gray-200 text-neutral-700"
                     }`}
                   >
-                    {customer.Bloqueado
-                      ? "Bloqueado"
-                      : customer.Ativo
-                        ? "Ativo"
-                        : "Inativo"}
+                    {customer.Ativo ? "Ativo" : "Inativo"}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -308,8 +301,8 @@ export default function CustomersPage() {
               </Button>
             </div>
           </div>
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }

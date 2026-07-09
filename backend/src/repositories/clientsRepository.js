@@ -12,7 +12,9 @@ function buildBirthdayWhere({ month, year }) {
 }
 
 function buildClientsWhere({ search, status } = {}) {
-  const where = {};
+  const where = {
+    blocked: false,
+  };
 
   if (search) {
     where[Op.or] = [
@@ -38,8 +40,6 @@ function buildClientsWhere({ search, status } = {}) {
     where.active = true;
   } else if (status === "inativo") {
     where.active = false;
-  } else if (status === "bloqueado") {
-    where.blocked = true;
   }
 
   return where;
@@ -56,13 +56,19 @@ async function getAllClients({ search, status, page, pageSize } = {}) {
 
 async function findBirthdays({ month, year }) {
   return Customers.findAll({
-    where: buildBirthdayWhere({ month, year }),
+    where: {
+      [Op.and]: [buildBirthdayWhere({ month, year }), { blocked: false }],
+    },
     order: [["birthDate", "ASC"], ["fullName", "ASC"]],
   });
 }
 
 async function getClientById(id) {
-  return Customers.findByPk(id, {
+  return Customers.findOne({
+    where: {
+      idCustomer: id,
+      blocked: false,
+    },
     include: [
       {
         model: Professions,

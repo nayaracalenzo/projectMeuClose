@@ -135,8 +135,8 @@ export default function GeneralCatalogItems({
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <div className="md:col-span-1">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_110px_1fr_1fr]">
+              <div>
                 <label
                   htmlFor={`general-name-${product.id}`}
                   className="mb-1 block text-sm text-primary"

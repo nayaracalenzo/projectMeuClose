@@ -1,14 +1,17 @@
-﻿import { CircularProgress } from "@mui/material";
+import { CircularProgress } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/Button";
-import CustomerDetailsCard, { type CustomerFieldConfig } from "../components/CustomerDetailsCard";
+import CustomerFormFields, { type CustomerFormValues } from "../components/CustomerFormFields";
+import CustomerModal from "../components/CustomerModal";
+import NoticeToast from "../components/NoticeToast";
 import CustomerReceivablesModal from "../components/CustomerReceivablesModal";
 import CustomerSalesModal from "../components/CustomerSalesModal";
 import { getRequest, updateRequest } from "../services/request";
-import { formatDocument } from "../utils/formatDocument";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { maskCep } from "../utils/maskCep";
 import { maskCpfCnpj } from "../utils/maskCpfCnpj";
+import { fetchAddressByZipCode } from "../utils/zipCodeLookup";
 
 type ClientDetails = {
   id: number;
@@ -48,6 +51,33 @@ type ValidationIssue = {
   message: string;
 };
 
+type NoticeState = {
+  open: boolean;
+  tone: "success" | "warning" | "error";
+  title?: string;
+  message: string;
+};
+
+type ConfirmationModalState =
+  | { open: false; type: null; destination?: undefined }
+  | { open: true; type: "deactivate"; destination?: undefined }
+  | { open: true; type: "delete"; destination?: undefined }
+  | { open: true; type: "leave"; destination: string };
+
+const EMPTY_NOTICE: NoticeState = {
+  open: false,
+  tone: "warning",
+  title: undefined,
+  message: "",
+};
+
+const EMPTY_CONFIRMATION_MODAL: ConfirmationModalState = {
+  open: false,
+  type: null,
+};
+
+const onlyDigits = (value?: string | null) => (value || "").replace(/\D/g, "");
+
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
   const base = String(value).slice(0, 10);
@@ -55,11 +85,6 @@ const formatDate = (value?: string | null) => {
   if (!match) return "-";
   return `${match[3]}/${match[2]}/${match[1]}`;
 };
-
-const formatType = (value: string) =>
-  value === "INDIVIDUAL" ? "Pessoa física" : "Pessoa jurídica";
-
-const onlyDigits = (value?: string | null) => (value || "").replace(/\D/g, "");
 
 const formatPhoneMask = (value?: string | null) => {
   const digits = onlyDigits(value).slice(0, 11);
@@ -75,12 +100,39 @@ const toEditableForm = (clientData: ClientDetails): Partial<ClientDetails> => ({
   ...clientData,
   document: maskCpfCnpj(clientData.document || ""),
   phone: formatPhoneMask(clientData.phone),
-  zipCode: clientData.zipCode || "",
+  zipCode: maskCep(clientData.zipCode || ""),
 });
 
-const getClientValidationIssues = (
-  form: Partial<ClientDetails>,
-): ValidationIssue[] => {
+const toSharedFormValues = (form: Partial<ClientDetails>): CustomerFormValues => ({
+  typeCustomer: (form.typeCustomer || "INDIVIDUAL") as CustomerFormValues["typeCustomer"],
+  document: String(form.document || ""),
+  rg: String(form.rg || ""),
+  fullName: String(form.fullName || ""),
+  birthDate: String(form.birthDate || ""),
+  companyName: String(form.companyName || ""),
+  tradeName: String(form.tradeName || ""),
+  phone: String(form.phone || ""),
+  email: String(form.email || ""),
+  zipCode: String(form.zipCode || ""),
+  street: String(form.street || ""),
+  number: String(form.number || ""),
+  complement: String(form.complement || ""),
+  neighborhood: String(form.neighborhood || ""),
+  city: String(form.city || ""),
+  state: String(form.state || ""),
+  professionId:
+    form.professionId === null || form.professionId === undefined ? "" : String(form.professionId),
+  comment: String(form.comment || ""),
+});
+
+const serializeEditableState = (form: Partial<ClientDetails>) =>
+  JSON.stringify({
+    ...toSharedFormValues(form),
+    active: Boolean(form.active),
+    blocked: Boolean(form.blocked),
+  });
+
+const getClientValidationIssues = (form: Partial<ClientDetails>): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
   const typeCustomer = form.typeCustomer;
   const documentDigits = onlyDigits(form.document);
@@ -92,18 +144,18 @@ const getClientValidationIssues = (
     issues.push({
       key: "phone",
       label: "Telefone",
-      message: "Telefone é obrigatório.",
+      message: "Telefone e obrigatorio.",
     });
   }
 
   if (typeCustomer === "INDIVIDUAL") {
     if (!documentDigits) {
-      issues.push({ key: "document", label: "CPF", message: "CPF é obrigatório." });
+      issues.push({ key: "document", label: "CPF", message: "CPF e obrigatorio." });
     } else if (documentDigits.length !== 11) {
       issues.push({
         key: "document",
         label: "CPF",
-        message: "CPF deve conter 11 dígitos.",
+        message: "CPF deve conter 11 digitos.",
       });
     }
 
@@ -111,27 +163,27 @@ const getClientValidationIssues = (
       issues.push({
         key: "fullName",
         label: "Nome",
-        message: "Nome completo é obrigatório para pessoa física.",
+        message: "Nome completo e obrigatorio para pessoa fisica.",
       });
     }
   }
 
   if (typeCustomer === "COMPANY") {
     if (!documentDigits) {
-      issues.push({ key: "document", label: "CNPJ", message: "CNPJ é obrigatório." });
+      issues.push({ key: "document", label: "CNPJ", message: "CNPJ e obrigatorio." });
     } else if (documentDigits.length !== 14) {
       issues.push({
         key: "document",
         label: "CNPJ",
-        message: "CNPJ deve conter 14 dígitos.",
+        message: "CNPJ deve conter 14 digitos.",
       });
     }
 
     if (!companyName) {
       issues.push({
         key: "companyName",
-        label: "Razão social",
-        message: "Razão social é obrigatória para pessoa jurídica.",
+        label: "Razao social",
+        message: "Razao social e obrigatoria para pessoa juridica.",
       });
     }
   }
@@ -145,7 +197,6 @@ export default function CustomerDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [client, setClient] = useState<ClientDetails | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [zipLookupMessage, setZipLookupMessage] = useState("");
@@ -153,6 +204,10 @@ export default function CustomerDetails() {
   const [professions, setProfessions] = useState<ProfessionOption[]>([]);
   const [isReceivablesModalOpen, setIsReceivablesModalOpen] = useState(false);
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
+  const [notice, setNotice] = useState<NoticeState>(EMPTY_NOTICE);
+  const [confirmationModal, setConfirmationModal] = useState<ConfirmationModalState>(
+    EMPTY_CONFIRMATION_MODAL,
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -169,7 +224,7 @@ export default function CustomerDetails() {
       } catch (err: unknown) {
         const maybeAxiosError = err as { response?: { status?: number } };
         if (maybeAxiosError.response?.status === 404) {
-          setError("Cliente não encontrado.");
+          setError("Cliente nao encontrado.");
         } else {
           setError("Erro ao carregar detalhes do cliente.");
         }
@@ -181,45 +236,63 @@ export default function CustomerDetails() {
     fetchData();
   }, [id]);
 
+  const originalForm = useMemo(
+    () => (client ? serializeEditableState(toEditableForm(client)) : ""),
+    [client],
+  );
+  const currentForm = useMemo(() => serializeEditableState(form), [form]);
+  const hasUnsavedChanges = Boolean(client) && originalForm !== currentForm;
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges) return;
+
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
   const setField = (field: keyof ClientDetails, value: unknown) => {
     setForm((prev) => ({ ...prev, [field]: value as never }));
   };
 
   const handleZipCodeChange = async (value: string) => {
     const digits = onlyDigits(value).slice(0, 8);
-    setField("zipCode", digits);
+    setField("zipCode", maskCep(digits));
     setZipLookupMessage("");
 
     if (digits.length !== 8) return;
 
     try {
-      setZipLookupMessage("Buscando endereço pelo CEP...");
-      const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-      const data = await response.json();
+      setZipLookupMessage("Buscando endereco pelo CEP...");
+      const address = await fetchAddressByZipCode(digits);
 
-      if (data.erro) {
-        setZipLookupMessage("CEP não encontrado.");
+      if (!address) {
+        setZipLookupMessage("CEP nao encontrado.");
         return;
       }
 
       setForm((prev) => ({
         ...prev,
-        zipCode: digits,
-        street: data.logradouro || prev.street || "",
-        neighborhood: data.bairro || prev.neighborhood || "",
-        complement: data.complemento || prev.complement || "",
-        city: data.localidade || prev.city || "",
-        state: data.uf || prev.state || "",
+        zipCode: maskCep(digits),
+        street: address.street || prev.street || "",
+        neighborhood: address.neighborhood || prev.neighborhood || "",
+        complement: address.complement || prev.complement || "",
+        city: address.city || prev.city || "",
+        state: address.state || prev.state || "",
       }));
-      setZipLookupMessage("Endereço preenchido automaticamente.");
+      setZipLookupMessage("Endereco preenchido automaticamente.");
     } catch {
-      setZipLookupMessage("Não foi possível consultar o CEP.");
+      setZipLookupMessage("Nao foi possivel consultar o CEP.");
     }
   };
 
   const handleFieldChange = (key: string, value: unknown) => {
     if (key === "zipCode") {
-      handleZipCodeChange(String(value || ""));
+      void handleZipCodeChange(String(value || ""));
       return;
     }
 
@@ -239,221 +312,178 @@ export default function CustomerDetails() {
       return;
     }
 
+    if (key === "state") {
+      setField("state", String(value || "").toUpperCase().slice(0, 2));
+      return;
+    }
+
     setField(key as keyof ClientDetails, value);
   };
 
-  const values = useMemo(
-    () => ((isEditing ? form : client) as Record<string, unknown>) || {},
-    [client, form, isEditing],
-  );
+  const handleActiveChange = (value: boolean) => {
+    if (value) {
+      setForm((prev) => ({
+        ...prev,
+        active: true,
+      }));
+      return;
+    }
 
-  const professionsOptions = professions.map((item) => ({
-    value: item.id,
-    label: item.name,
-  }));
+    setConfirmationModal({
+      open: true,
+      type: "deactivate",
+    });
+  };
 
-  const validationIssues = useMemo(
-    () => getClientValidationIssues(isEditing ? form : client || {}),
-    [client, form, isEditing],
-  );
+  const handleDeleteRequest = () => {
+    setConfirmationModal({
+      open: true,
+      type: "delete",
+    });
+  };
 
-  const invalidFieldKeys = useMemo(
-    () => new Set(validationIssues.map((issue) => issue.key)),
-    [validationIssues],
-  );
+  const validationIssues = useMemo(() => getClientValidationIssues(form), [form]);
 
-  const cards = useMemo(() => {
-    const isIndividual = (form.typeCustomer || client?.typeCustomer) === "INDIVIDUAL";
-    const isCompany = (form.typeCustomer || client?.typeCustomer) === "COMPANY";
-
-    const principal: CustomerFieldConfig[] = [
-      {
-        key: "typeCustomer",
-        label: "Tipo",
-        formatValue: (v) => formatType(String(v || "INDIVIDUAL")),
-      },
-      {
-        key: "fullName",
-        label: "Nome",
-        editable: true,
-        required: isIndividual,
-        invalid: invalidFieldKeys.has("fullName"),
-        inputClassName: "w-[85%]",
-      },
-      {
-        key: "companyName",
-        label: "Razão social",
-        editable: true,
-        required: isCompany,
-        invalid: invalidFieldKeys.has("companyName"),
-        inputClassName: "w-[85%]",
-      },
-      {
-        key: "tradeName",
-        label: "Nome fantasia",
-        editable: true,
-        inputClassName: "w-[85%]",
-      },
-    ];
-
-    const docs: CustomerFieldConfig[] = [
-      {
-        key: "document",
-        label: isIndividual ? "CPF" : "CNPJ",
-        editable: true,
-        required: true,
-        invalid: invalidFieldKeys.has("document"),
-        group: "document-rg",
-        inputClassName: "w-full",
-        formatValue: (v) => formatDocument(String(v || "")),
-      },
-      {
-        key: "rg",
-        label: "RG",
-        editable: true,
-        group: "document-rg",
-        inputClassName: "w-full",
-      },
-      {
-        key: "email",
-        label: "Email",
-        editable: true,
-        inputClassName: "w-[85%]",
-      },
-      {
-        key: "phone",
-        label: "Telefone",
-        editable: true,
-        required: true,
-        invalid: invalidFieldKeys.has("phone"),
-        inputClassName: "max-w-[40%]",
-        formatValue: (v) => formatPhoneMask(String(v || "")),
-      },
-      {
-        key: "professionId",
-        label: "Profissão",
-        type: "select",
-        editable: true,
-        options: professionsOptions,
-        formatValue: (_v, allValues) =>
-          String(allValues.professionName || "-") || "-",
-        inputClassName: "max-w-[41.5%]",
-      },
-    ];
-
-    const endereco: CustomerFieldConfig[] = [
-      {
-        key: "zipCode",
-        label: "CEP",
-        editable: true,
-        inputClassName: "max-w-[170px]",
-      },
-      { key: "street", label: "Rua", editable: true, group: "street-number", inputClassName: "flex-1" },
-      {
-        key: "number",
-        label: "Nº",
-        editable: true,
-        group: "street-number",
-        inputClassName: "max-w-[60px]",
-      },
-      {
-        key: "complement",
-        label: "Complemento",
-        editable: true,
-      },
-      { key: "neighborhood", label: "Bairro", editable: true },
-      {
-        key: "city",
-        label: "Cidade",
-        editable: true,
-        group: "city-state",
-        inputClassName: "w-full",
-      },
-      {
-        key: "state",
-        label: "UF",
-        editable: true,
-        group: "city-state",
-        inputClassName: "max-w-[110px]",
-      },
-    ];
-
-    const situacao: CustomerFieldConfig[] = [
-      { key: "active", label: "Ativo", editable: true, type: "checkbox" },
-      { key: "blocked", label: "Bloqueado", editable: true, type: "checkbox" },
-      {
-        key: "createdAt",
-        label: "Criado em",
-        formatValue: (v) => formatDate(String(v || "")),
-      },
-      {
-        key: "updatedAt",
-        label: "Atualizado em",
-        formatValue: (v) => formatDate(String(v || "")),
-      },
-      {
-        key: "comment",
-        label: "Observações",
-        editable: true,
-        inputClassName: "w-[85%] h-20",
-      },
-    ];
-
-    return [
-      { title: "Dados principais", fields: principal },
-      { title: "Documentos e contato", fields: docs },
-      { title: "Endereço", fields: endereco },
-      { title: "Situação e observações", fields: situacao },
-    ];
-  }, [client?.typeCustomer, form.typeCustomer, invalidFieldKeys, professionsOptions]);
+  const buildPayload = (overrides: Partial<ClientDetails> = {}) => ({
+    typeCustomer: overrides.typeCustomer ?? form.typeCustomer,
+    document: onlyDigits(String(overrides.document ?? form.document ?? "")),
+    rg: overrides.rg ?? form.rg,
+    fullName: overrides.fullName ?? form.fullName,
+    birthDate: overrides.birthDate ?? form.birthDate,
+    companyName: overrides.companyName ?? form.companyName,
+    tradeName: overrides.tradeName ?? form.tradeName,
+    phone: onlyDigits(String(overrides.phone ?? form.phone ?? "")),
+    email: overrides.email ?? form.email,
+    zipCode: onlyDigits(String(overrides.zipCode ?? form.zipCode ?? "")),
+    street: overrides.street ?? form.street,
+    number: overrides.number ?? form.number,
+    complement: overrides.complement ?? form.complement,
+    neighborhood: overrides.neighborhood ?? form.neighborhood,
+    city: overrides.city ?? form.city,
+    state:
+      typeof (overrides.state ?? form.state) === "string"
+        ? String(overrides.state ?? form.state ?? "")
+            .toUpperCase()
+            .slice(0, 2)
+        : overrides.state ?? form.state,
+    active: overrides.active ?? form.active,
+    blocked: overrides.blocked ?? form.blocked,
+    professionId: overrides.professionId ?? form.professionId,
+    comment: overrides.comment ?? form.comment,
+  });
 
   const handleSave = async () => {
-    if (!id) return;
+    if (!id) return true;
 
     if (validationIssues.length > 0) {
-      setSaveMessage(validationIssues[0].message);
-      return;
+      setNotice({
+        open: true,
+        tone: "warning",
+        title: "Campos obrigatorios",
+        message: validationIssues[0].message,
+      });
+      return false;
     }
 
     try {
       setSaving(true);
       setSaveMessage("");
 
-      const payload = {
-        typeCustomer: form.typeCustomer,
-        document: onlyDigits(form.document),
-        rg: form.rg,
-        fullName: form.fullName,
-        birthDate: form.birthDate,
-        companyName: form.companyName,
-        tradeName: form.tradeName,
-        phone: onlyDigits(form.phone),
-        email: form.email,
-        zipCode: onlyDigits(form.zipCode),
-        street: form.street,
-        number: form.number,
-        complement: form.complement,
-        neighborhood: form.neighborhood,
-        city: form.city,
-        state: typeof form.state === "string" ? form.state.toUpperCase().slice(0, 2) : form.state,
-        active: form.active,
-        blocked: form.blocked,
-        professionId: form.professionId,
-        comment: form.comment,
-      };
-
-      const updated = await updateRequest(`/clients/${id}`, payload as object);
+      const updated = await updateRequest(`/clients/${id}`, buildPayload());
       setClient(updated as ClientDetails);
       setForm(toEditableForm(updated as ClientDetails));
-      setIsEditing(false);
       setSaveMessage("Cliente atualizado com sucesso.");
+      return true;
     } catch (err: unknown) {
       setSaveMessage(
-        getUserFacingApiErrorMessage(err, "Não foi possível salvar as alterações."),
+        getUserFacingApiErrorMessage(err, "Nao foi possivel salvar as alteracoes."),
       );
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSoftDelete = async () => {
+    if (!id) return;
+
+    try {
+      setSaving(true);
+      setSaveMessage("");
+      await updateRequest(`/clients/${id}`, buildPayload({ active: false, blocked: true }));
+      setNotice({
+        open: true,
+        tone: "success",
+        title: "Cliente excluido",
+        message: "O cliente foi removido da listagem e mantido no banco como excluido.",
+      });
+      navigate("/clientes");
+    } catch (err: unknown) {
+      setNotice({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel excluir",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel excluir o cliente agora. Tente novamente.",
+        ),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLeavePage = async (destination: string) => {
+    if (!hasUnsavedChanges) {
+      navigate(destination);
+      return;
+    }
+
+    setConfirmationModal({
+      open: true,
+      type: "leave",
+      destination,
+    });
+  };
+
+  const closeConfirmationModal = () => {
+    setConfirmationModal(EMPTY_CONFIRMATION_MODAL);
+  };
+
+  const handleConfirmation = async () => {
+    if (confirmationModal.type === "deactivate") {
+      setForm((prev) => ({
+        ...prev,
+        active: false,
+      }));
+      closeConfirmationModal();
+      return;
+    }
+
+    if (confirmationModal.type === "delete") {
+      closeConfirmationModal();
+      await handleSoftDelete();
+      return;
+    }
+
+    if (confirmationModal.type === "leave" && confirmationModal.destination) {
+      const destination = confirmationModal.destination;
+      closeConfirmationModal();
+      const saved = await handleSave();
+      if (!saved) return;
+      navigate(destination);
+    }
+  };
+
+  const handleDiscardChanges = () => {
+    if (confirmationModal.type !== "leave" || !confirmationModal.destination) {
+      closeConfirmationModal();
+      return;
+    }
+
+    const destination = confirmationModal.destination;
+    closeConfirmationModal();
+    navigate(destination);
   };
 
   if (loading) {
@@ -467,80 +497,164 @@ export default function CustomerDetails() {
   if (error || !client) {
     return (
       <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-        <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">Detalhe do Cliente</h1>
-        <p className="mb-4 text-neutral-700">{error || "Cliente não encontrado."}</p>
-        <Button variant="secondary" size="md" onClick={() => navigate("/clientes")}>Voltar para clientes</Button>
+        <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">
+          Detalhe do Cliente
+        </h1>
+        <p className="mb-4 text-neutral-700">{error || "Cliente nao encontrado."}</p>
+        <Button variant="secondary" size="md" onClick={() => navigate("/clientes")}>
+          Voltar para clientes
+        </Button>
       </div>
     );
   }
 
+  const displayForm = toSharedFormValues(form);
+
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5 flex items-center justify-between gap-3">
-        <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">Detalhe do Cliente</h1>
+        <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">
+          Detalhe do Cliente
+        </h1>
         <div className="hidden gap-2 md:flex">
-          {isEditing ? (
-            <>
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => {
-                  setForm(toEditableForm(client));
-                  setIsEditing(false);
-                  setZipLookupMessage("");
-                  setSaveMessage("");
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button variant="primary" size="md" onClick={handleSave} disabled={saving}>
-                {saving ? "Salvando..." : "Salvar"}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button variant="secondary" size="md" onClick={() => navigate("/clientes")}>Voltar</Button>
-              <Button variant="secondary" size="md" onClick={() => setIsSalesModalOpen(true)}>Vendas do Cliente</Button>
-              <Button variant="secondary" size="md" onClick={() => setIsReceivablesModalOpen(true)}>A Receber</Button>
-              <Button variant="primary" size="md" onClick={() => setIsEditing(true)}>Editar</Button>
-            </>
-          )}
+          <Button variant="secondary" size="md" onClick={() => void handleLeavePage("/clientes")}>
+            Voltar
+          </Button>
+          <Button variant="secondary" size="md" onClick={() => setIsSalesModalOpen(true)}>
+            Vendas do Cliente
+          </Button>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setIsReceivablesModalOpen(true)}
+          >
+            A Receber
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={() => void handleSave()}
+            disabled={saving || !hasUnsavedChanges}
+          >
+            {saving ? "Salvando..." : "Salvar"}
+          </Button>
         </div>
       </div>
 
-      {validationIssues.length > 0 && !isEditing && (
-        <p className="mb-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Cadastro legado com pendências: {validationIssues.map((issue) => issue.label).join(", ")}.
-        </p>
-      )}
-      {saveMessage && <p className="mb-4 text-sm text-neutral-700">{saveMessage}</p>}
-      {isEditing && zipLookupMessage && (
-        <p className="mb-4 text-xs text-neutral-700">{zipLookupMessage}</p>
-      )}
+      {saveMessage ? <p className="mb-4 text-sm text-neutral-700">{saveMessage}</p> : null}
+      {zipLookupMessage ? <p className="mb-4 text-xs text-neutral-700">{zipLookupMessage}</p> : null}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {cards.map((card) => (
-          <CustomerDetailsCard
-            key={card.title}
-            title={card.title}
-            fields={card.fields}
-            values={values}
-            isEditing={isEditing}
-            onFieldChange={handleFieldChange}
-          />
-        ))}
+      <div className="bg-surface-lowest p-6 shadow-sm">
+        <CustomerFormFields
+          form={displayForm}
+          professions={professions}
+          onFieldChange={(field, value) => handleFieldChange(field, value)}
+          onTypeCustomerChange={(value) => setField("typeCustomer", value)}
+          readOnly={false}
+          showStatusFields
+          active={Boolean(form.active)}
+          onActiveChange={handleActiveChange}
+          onDeleteRequest={handleDeleteRequest}
+        />
+
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 py-2">
+            <p className="text-sm text-primary">Criado em</p>
+            <p className="font-medium text-[#2a2526]">{formatDate(client.createdAt)}</p>
+          </div>
+          <div className="rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 py-2">
+            <p className="text-sm text-primary">Atualizado em</p>
+            <p className="font-medium text-[#2a2526]">{formatDate(client.updatedAt)}</p>
+          </div>
+        </div>
       </div>
 
       <CustomerSalesModal
         open={isSalesModalOpen}
-        clientName={String(values.fullName || client.fullName || "Cliente")}
+        clientName={String(client.fullName || client.companyName || "Cliente")}
         onClose={() => setIsSalesModalOpen(false)}
       />
 
       <CustomerReceivablesModal
         open={isReceivablesModalOpen}
-        clientName={String(values.fullName || client.fullName || "Cliente")}
+        clientName={String(client.fullName || client.companyName || "Cliente")}
         onClose={() => setIsReceivablesModalOpen(false)}
+      />
+
+      <CustomerModal
+        open={confirmationModal.open}
+        title={
+          confirmationModal.type === "delete"
+            ? "Excluir cliente"
+            : confirmationModal.type === "deactivate"
+              ? "Desativar cliente"
+              : "Salvar alteracoes antes de sair?"
+        }
+        subtitle={
+          confirmationModal.type === "delete"
+            ? "Esta exclusao e logica: o cliente sai do sistema, mas permanece salvo no banco."
+            : confirmationModal.type === "deactivate"
+              ? "A desativacao impede novas compras para este cliente."
+              : "Voce fez alteracoes neste cadastro."
+        }
+        onClose={closeConfirmationModal}
+      >
+        {confirmationModal.type === "delete" ? (
+          <div className="space-y-5">
+            <p className="text-sm text-neutral-700">
+              Tem certeza que deseja excluir este cliente? Caso ele tenha debitos, estes tambem
+              serao excluidos.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" size="md" onClick={closeConfirmationModal}>
+                Cancelar
+              </Button>
+              <Button variant="danger" size="md" onClick={() => void handleConfirmation()}>
+                Confirmar exclusao
+              </Button>
+            </div>
+          </div>
+        ) : confirmationModal.type === "deactivate" ? (
+          <div className="space-y-5">
+            <p className="text-sm text-neutral-700">
+              Confirme se deseja desativar este cliente. Ele nao podera realizar novas compras
+              enquanto estiver inativo.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" size="md" onClick={closeConfirmationModal}>
+                Cancelar
+              </Button>
+              <Button variant="primary" size="md" onClick={() => void handleConfirmation()}>
+                Confirmar desativacao
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <p className="text-sm text-neutral-700">
+              Se continuar, podemos salvar suas alteracoes antes de voltar para a listagem.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="secondary" size="md" onClick={handleDiscardChanges}>
+                Sair sem salvar
+              </Button>
+              <Button variant="secondary" size="md" onClick={closeConfirmationModal}>
+                Cancelar
+              </Button>
+              <Button variant="primary" size="md" onClick={() => void handleConfirmation()}>
+                Salvar e sair
+              </Button>
+            </div>
+          </div>
+        )}
+      </CustomerModal>
+
+      <NoticeToast
+        open={notice.open}
+        tone={notice.tone}
+        title={notice.title}
+        message={notice.message}
+        onClose={() => setNotice(EMPTY_NOTICE)}
       />
     </div>
   );
