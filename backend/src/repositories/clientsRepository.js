@@ -1,3 +1,4 @@
+const { Op } = require("sequelize");
 const { Customers, Professions, Sequelize } = require("../models");
 
 function buildBirthdayWhere({ month, year }) {
@@ -10,21 +11,64 @@ function buildBirthdayWhere({ month, year }) {
   return Sequelize.literal(filters.join(" AND "));
 }
 
-async function getAllClients() {
-  return Customers.findAll({
+function buildClientsWhere({ search, status } = {}) {
+  const where = {
+    blocked: false,
+  };
+
+  if (search) {
+    where[Op.or] = [
+      {
+        fullName: {
+          [Op.iLike]: `%${search}%`,
+        },
+      },
+      {
+        document: {
+          [Op.iLike]: `%${search}%`,
+        },
+      },
+      {
+        companyName: {
+          [Op.iLike]: `%${search}%`,
+        },
+      },
+    ];
+  }
+
+  if (status === "ativo") {
+    where.active = true;
+  } else if (status === "inativo") {
+    where.active = false;
+  }
+
+  return where;
+}
+
+async function getAllClients({ search, status, page, pageSize } = {}) {
+  return Customers.findAndCountAll({
+    where: buildClientsWhere({ search, status }),
     order: [["fullName", "ASC"]],
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
   });
 }
 
 async function findBirthdays({ month, year }) {
   return Customers.findAll({
-    where: buildBirthdayWhere({ month, year }),
+    where: {
+      [Op.and]: [buildBirthdayWhere({ month, year }), { blocked: false }],
+    },
     order: [["birthDate", "ASC"], ["fullName", "ASC"]],
   });
 }
 
 async function getClientById(id) {
-  return Customers.findByPk(id, {
+  return Customers.findOne({
+    where: {
+      idCustomer: id,
+      blocked: false,
+    },
     include: [
       {
         model: Professions,

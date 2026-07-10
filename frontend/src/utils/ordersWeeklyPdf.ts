@@ -21,7 +21,7 @@ export interface PrintableOrder {
 
 interface WeeklyPdfParams {
   orders: PrintableOrder[];
-  logoUrl: string;
+  logoUrl?: string;
   weekLabel: string;
 }
 
@@ -67,23 +67,25 @@ const drawTableHeader = (doc: jsPDF, startY: number) => {
 
 const drawPageHeader = (
   doc: jsPDF,
-  logoDataUrl: string,
+  logoDataUrl: string | null,
   weekLabel: string,
   totalOrders: number,
   totalItems: number,
 ) => {
-  doc.addImage(logoDataUrl, "PNG", 14, 10, 18, 22);
+  if (logoDataUrl) {
+    doc.addImage(logoDataUrl, "PNG", 14, 10, 18, 22);
+  }
   doc.setTextColor(22, 19, 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(21);
-  doc.text("Meu Close", 38, 19);
+  doc.text("Meu Close", logoDataUrl ? 38 : 14, 19);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
-  doc.text("Pedidos da semana", 38, 26);
+  doc.text("Pedidos por periodo", logoDataUrl ? 38 : 14, 26);
   doc.setFontSize(9.5);
-  doc.text(`Periodo: ${weekLabel}`, 38, 32);
-  doc.text("Impressao em A4 horizontal", 38, 37);
+  doc.text(`Periodo da prova: ${weekLabel}`, logoDataUrl ? 38 : 14, 32);
+  doc.text("Impressao em A4 horizontal", logoDataUrl ? 38 : 14, 37);
 
   doc.setDrawColor(210, 205, 203);
   doc.line(12, 44, 285, 44);
@@ -106,7 +108,7 @@ export const downloadWeeklyOrdersPdf = async ({
   weekLabel,
 }: WeeklyPdfParams) => {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-  const logoDataUrl = await loadImageAsDataUrl(logoUrl);
+  const logoDataUrl = logoUrl ? await loadImageAsDataUrl(logoUrl) : null;
   const totalItems = orders.reduce(
     (acc, order) => acc + order.items.reduce((itemsAcc, item) => itemsAcc + item.quantity, 0),
     0,
@@ -186,10 +188,10 @@ export const downloadWeeklyOrdersPdf = async ({
     doc.setTextColor(120, 110, 109);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.text("MeuClose | Relatorio semanal de pedidos", 12, 205);
+    doc.text("MeuClose | Relatorio de pedidos por periodo", 12, 205);
     doc.text(`Pagina ${page} de ${totalPages}`, 285, 205, { align: "right" });
   }
 
   const safeWeekLabel = weekLabel.replace(/[\\/:?\s]+/g, "-");
-  doc.save(`pedidos-semana-${safeWeekLabel}.pdf`);
+  doc.save(`pedidos-periodo-${safeWeekLabel}.pdf`);
 };

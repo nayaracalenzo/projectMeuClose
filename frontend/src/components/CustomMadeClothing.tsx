@@ -1,11 +1,23 @@
-﻿import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
-import { getRequest } from "../services/request";
+import { getRequest, postRequest } from "../services/request";
 import MeasurementsFields from "./MeasurementsFields";
+import CustomerModal from "./CustomerModal";
+import NoticeToast from "./NoticeToast";
 
-const mockTypes = ["Vestido", "Conjunto", "Blazer", "Calca"];
-const mockFabrics = ["Linho", "Viscose", "Crepe", "Alfaiataria"];
-const mockColors = ["Preto", "Off-white", "Azul marinho", "Verde"];
+interface AdminOption {
+  desc?: string | null;
+}
+
+type QuickCreateResource = "clothings-types" | "fabrics" | "colors";
+
+type QuickCreateNotice = {
+  tone: "success" | "error";
+  title?: string;
+  message: string;
+};
+
 interface SeamstressOption {
   id: number;
   shortName: string;
@@ -66,6 +78,7 @@ interface CustomMadeProduct {
   selectedMeasurements: MeasurementField[];
   description: string;
   price: string;
+  discountPercent: string;
   details: string;
   status: string;
   seamstress: string;
@@ -82,6 +95,7 @@ export interface CustomMadeProductDraft {
   selectedMeasurements: MeasurementField[];
   description: string;
   price: string;
+  discountPercent: string;
   details: string;
   status: string;
   seamstress: string;
@@ -93,6 +107,8 @@ export interface CustomMadeSummaryItem {
   type: string;
   quantity: number;
   value: number;
+  discountAmount: number;
+  finalValue: number;
 }
 
 interface CustomMadeClothingProps {
@@ -121,11 +137,31 @@ const emptyMeasurements = (): Measurements => ({
   gancho: "",
 });
 
+function normalizeAdminOptions(data: unknown) {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .map((item) => String((item as AdminOption)?.desc || "").trim())
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right, "pt-BR"));
+}
+
 export default function CustomMadeClothing({
   onSummaryChange,
   onProductsChange,
 }: CustomMadeClothingProps) {
   const [seamstresses, setSeamstresses] = useState<SeamstressOption[]>([]);
+  const [clothingTypes, setClothingTypes] = useState<string[]>([]);
+  const [fabrics, setFabrics] = useState<string[]>([]);
+  const [colors, setColors] = useState<string[]>([]);
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+  const [quickCreateResource, setQuickCreateResource] =
+    useState<QuickCreateResource>("clothings-types");
+  const [quickCreateProductId, setQuickCreateProductId] = useState<number | null>(null);
+  const [quickCreateValue, setQuickCreateValue] = useState("");
+  const [quickCreateSubmitting, setQuickCreateSubmitting] = useState(false);
+  const [quickCreateError, setQuickCreateError] = useState("");
+  const [notice, setNotice] = useState<QuickCreateNotice | null>(null);
   const [products, setProducts] = useState<CustomMadeProduct[]>([
     {
       id: 1,
@@ -136,6 +172,7 @@ export default function CustomMadeClothing({
       selectedMeasurements: [],
       description: "",
       price: "",
+      discountPercent: "",
       details: "",
       status: "A PRODUZIR",
       seamstress: "",
@@ -147,11 +184,60 @@ export default function CustomMadeClothing({
   const fieldClassName =
     "h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";
 
+  const getDiscountPercent = (value: string) => {
+    const parsed = Number(value.replace(",", "."));
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(100, Math.max(0, parsed));
+  };
+
+  const quickCreateConfig = useMemo(
+    () => ({
+      "clothings-types": {
+        endpoint: "/admin/clothings-types",
+        label: "tipo de roupa",
+        buttonLabel: "Tipo",
+      },
+      fabrics: {
+        endpoint: "/admin/fabrics",
+        label: "tecido",
+        buttonLabel: "Tecido",
+      },
+      colors: {
+        endpoint: "/admin/colors",
+        label: "cor",
+        buttonLabel: "Cor",
+      },
+    }),
+    [],
+  );
+
+  const closeQuickCreateModal = useCallback(() => {
+    setIsQuickCreateOpen(false);
+    setQuickCreateProductId(null);
+    setQuickCreateValue("");
+    setQuickCreateError("");
+    setQuickCreateSubmitting(false);
+  }, []);
+
+  const openQuickCreateModal = useCallback((resource: QuickCreateResource, productId: number) => {
+    setQuickCreateResource(resource);
+    setQuickCreateProductId(productId);
+    setQuickCreateValue("");
+    setQuickCreateError("");
+    setIsQuickCreateOpen(true);
+  }, []);
+
   useEffect(() => {
-    const fetchSeamstresses = async () => {
+    const fetchReferenceData = async () => {
       try {
-        const data = await getRequest("/admin/employees");
-        const parsedSeamstresses = data
+        const [employeesData, clothingTypesData, fabricsData, colorsData] = await Promise.all([
+          getRequest("/admin/employees"),
+          getRequest("/admin/clothings-types"),
+          getRequest("/admin/fabrics"),
+          getRequest("/admin/colors"),
+        ]);
+
+        const parsedSeamstresses = employeesData
           .filter(
             (employee: {
               idEmployee?: number;
@@ -172,12 +258,15 @@ export default function CustomMadeClothing({
           );
 
         setSeamstresses(parsedSeamstresses);
+        setClothingTypes(normalizeAdminOptions(clothingTypesData));
+        setFabrics(normalizeAdminOptions(fabricsData));
+        setColors(normalizeAdminOptions(colorsData));
       } catch (error) {
-        console.error("Erro ao buscar costureiras", error);
+        console.error("Erro ao buscar dados de referência da roupa sob medida", error);
       }
     };
 
-    fetchSeamstresses();
+    fetchReferenceData();
   }, []);
 
   const updateProduct = (
@@ -276,15 +365,111 @@ export default function CustomMadeClothing({
     setProducts((prev) => prev.filter((product) => product.id !== productId));
   };
 
+  const syncQuickCreateOptions = useCallback(
+    (resource: QuickCreateResource, nextValue: string) => {
+      const appendUniqueSorted = (currentItems: string[]) =>
+        Array.from(new Set([...currentItems, nextValue])).sort((left, right) =>
+          left.localeCompare(right, "pt-BR"),
+        );
+
+      if (resource === "clothings-types") {
+        setClothingTypes((prev) => appendUniqueSorted(prev));
+        return;
+      }
+
+      if (resource === "fabrics") {
+        setFabrics((prev) => appendUniqueSorted(prev));
+        return;
+      }
+
+      setColors((prev) => appendUniqueSorted(prev));
+    },
+    [],
+  );
+
+  const handleQuickCreateSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      const normalizedValue = quickCreateValue.trim();
+      if (!normalizedValue) {
+        setQuickCreateError("Informe uma descrição para salvar.");
+        return;
+      }
+
+      try {
+        setQuickCreateSubmitting(true);
+        setQuickCreateError("");
+
+        await postRequest(quickCreateConfig[quickCreateResource].endpoint, {
+          desc: normalizedValue,
+        });
+
+        syncQuickCreateOptions(quickCreateResource, normalizedValue);
+        setProducts((prev) =>
+          prev.map((product) => {
+            if (product.id !== quickCreateProductId) {
+              return product;
+            }
+
+            if (quickCreateResource === "clothings-types") {
+              return { ...product, type: normalizedValue };
+            }
+
+            if (quickCreateResource === "fabrics") {
+              return { ...product, fabric: normalizedValue };
+            }
+
+            return { ...product, color: normalizedValue };
+          }),
+        );
+
+        closeQuickCreateModal();
+        setNotice({
+          tone: "success",
+          title: "Cadastro realizado",
+          message: `${quickCreateConfig[quickCreateResource].buttonLabel} adicionado com sucesso.`,
+        });
+      } catch (error: unknown) {
+        console.error("Erro ao cadastrar opção administrativa da roupa sob medida", error);
+        const message = getUserFacingApiErrorMessage(error, "Não foi possível salvar o cadastro.");
+        setQuickCreateError(message);
+        setNotice({
+          tone: "error",
+          title: "Erro ao cadastrar",
+          message,
+        });
+      } finally {
+        setQuickCreateSubmitting(false);
+      }
+    },
+    [
+      closeQuickCreateModal,
+      quickCreateConfig,
+      quickCreateProductId,
+      quickCreateResource,
+      quickCreateValue,
+      syncQuickCreateOptions,
+    ],
+  );
+
   useEffect(() => {
     if (!onSummaryChange) return;
 
     onSummaryChange(
-      products.map((product) => ({
-        type: product.type || "Sob-medida",
-        quantity: 1,
-        value: parseCurrencyToNumber(product.price),
-      })),
+      products.map((product) => {
+        const value = parseCurrencyToNumber(product.price);
+        const discountPercent = getDiscountPercent(product.discountPercent);
+        const discountAmount = Number(((value * discountPercent) / 100).toFixed(2));
+
+        return {
+          type: product.type || "Sob-medida",
+          quantity: 1,
+          value,
+          discountAmount,
+          finalValue: Number((value - discountAmount).toFixed(2)),
+        };
+      }),
     );
   }, [onSummaryChange, products]);
 
@@ -304,7 +489,7 @@ export default function CustomMadeClothing({
     <div className="bg-white">
       <div className="mb-1 flex items-center justify-between">
         <p className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-700">
-          Dados da peça sob-medida
+          Dados da peça sob medida
         </p>
       </div>
 
@@ -328,7 +513,9 @@ export default function CustomMadeClothing({
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-[90px_1fr_42px] md:items-center">
-              <label htmlFor={`type-${product.id}`} className="text-sm text-primary">Tipo</label>
+              <label htmlFor={`type-${product.id}`} className="text-sm text-primary">
+                Tipo
+              </label>
               <select
                 id={`type-${product.id}`}
                 value={product.type}
@@ -336,13 +523,24 @@ export default function CustomMadeClothing({
                 className={fieldClassName}
               >
                 <option value="">Selecione...</option>
-                {mockTypes.map((item) => (
-                  <option key={item} value={item}>{item}</option>
+                {clothingTypes.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
-              <button type="button" className="h-10 rounded border border-outline-variant/60 bg-white text-primary">+</button>
+              <button
+                type="button"
+                onClick={() => openQuickCreateModal("clothings-types", product.id)}
+                className="h-10 rounded border border-outline-variant/60 bg-white text-primary"
+                aria-label="Cadastrar novo tipo de roupa"
+              >
+                +
+              </button>
 
-              <label htmlFor={`fabric-${product.id}`} className="text-sm text-primary">Tecido</label>
+              <label htmlFor={`fabric-${product.id}`} className="text-sm text-primary">
+                Tecido
+              </label>
               <select
                 id={`fabric-${product.id}`}
                 value={product.fabric}
@@ -350,13 +548,24 @@ export default function CustomMadeClothing({
                 className={fieldClassName}
               >
                 <option value="">Selecione...</option>
-                {mockFabrics.map((item) => (
-                  <option key={item} value={item}>{item}</option>
+                {fabrics.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
-              <button type="button" className="h-10 rounded border border-outline-variant/60 bg-white text-primary">+</button>
+              <button
+                type="button"
+                onClick={() => openQuickCreateModal("fabrics", product.id)}
+                className="h-10 rounded border border-outline-variant/60 bg-white text-primary"
+                aria-label="Cadastrar novo tecido"
+              >
+                +
+              </button>
 
-              <label htmlFor={`color-${product.id}`} className="text-sm text-primary">Cor</label>
+              <label htmlFor={`color-${product.id}`} className="text-sm text-primary">
+                Cor
+              </label>
               <select
                 id={`color-${product.id}`}
                 value={product.color}
@@ -364,11 +573,20 @@ export default function CustomMadeClothing({
                 className={fieldClassName}
               >
                 <option value="">Selecione...</option>
-                {mockColors.map((item) => (
-                  <option key={item} value={item}>{item}</option>
+                {colors.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
               </select>
-              <button type="button" className="h-10 rounded border border-outline-variant/60 bg-white text-primary">+</button>
+              <button
+                type="button"
+                onClick={() => openQuickCreateModal("colors", product.id)}
+                className="h-10 rounded border border-outline-variant/60 bg-white text-primary"
+                aria-label="Cadastrar nova cor"
+              >
+                +
+              </button>
             </div>
 
             <MeasurementsFields
@@ -377,14 +595,22 @@ export default function CustomMadeClothing({
               selectedMeasurements={product.selectedMeasurements}
               measurements={product.measurements}
               measurementOptions={measurementOptions}
-              onAddMeasurementField={(id, field) => addMeasurementField(id, field as MeasurementField)}
-              onRemoveMeasurementField={(id, field) => removeMeasurementField(id, field as MeasurementField)}
-              onUpdateMeasurement={(id, field, value) => updateMeasurement(id, field as MeasurementField, value)}
+              onAddMeasurementField={(id, field) =>
+                addMeasurementField(id, field as MeasurementField)
+              }
+              onRemoveMeasurementField={(id, field) =>
+                removeMeasurementField(id, field as MeasurementField)
+              }
+              onUpdateMeasurement={(id, field, value) =>
+                updateMeasurement(id, field as MeasurementField, value)
+              }
             />
 
             <div className="mt-4 rounded border border-outline-variant/60 bg-white p-3">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-[110px_1fr] md:items-center items-center my-3">
-                <label htmlFor={`details-${product.id}`} className="text-sm text-primary">Detalhes</label>
+              <div className="my-3 grid grid-cols-1 items-center gap-2 md:grid-cols-[110px_1fr] md:items-center">
+                <label htmlFor={`details-${product.id}`} className="text-sm text-primary">
+                  Detalhes
+                </label>
                 <input
                   id={`details-${product.id}`}
                   value={product.details}
@@ -393,7 +619,9 @@ export default function CustomMadeClothing({
                 />
               </div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-[110px_1fr] md:items-center">
-                <label htmlFor={`price-${product.id}`} className="text-sm text-primary">Preço R$</label>
+                <label htmlFor={`price-${product.id}`} className="text-sm text-primary">
+                  Preço R$
+                </label>
                 <input
                   id={`price-${product.id}`}
                   value={product.price}
@@ -402,12 +630,33 @@ export default function CustomMadeClothing({
                   className={`${fieldClassName} max-w-55`}
                 />
               </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[110px_1fr] md:items-center">
+                <label htmlFor={`discount-${product.id}`} className="text-sm text-primary">
+                  Desconto %
+                </label>
+                <input
+                  id={`discount-${product.id}`}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  value={product.discountPercent}
+                  onChange={(e) => updateProduct(product.id, "discountPercent", e.target.value)}
+                  placeholder="0"
+                  className={`${fieldClassName} max-w-55`}
+                />
+              </div>
             </div>
 
             <div className="mt-4 space-y-3">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <label htmlFor={`status-${product.id}`} className="mb-1 block text-sm text-primary">Situação</label>
+                  <label
+                    htmlFor={`status-${product.id}`}
+                    className="mb-1 block text-sm text-primary"
+                  >
+                    Situação
+                  </label>
                   <select
                     id={`status-${product.id}`}
                     value={product.status}
@@ -422,7 +671,12 @@ export default function CustomMadeClothing({
                 </div>
 
                 <div>
-                  <label htmlFor={`fittingDate-${product.id}`} className="mb-1 block text-sm text-primary">Data Prova</label>
+                  <label
+                    htmlFor={`fittingDate-${product.id}`}
+                    className="mb-1 block text-sm text-primary"
+                  >
+                    Data Prova
+                  </label>
                   <input
                     id={`fittingDate-${product.id}`}
                     type="date"
@@ -435,7 +689,12 @@ export default function CustomMadeClothing({
 
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <label htmlFor={`seamstress-${product.id}`} className="mb-1 block text-sm text-primary">Costureira</label>
+                  <label
+                    htmlFor={`seamstress-${product.id}`}
+                    className="mb-1 block text-sm text-primary"
+                  >
+                    Costureira
+                  </label>
                   <select
                     id={`seamstress-${product.id}`}
                     value={product.seamstress}
@@ -452,7 +711,12 @@ export default function CustomMadeClothing({
                 </div>
 
                 <div>
-                  <label htmlFor={`seamstressCost-${product.id}`} className="mb-1 block text-sm text-primary">R$ Costureira</label>
+                  <label
+                    htmlFor={`seamstressCost-${product.id}`}
+                    className="mb-1 block text-sm text-primary"
+                  >
+                    R$ Costureira
+                  </label>
                   <input
                     id={`seamstressCost-${product.id}`}
                     value={product.seamstressCost}
@@ -466,6 +730,63 @@ export default function CustomMadeClothing({
           </div>
         ))}
       </div>
+
+      <CustomerModal
+        open={isQuickCreateOpen}
+        onClose={closeQuickCreateModal}
+        title={`Novo ${quickCreateConfig[quickCreateResource].label}`}
+        subtitle="Cadastre uma nova opção sem sair da venda."
+      >
+        <div className="mx-auto max-w-xl">
+          {quickCreateError ? (
+            <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-3 py-2 text-sm text-[#7a1717]">
+              {quickCreateError}
+            </div>
+          ) : null}
+
+          <form className="space-y-4" onSubmit={handleQuickCreateSubmit}>
+            <div>
+              <label className="mb-1 block text-sm text-primary" htmlFor="quick-create-desc">
+                Descrição
+              </label>
+              <input
+                id="quick-create-desc"
+                value={quickCreateValue}
+                onChange={(event) => setQuickCreateValue(event.target.value)}
+                placeholder={`Digite o ${quickCreateConfig[quickCreateResource].label}`}
+                className={fieldClassName}
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="submit"
+                disabled={quickCreateSubmitting}
+                className="rounded border border-primary bg-primary px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {quickCreateSubmitting ? "Salvando..." : "Salvar"}
+              </button>
+              <button
+                type="button"
+                onClick={closeQuickCreateModal}
+                className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm text-primary"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </CustomerModal>
+
+      <NoticeToast
+        open={Boolean(notice)}
+        tone={notice?.tone || "success"}
+        title={notice?.title}
+        message={notice?.message || ""}
+        onClose={() => setNotice(null)}
+      />
     </div>
   );
 }

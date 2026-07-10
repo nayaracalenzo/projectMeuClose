@@ -1,293 +1,280 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Printer } from "lucide-react";
+import { Printer } from "lucide-react";
 import { Button } from "../components/Button";
-import {
-  downloadWeeklyOrdersPdf,
-  type PrintableOrder,
-} from "../utils/ordersWeeklyPdf";
+import CustomerModal from "../components/CustomerModal";
+import { getRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { formatCurrency } from "../utils/currency";
+import { downloadWeeklyOrdersPdf, type PrintableOrder } from "../utils/ordersWeeklyPdf";
 
-type OrderStatus = "ABERTO" | "EM PRODUCAO" | "FINALIZADO" | "ENTREGUE";
-type OrderKind = "ENCOMENDA" | "PECA PRONTA" | "AJUSTE";
-type OrderSort = "LAST_CREATED" | "OLDEST_CREATED";
-
-interface OrderRow extends PrintableOrder {
-  kind: OrderKind;
-  status: OrderStatus;
+interface ProductOrderRow {
+  id: number;
+  saleId: number | null;
+  description: string;
+  customer: string;
+  category: string | null;
+  productType: string | null;
+  clothingType: string | null;
+  seamstress: string | null;
+  status: string | null;
+  finalValue: number;
+  testDate: string | null;
+  createdAt: string;
+  qtyStock: number;
+  fabric: string | null;
+  color: string | null;
+  size: string | null;
+  details: string;
 }
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+interface StatusOption {
+  id: number;
+  desc: string;
+}
 
-const formatDate = (dateString: string) =>
-  new Intl.DateTimeFormat("pt-BR").format(new Date(`${dateString}T00:00:00`));
+interface ProductionResponse {
+  items: ProductOrderRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
-const toIsoDate = (daysFromToday: number) => {
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  date.setDate(date.getDate() + daysFromToday);
-  return date.toISOString().slice(0, 10);
+const formatDate = (value?: string | null) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return new Intl.DateTimeFormat("pt-BR").format(date);
 };
 
-const startOfWeek = (date: Date) => {
-  const normalized = new Date(date);
-  normalized.setHours(0, 0, 0, 0);
-  const day = normalized.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  normalized.setDate(normalized.getDate() + diff);
-  return normalized;
+const toInputDate = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 };
 
-const endOfWeek = (date: Date) => {
-  const end = startOfWeek(date);
-  end.setDate(end.getDate() + 6);
-  return end;
+const formatCustomerName = (value?: string | null) => {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (parts.length === 0) return "Sem cliente";
+
+  return parts.slice(0, 2).join(" ");
 };
 
-const isDateInCurrentWeek = (dateString: string) => {
-  const date = new Date(`${dateString}T00:00:00`);
-  const start = startOfWeek(new Date());
-  const end = endOfWeek(new Date());
-  return date >= start && date <= end;
-};
+const getProductionStatusBadgeClassName = (status?: string | null) => {
+  const normalized = String(status || "").trim().toLowerCase();
 
-const buildWeekLabel = () => {
-  const start = startOfWeek(new Date());
-  const end = endOfWeek(new Date());
-  const formatter = new Intl.DateTimeFormat("pt-BR");
-  return `${formatter.format(start)} a ${formatter.format(end)}`;
-};
-
-const isPrintableWeeklyOrder = (order: OrderRow) => {
-  if (order.status === "ENTREGUE") {
-    return false;
+  if (normalized === "entregue") {
+    return "bg-secondary text-primary";
   }
 
-  if (order.status === "FINALIZADO" && order.kind === "PECA PRONTA") {
-    return false;
+  if (normalized === "a produzir") {
+    return "bg-[#F5E6A9] text-[#6D5200]";
   }
 
-  return true;
-};
+  if (normalized === "cancelada" || normalized === "atrasada") {
+    return "bg-[#F8D7DA] text-[#7A1717]";
+  }
 
-const mockOrders: OrderRow[] = [
-  {
-    id: 1024,
-    customer: "Ana Paula Santos",
-    kind: "ENCOMENDA",
-    date: toIsoDate(-4),
-    status: "EM PRODUCAO",
-    total: 420,
-    items: [
-      {
-        name: "Vestido midi evasê",
-        quantity: 1,
-        fabric: "Linho misto",
-        color: "Terracota",
-        size: "M",
-        notes: "Decote quadrado e manga bufante",
-      },
-      {
-        name: "Cinto encapado",
-        quantity: 1,
-        fabric: "Mesmo tecido do vestido",
-        color: "Terracota",
-        size: "Unico",
-        notes: "Fivela dourada",
-      },
-    ],
-  },
-  {
-    id: 1025,
-    customer: "Camila Rocha",
-    kind: "AJUSTE",
-    date: toIsoDate(-3),
-    status: "ABERTO",
-    total: 90,
-    items: [
-      {
-        name: "Calca de alfaiataria",
-        quantity: 1,
-        fabric: "Crepe estruturado",
-        color: "Preto",
-        size: "40",
-        notes: "Ajustar barra e cintura",
-      },
-    ],
-  },
-  {
-    id: 1026,
-    customer: "Boutique Bella",
-    kind: "PECA PRONTA",
-    date: toIsoDate(-2),
-    status: "FINALIZADO",
-    total: 180,
-    items: [
-      {
-        name: "Camisa feminina",
-        quantity: 2,
-        fabric: "Tricoline",
-        color: "Off-white",
-        size: "P e M",
-        notes: "Botoes perolados",
-      },
-    ],
-  },
-  {
-    id: 1027,
-    customer: "Luana M. Souza",
-    kind: "ENCOMENDA",
-    date: toIsoDate(-1),
-    status: "ENTREGUE",
-    total: 350,
-    items: [
-      {
-        name: "Conjunto cropped + saia",
-        quantity: 1,
-        fabric: "Viscolinho",
-        color: "Verde sage",
-        size: "M",
-        notes: "Saia com forro e ziper invisivel",
-      },
-    ],
-  },
-  {
-    id: 1028,
-    customer: "Marta Ferreira",
-    kind: "ENCOMENDA",
-    date: toIsoDate(1),
-    status: "ABERTO",
-    total: 510,
-    items: [
-      {
-        name: "Blazer acinturado",
-        quantity: 1,
-        fabric: "Sarja premium",
-        color: "Areia",
-        size: "G",
-        notes: "Forro interno acetinado",
-      },
-      {
-        name: "Calca reta",
-        quantity: 1,
-        fabric: "Sarja premium",
-        color: "Areia",
-        size: "G",
-        notes: "Cintura alta",
-      },
-    ],
-  },
-  {
-    id: 1029,
-    customer: "Helena Costa",
-    kind: "AJUSTE",
-    date: toIsoDate(-10),
-    status: "EM PRODUCAO",
-    total: 120,
-    items: [
-      {
-        name: "Vestido de festa",
-        quantity: 1,
-        fabric: "Tule bordado",
-        color: "Azul marinho",
-        size: "38",
-        notes: "Ajustar busto e comprimento",
-      },
-    ],
-  },
-];
+  return "bg-gray-200 text-neutral-700";
+};
 
 export default function Orders() {
+  const pageSize = 10;
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [selectedKind, setSelectedKind] = useState<"TODOS" | OrderKind>("TODOS");
-  const [selectedStatus, setSelectedStatus] = useState<"TODOS" | OrderStatus>("TODOS");
-  const [sortBy, setSortBy] = useState<OrderSort>("LAST_CREATED");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const pageSize = 5;
+  const [productionItems, setProductionItems] = useState<ProductOrderRow[]>([]);
+  const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [dateOrder, setDateOrder] = useState("createdAtDesc");
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfStartDate, setPdfStartDate] = useState("");
+  const [pdfEndDate, setPdfEndDate] = useState("");
+  const [error, setError] = useState("");
 
-  const filteredOrders = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  useEffect(() => {
+    const fetchStatuses = async () => {
+      try {
+        const data = await getRequest("/products/status-options");
+        setStatusOptions(Array.isArray(data) ? data : []);
+      } catch {
+        setStatusOptions([]);
+      }
+    };
 
-    const rows = mockOrders.filter((item) => {
-      const matchesSearch =
-        !term || item.customer.toLowerCase().includes(term) || String(item.id).includes(term);
-      const matchesKind = selectedKind === "TODOS" || item.kind === selectedKind;
-      const matchesStatus = selectedStatus === "TODOS" || item.status === selectedStatus;
-      return matchesSearch && matchesKind && matchesStatus;
-    });
+    void fetchStatuses();
+  }, []);
 
-    rows.sort((a, b) => {
-      const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (sortBy === "LAST_CREATED") return dateDiff;
-      return -dateDiff;
-    });
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, dateOrder]);
 
-    return rows;
-  }, [search, selectedKind, selectedStatus, sortBy]);
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setLoading(true);
+        setError("");
 
-  const weeklyOrders = useMemo(() => {
-    return filteredOrders.filter(
-      (order) => isDateInCurrentWeek(order.date) && isPrintableWeeklyOrder(order),
-    );
-  }, [filteredOrders]);
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+          sortBy: dateOrder,
+          productionOnly: "true",
+        });
 
-  const weekLabel = useMemo(() => buildWeekLabel(), []);
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedOrders = filteredOrders.slice(startIndex, startIndex + pageSize);
+        if (statusFilter !== "todos") {
+          params.set("statusId", statusFilter);
+        }
 
-  const handleGenerateWeeklyPdf = async () => {
-    if (!weeklyOrders.length) {
-      return;
-    }
+        const data = (await getRequest(`/products?${params.toString()}`)) as ProductionResponse;
+        setProductionItems(Array.isArray(data.items) ? data.items : []);
+        setTotalItems(Number(data.total) || 0);
+        setTotalPages(Number(data.totalPages) || 1);
+      } catch (err: unknown) {
+        setError(getUserFacingApiErrorMessage(err));
+        setProductionItems([]);
+        setTotalItems(0);
+        setTotalPages(1);
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    void fetchItems();
+  }, [dateOrder, page, pageSize, statusFilter]);
+
+  const handleOpenPdfModal = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() + diffToMonday);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    setPdfStartDate(toInputDate(startOfWeek));
+    setPdfEndDate(toInputDate(endOfWeek));
+    setPdfModalOpen(true);
+  };
+
+  const handleDownloadWeeklyPdf = async () => {
     try {
-      setIsGeneratingPdf(true);
+      if (!pdfStartDate || !pdfEndDate) {
+        setError("Informe a data inicial e a data final para gerar o PDF.");
+        return;
+      }
+
+      if (pdfStartDate > pdfEndDate) {
+        setError("A data inicial não pode ser maior que a data final.");
+        return;
+      }
+
+      setPdfLoading(true);
+      setError("");
+      const params = new URLSearchParams({
+        page: "1",
+        pageSize: "100",
+        sortBy: "testDateAsc",
+        startDate: pdfStartDate,
+        endDate: pdfEndDate,
+        productionOnly: "true",
+      });
+
+      if (statusFilter !== "todos") {
+        params.set("statusId", statusFilter);
+      }
+
+      const firstPage = (await getRequest(`/products?${params.toString()}`)) as ProductionResponse;
+      let weeklyItems = Array.isArray(firstPage.items) ? [...firstPage.items] : [];
+      const totalWeeklyPages = Number(firstPage.totalPages) || 1;
+
+      for (let currentPage = 2; currentPage <= totalWeeklyPages; currentPage += 1) {
+        params.set("page", String(currentPage));
+        const nextPage = (await getRequest(`/products?${params.toString()}`)) as ProductionResponse;
+        if (Array.isArray(nextPage.items)) {
+          weeklyItems = [...weeklyItems, ...nextPage.items];
+        }
+      }
+
+      if (!weeklyItems.length) {
+        setError("Nenhum item de produção foi encontrado no período informado para gerar o PDF.");
+        return;
+      }
+
+      const printableOrders: PrintableOrder[] = weeklyItems.map((item) => ({
+        id: item.id,
+        customer: item.customer,
+        kind: item.clothingType || item.productType || item.category || "Produção",
+        date: item.testDate || item.createdAt,
+        status: item.status || "-",
+        total: item.finalValue,
+        items: [
+          {
+            name: item.description,
+            quantity: item.qtyStock || 1,
+            fabric: item.fabric || "-",
+            color: item.color || "-",
+            size: item.size || "-",
+            notes: item.details || undefined,
+          },
+        ],
+      }));
+
+      const [startYear, startMonth, startDay] = pdfStartDate.split("-").map(Number);
+      const [endYear, endMonth, endDay] = pdfEndDate.split("-").map(Number);
+      const startDate = new Date(startYear, startMonth - 1, startDay);
+      const endDate = new Date(endYear, endMonth - 1, endDay);
+      const weekLabel = `${new Intl.DateTimeFormat("pt-BR").format(startDate)} a ${new Intl.DateTimeFormat(
+        "pt-BR",
+      ).format(endDate)}`;
+
       await downloadWeeklyOrdersPdf({
-        orders: weeklyOrders,
-        logoUrl: "/manequim.png",
+        orders: printableOrders,
         weekLabel,
       });
-    } catch (error) {
-      console.error("Erro ao gerar PDF semanal de pedidos", error);
+      setPdfModalOpen(false);
+    } catch (err: unknown) {
+      setError(getUserFacingApiErrorMessage(err, "Não foi possível gerar o PDF do período."));
     } finally {
-      setIsGeneratingPdf(false);
+      setPdfLoading(false);
     }
   };
+
+  const headingText = loading
+    ? "Carregando produção..."
+    : `${totalItems} item(ns) de produção encontrado(s).`;
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5 flex justify-center gap-4 md:justify-between">
         <div>
-          <h1 className="pb-2 pt-12 text-6xl font-semibold text-primary md:text-4xl">
-            Pedidos
-          </h1>
-          <p className="text-sm text-neutral-700">
-            {weeklyOrders.length} pedido(s) pendente(s) desta semana em {weekLabel}
-          </p>
+          <h1 className="pb-2 pt-12 text-6xl font-semibold text-primary md:text-4xl">Produção</h1>
+          <p className="text-sm text-neutral-700">{headingText}</p>
         </div>
         <div className="hidden gap-2 md:flex">
-           <Button
-                            variant="primary"
-                            size="md"
-                            className="px-5"
-                            onClick={() => navigate("/nova-venda")}
-                          >
-                            + Novo Pedido
-                          </Button>
           <Button
-            variant="secondary"
+            variant="primary"
             size="md"
             className="px-5"
-            onClick={handleGenerateWeeklyPdf}
-            disabled={!weeklyOrders.length}
-            isLoading={isGeneratingPdf}
+            onClick={handleOpenPdfModal}
+            disabled={loading || pdfLoading}
           >
             <span className="flex items-center gap-2">
               <Printer size={16} />
-              PDF da semana
+              {pdfLoading ? "Gerando PDF..." : "Gerar PDF"}
             </span>
           </Button>
         </div>
@@ -298,164 +285,225 @@ export default function Orders() {
           variant="secondary"
           size="md"
           className="w-full"
-          onClick={handleGenerateWeeklyPdf}
-          disabled={!weeklyOrders.length}
-          isLoading={isGeneratingPdf}
+          onClick={handleOpenPdfModal}
+          disabled={loading || pdfLoading}
         >
           <span className="flex items-center justify-center gap-2">
             <Printer size={16} />
-            Gerar PDF da semana
+            {pdfLoading ? "Gerando PDF..." : "Gerar PDF"}
           </span>
         </Button>
       </div>
 
-      <div className="mb-5 flex w-full flex-col gap-3 md:flex-row md:items-end">
-        <div className="flex-1">
-          <label className="mb-2 block text-sm font-semibold text-primary">
-            Cliente ou no. pedido
+      <div className="mb-4 grid w-full max-w-2xl gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="orders-status-filter" className="text-sm font-medium text-primary">
+            Filtrar por situação
           </label>
-          <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            placeholder="Ex.: Ana, 1024"
-            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
-          />
-        </div>
-        <div className="flex-1">
-          <label className="mb-2 block text-sm font-semibold text-primary">Tipo</label>
           <select
-            value={selectedKind}
-            onChange={(e) => {
-              setSelectedKind(e.target.value as "TODOS" | OrderKind);
-              setCurrentPage(1);
-            }}
-            className="h-11 w-full rounded border border-gray-800 bg-white px-3 text-[15px] text-primary md:border-outline-variant/50"
+            id="orders-status-filter"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           >
-            <option value="TODOS">Todos</option>
-            <option value="ENCOMENDA">Encomenda</option>
-            <option value="PECA PRONTA">Peça pronta</option>
-            <option value="AJUSTE">Ajuste</option>
+            <option value="todos">Todos</option>
+            {statusOptions.map((status) => (
+              <option key={status.id} value={status.id}>
+                {status.desc}
+              </option>
+            ))}
           </select>
         </div>
-        <div className="flex-1">
-          <label className="mb-2 block text-sm font-semibold text-primary">Status</label>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="orders-date-order" className="text-sm font-medium text-primary">
+            Ordenar por data
+          </label>
           <select
-            value={selectedStatus}
-            onChange={(e) => {
-              setSelectedStatus(e.target.value as "TODOS" | OrderStatus);
-              setCurrentPage(1);
-            }}
-            className="h-11 w-full rounded border border-gray-800 bg-white px-3 text-[15px] text-primary md:border-outline-variant/50"
+            id="orders-date-order"
+            value={dateOrder}
+            onChange={(event) => setDateOrder(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           >
-            <option value="TODOS">Todos</option>
-            <option value="ABERTO">Aberto</option>
-            <option value="EM PRODUCAO">Em produção</option>
-            <option value="FINALIZADO">Finalizado</option>
-            <option value="ENTREGUE">Entregue</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="mb-2 block text-sm font-semibold text-primary">Ordenação</label>
-          <select
-            value={sortBy}
-            onChange={(e) => {
-              setSortBy(e.target.value as OrderSort);
-              setCurrentPage(1);
-            }}
-            className="h-11 w-full rounded border border-gray-800 bg-white px-3 text-[15px] text-primary md:border-outline-variant/50"
-          >
-            <option value="LAST_CREATED">Mais recentes</option>
-            <option value="OLDEST_CREATED">Mais antigos</option>
+            <option value="createdAtDesc">Mais recentes</option>
+            <option value="testDateAsc">Data de prova mais antiga</option>
+            <option value="testDateDesc">Data de prova mais recente</option>
           </select>
         </div>
       </div>
+
+      {error ? (
+        <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
+          {error}
+        </div>
+      ) : null}
+
+      <CustomerModal
+        open={pdfModalOpen}
+        onClose={() => {
+          if (!pdfLoading) {
+            setPdfModalOpen(false);
+          }
+        }}
+        title="Gerar PDF de produção"
+        subtitle="Selecione o intervalo da data de prova para montar o relatório."
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="pdf-start-date" className="text-sm font-medium text-primary">
+              Data de prova inicial
+            </label>
+            <input
+              id="pdf-start-date"
+              type="date"
+              value={pdfStartDate}
+              onChange={(event) => setPdfStartDate(event.target.value)}
+              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="pdf-end-date" className="text-sm font-medium text-primary">
+              Data de prova final
+            </label>
+            <input
+              id="pdf-end-date"
+              type="date"
+              value={pdfEndDate}
+              onChange={(event) => setPdfEndDate(event.target.value)}
+              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-3">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setPdfModalOpen(false)}
+            disabled={pdfLoading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleDownloadWeeklyPdf}
+            disabled={pdfLoading}
+          >
+            {pdfLoading ? "Gerando PDF..." : "Gerar PDF"}
+          </Button>
+        </div>
+      </CustomerModal>
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Pedido</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Descrição</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Cliente</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Tipo</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Data</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Data Prova</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Costureira</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Status</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary text-right">
-                Valor
-              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary text-right">Valor</th>
             </tr>
           </thead>
           <tbody>
-            {paginatedOrders.map((order) => (
-              <tr
-                key={order.id}
-                className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
-                onClick={() => navigate(`/pedido/${order.id}`)}
-              >
-                <td className="px-4 py-3 text-[14px] font-semibold text-primary">#{order.id}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{order.customer}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{order.kind}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">
-                  {formatDate(order.date)}
-                </td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{order.status}</td>
-                <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
-                  {formatCurrency(order.total)}
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                  Carregando produção...
                 </td>
               </tr>
-            ))}
+            ) : productionItems.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                  Nenhum item em produção cadastrado
+                </td>
+              </tr>
+            ) : (
+              productionItems.map((order) => (
+                <tr
+                  key={order.id}
+                  className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
+                  onClick={() => navigate(`/pedido/${order.id}`)}
+                >
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{order.description || "-"}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatCustomerName(order.customer)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(order.testDate)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{order.seamstress || "-"}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getProductionStatusBadgeClassName(
+                        order.status,
+                      )}`}
+                    >
+                      {order.status || "-"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
+                    {formatCurrency(order.finalValue)}
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
-        {paginatedOrders.map((order) => (
-          <div
-            key={order.id}
-            className="flex w-full items-center justify-between px-4 py-6"
-            onClick={() => navigate(`/pedido/${order.id}`)}
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-primary">
-                #{order.id} - {order.customer}
-              </p>
-              <p className="text-xs text-neutral-700">
-                {order.kind} - {order.status}
-              </p>
-              <p className="text-xs text-neutral-700">{formatDate(order.date)}</p>
-              <p className="mt-2 text-sm font-semibold text-primary">
-                {formatCurrency(order.total)}
-              </p>
-            </div>
-            <ChevronRight size={16} className="ml-2 text-neutral-700" />
+        {loading ? (
+          <div className="px-4 py-6 text-center text-sm text-neutral-700">Carregando produção...</div>
+        ) : productionItems.length === 0 ? (
+          <div className="px-4 py-6 text-center text-sm text-neutral-700">
+            Nenhum item em produção cadastrado
           </div>
-        ))}
+        ) : (
+          productionItems.map((order) => (
+            <button
+              key={order.id}
+              type="button"
+              className="w-full px-4 py-4 text-left"
+              onClick={() => navigate(`/pedido/${order.id}`)}
+            >
+              <p className="text-xs text-neutral-700">Descrição: {order.description || "-"}</p>
+              <p className="text-sm font-semibold text-primary">{formatCustomerName(order.customer)}</p>
+              <p className="text-xs text-neutral-700">Data Prova: {formatDate(order.testDate)}</p>
+              <p className="text-xs text-neutral-700">Costureira: {order.seamstress || "-"}</p>
+              <p className="text-xs text-neutral-700">
+                Status:{" "}
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${getProductionStatusBadgeClassName(
+                    order.status,
+                  )}`}
+                >
+                  {order.status || "-"}
+                </span>
+              </p>
+              <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(order.finalValue)}</p>
+            </button>
+          ))
+        )}
       </div>
 
-      <div className="mt-4 hidden items-center justify-between md:flex">
-        <p className="text-[13px] tracking-[0.04em] text-neutral-700">
-          Exibindo {filteredOrders.length === 0 ? 0 : startIndex + 1}-
-          {Math.min(startIndex + pageSize, filteredOrders.length)} de {filteredOrders.length}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-neutral-700">
+          Página {page} de {totalPages}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           <Button
             variant="secondary"
             size="sm"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={loading || page <= 1}
           >
             Anterior
           </Button>
-          <span className="px-2 text-sm text-primary">
-            {currentPage} / {totalPages}
-          </span>
           <Button
             variant="secondary"
             size="sm"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={loading || page >= totalPages}
           >
             Próxima
           </Button>

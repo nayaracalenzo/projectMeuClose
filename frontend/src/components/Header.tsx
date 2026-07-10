@@ -1,7 +1,4 @@
-import { LogOut } from "lucide-react";
-import { logoutAndRedirect } from "../utils/auth";
-
-export default function Header() {
+﻿export default function Header() {
   const data = new Date();
 
   const opcoes: Intl.DateTimeFormatOptions = {
@@ -15,17 +12,9 @@ export default function Header() {
   const dataFinal = dataFormatada.charAt(0).toUpperCase() + dataFormatada.slice(1);
 
   return (
-    <header className="hidden h-20 w-full items-center justify-end border-b border-outline-variant/25 text-primary md:flex">
+    <header className="hidden bg-[#f5f5f5] h-20 w-full items-center justify-end border-b border-outline-variant/25 text-primary md:flex">
       <div className="flex items-center gap-3 px-4 md:px-8">
         <div className="text-base font-medium">{dataFinal}</div>
-        <button
-          type="button"
-          onClick={() => logoutAndRedirect("logged_out")}
-          className="inline-flex items-center gap-2 rounded-lg border border-outline-variant/40 px-3 py-2 text-sm font-medium transition hover:bg-surface"
-        >
-          <LogOut size={16} />
-          Sair
-        </button>
       </div>
     </header>
   );

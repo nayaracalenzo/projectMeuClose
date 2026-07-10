@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "../components/Button";
 import { getRequest, postRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { getCategoryBadgeClassName } from "../utils/categoryBadge";
 import { formatCurrency } from "../utils/currency";
 
 type Scope = "LOJA" | "PESSOAL";
@@ -17,12 +20,19 @@ interface PaymentTypeOption {
   name: string;
 }
 
+interface SupplierOption {
+  id: number;
+  name: string;
+}
+
 interface PayableRow {
   id: number;
   scope: Scope;
   description: string;
   category: string;
   beneficiary: string;
+  supplierId: number | null;
+  supplierName: string | null;
   amount: number;
   openAmount: number;
   dueDate: string;
@@ -32,6 +42,20 @@ interface PayableRow {
   plannedPaymentTypeId: number | null;
   plannedPaymentTypeName: string | null;
 }
+
+interface PayablesResponse {
+  items: PayableRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  summary: {
+    totalAmount: number;
+    totalOpen: number;
+  };
+}
+
+const PAGE_SIZE = 10;
 
 const filterOptions: Array<{ value: PayableFilter; label: string }> = [
   { value: "EM_ABERTO", label: "Em Aberto" },
@@ -45,13 +69,6 @@ const filterOptions: Array<{ value: PayableFilter; label: string }> = [
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 
-const parseLocalDate = (value: string, endOfDay = false) => {
-  const [year, month, day] = value.split("-").map(Number);
-  return endOfDay
-    ? new Date(year, month - 1, day, 23, 59, 59, 999)
-    : new Date(year, month - 1, day, 0, 0, 0, 0);
-};
-
 export default function PayablesPage() {
   const [scope, setScope] = useState<Scope>("LOJA");
   const [filter, setFilter] = useState<PayableFilter>("EM_ABERTO");
@@ -60,13 +77,19 @@ export default function PayablesPage() {
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<PayableRow[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState({ totalAmount: 0, totalOpen: 0 });
   const [activePayableId, setActivePayableId] = useState<number | null>(null);
 
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [settlementTarget, setSettlementTarget] = useState<SettlementTarget>("BANCO");
@@ -78,19 +101,44 @@ export default function PayablesPage() {
   const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [referenceCode, setReferenceCode] = useState("");
 
+  useEffect(() => {
+    setPage(1);
+  }, [scope, filter, startDate, endDate]);
+
   const fetchRows = useCallback(async () => {
     try {
       setLoading(true);
       setMessage("");
-      const data = await getRequest(`/payables?scope=${scope}&status=${filter}`);
-      setRows(data);
+
+      const params = new URLSearchParams({
+        scope,
+        status: filter,
+        page: String(page),
+        pageSize: String(PAGE_SIZE),
+      });
+
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
+
+      const data = (await getRequest(`/payables?${params.toString()}`)) as PayablesResponse;
+      setRows(Array.isArray(data.items) ? data.items : []);
+      setTotalRows(Number(data.total) || 0);
+      setTotalPages(Number(data.totalPages) || 1);
+      setSummary({
+        totalAmount: Number(data.summary?.totalAmount || 0),
+        totalOpen: Number(data.summary?.totalOpen || 0),
+      });
     } catch (error) {
       console.error("Erro ao buscar contas a pagar", error);
+      setRows([]);
+      setTotalRows(0);
+      setTotalPages(1);
+      setSummary({ totalAmount: 0, totalOpen: 0 });
       setMessage("Não foi possível carregar as contas a pagar.");
     } finally {
       setLoading(false);
     }
-  }, [filter, scope]);
+  }, [endDate, filter, page, scope, startDate]);
 
   useEffect(() => {
     fetchRows();
@@ -109,24 +157,23 @@ export default function PayablesPage() {
     fetchPaymentTypes();
   }, []);
 
-  const filteredRows = useMemo(() => {
-    return rows.filter((row) => {
-      const rowDate = parseLocalDate(row.dueDate);
-      const matchesStartDate = !startDate || rowDate >= parseLocalDate(startDate);
-      const matchesEndDate = !endDate || rowDate <= parseLocalDate(endDate, true);
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      try {
+        const data = await getRequest("/admin/suppliers");
+        setSuppliers(
+          data.map((item: Record<string, unknown>) => ({
+            id: Number(item.idSupplier),
+            name: String(item.tradeName || item.fullName || item.idSupplier),
+          })),
+        );
+      } catch (error) {
+        console.error("Erro ao buscar fornecedores", error);
+      }
+    };
 
-      return matchesStartDate && matchesEndDate;
-    });
-  }, [endDate, rows, startDate]);
-
-  const totalOpen = useMemo(
-    () => filteredRows.reduce((acc, row) => acc + row.openAmount, 0),
-    [filteredRows],
-  );
-  const totalAmount = useMemo(
-    () => filteredRows.reduce((acc, row) => acc + row.amount, 0),
-    [filteredRows],
-  );
+    fetchSuppliers();
+  }, []);
 
   const handleCreatePayable = async () => {
     try {
@@ -135,6 +182,7 @@ export default function PayablesPage() {
         description,
         category,
         beneficiary,
+        supplierId: supplierId ? Number(supplierId) : null,
         amount: Number(amount),
         dueDate,
         settlementTarget,
@@ -145,6 +193,7 @@ export default function PayablesPage() {
       setDescription("");
       setCategory("");
       setBeneficiary("");
+      setSupplierId("");
       setAmount("");
       setAccountLabel("");
       setPlannedPaymentTypeId("");
@@ -152,13 +201,7 @@ export default function PayablesPage() {
       setMessage("Conta a pagar criada com sucesso.");
       await fetchRows();
     } catch (error: unknown) {
-      const maybeAxiosError = error as {
-        response?: { data?: { message?: string } };
-      };
-      setMessage(
-        maybeAxiosError.response?.data?.message ||
-          "Não foi possível criar a conta a pagar.",
-      );
+      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível criar a conta a pagar."));
     }
   };
 
@@ -185,13 +228,7 @@ export default function PayablesPage() {
       setActivePayableId(null);
       await fetchRows();
     } catch (error: unknown) {
-      const maybeAxiosError = error as {
-        response?: { data?: { message?: string } };
-      };
-      setMessage(
-        maybeAxiosError.response?.data?.message ||
-          "Não foi possível registrar o pagamento.",
-      );
+      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível registrar o pagamento."));
     }
   };
 
@@ -241,7 +278,7 @@ export default function PayablesPage() {
       {isCreateFormOpen && (
         <div className="mb-5 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Descricao</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">Descrição</label>
             <input value={description} onChange={(e) => setDescription(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
           </div>
           <div>
@@ -249,7 +286,18 @@ export default function PayablesPage() {
             <input value={category} onChange={(e) => setCategory(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Favorecido</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">Fornecedor</label>
+            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary">
+              <option value="">Selecione...</option>
+              {suppliers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">Favorecido livre</label>
             <input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
           </div>
           <div>
@@ -299,7 +347,7 @@ export default function PayablesPage() {
 
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <label className="mb-1 block text-sm font-semibold text-primary">Visao</label>
+          <label className="mb-1 block text-sm font-semibold text-primary">Visão</label>
           <select value={filter} onChange={(e) => setFilter(e.target.value as PayableFilter)} className="h-11 min-w-52 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary">
             {filterOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -321,7 +369,7 @@ export default function PayablesPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Ate</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">Até</label>
             <input
               type="date"
               value={endDate}
@@ -335,15 +383,15 @@ export default function PayablesPage() {
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Valor total</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(totalAmount)}</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalAmount)}</p>
         </div>
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(totalOpen)}</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalOpen)}</p>
         </div>
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Lancamentos</p>
-          <p className="text-lg font-semibold text-primary">{filteredRows.length}</p>
+          <p className="text-xs uppercase text-neutral-700">Lançamentos</p>
+          <p className="text-lg font-semibold text-primary">{totalRows}</p>
         </div>
       </div>
 
@@ -371,7 +419,7 @@ export default function PayablesPage() {
             <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Referencia</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">Referência</label>
             <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
           </div>
           <div className="flex gap-2 md:col-span-4">
@@ -389,14 +437,14 @@ export default function PayablesPage() {
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Descricao</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Favorecido</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Descrição</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Fornecedor</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Categoria</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Vencimento</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Forma</th>
               <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Valor</th>
               <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Saldo</th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Acao</th>
+              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Ação</th>
             </tr>
           </thead>
           <tbody>
@@ -404,16 +452,26 @@ export default function PayablesPage() {
               <tr className="bg-surface-lowest">
                 <td colSpan={8} className="px-4 py-4 text-sm text-neutral-700">Carregando...</td>
               </tr>
-            ) : filteredRows.length === 0 ? (
+            ) : rows.length === 0 ? (
               <tr className="bg-surface-lowest">
                 <td colSpan={8} className="px-4 py-4 text-sm text-neutral-700">Nenhuma conta a pagar encontrada.</td>
               </tr>
             ) : (
-              filteredRows.map((row) => (
+              rows.map((row) => (
                 <tr key={row.id} className="bg-surface-lowest">
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{row.description}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.beneficiary}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.category}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.supplierName || row.beneficiary}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                        row.category,
+                      )}`}
+                    >
+                      {row.category}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(row.dueDate)}</td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{row.plannedPaymentTypeName || "-"}</td>
                   <td className="px-4 py-3 text-right text-[14px] text-neutral-700">{formatCurrency(row.amount)}</td>
@@ -432,6 +490,30 @@ export default function PayablesPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-neutral-700">
+          Página {page} de {totalPages}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={loading || page <= 1}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={loading || page >= totalPages}
+          >
+            Próxima
+          </Button>
+        </div>
       </div>
     </div>
   );

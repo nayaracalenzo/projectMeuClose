@@ -7,13 +7,19 @@ const authRoute = require("./routes/authRoute");
 const clientsRoute = require("./routes/clientsRoute.js");
 const usersRoute = require("./routes/usersRoute");
 const productsRoute = require("./routes/productsRoute");
+const dashboardRoute = require("./routes/dashboardRoute");
 const cashRoute = require("./routes/cashRoute");
+const bankRoute = require("./routes/bankRoute");
 const salesRoute = require("./routes/salesRoute");
 const professionsRoute = require("./routes/professionsRoute");
 const adminRoute = require("./routes/adminRoute");
 const paymentTypesRoute = require("./routes/paymentTypesRoute");
 const receivablesRoute = require("./routes/receivablesRoute");
 const payablesRoute = require("./routes/payablesRoute");
+const {
+  scheduleOverdueProductsStatusSync,
+  syncOverdueProductsStatus,
+} = require("./services/overdueProductsService");
 require("dotenv").config();
 
 const app = express();
@@ -39,11 +45,13 @@ app.use("/sales", salesRoute);
 app.use("/payment-types", paymentTypesRoute);
 app.use("/receivables", receivablesRoute);
 app.use("/payables", payablesRoute);
+app.use("/products", productsRoute);
+app.use("/dashboard", dashboardRoute);
+app.use("/cash", cashRoute);
+app.use("/bank", bankRoute);
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // app.use("/users", usersRoute);
 // app.use("/customers", customersRoute);
-// app.use("/cash", cashRoute);
-// app.use("/products", productsRoute);
 
 app.get("/", (_req, res) => res.status(200).send("Online."));
 app.use(notFoundHandler);
@@ -55,4 +63,7 @@ app.listen(port, () => {
     environment: process.env.NODE_ENV || "development",
     allowedOriginsCount: allowedOrigins.length,
   });
+
+  syncOverdueProductsStatus().catch(() => {});
+  scheduleOverdueProductsStatusSync();
 });

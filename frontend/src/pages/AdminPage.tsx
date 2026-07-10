@@ -9,9 +9,11 @@ import {
   postRequest,
   updateRequest,
 } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
 
 type AdminResourceKey =
   | "employees"
+  | "suppliers"
   | "roles"
   | "colors"
   | "sizes"
@@ -25,18 +27,6 @@ type GenericRecord = Record<string, Primitive>;
 type RoleOption = {
   id: number;
   desc: string;
-};
-
-type PaymentTypeForm = {
-  desc: string;
-  kind: string;
-  active: boolean;
-  requiresDueDate: boolean;
-  allowsEntryAmount: boolean;
-  allowsInstallments: boolean;
-  maxInstallments: string;
-  defaultInstallments: string;
-  financialFlow: string;
 };
 
 type ResourceConfig = {
@@ -58,6 +48,14 @@ const resourceConfigList: ResourceConfig[] = [
     deleteLabel: "Desativar",
     primaryKey: "idEmployee",
     isSoftDelete: true,
+  },
+  {
+    key: "suppliers",
+    title: "Fornecedores",
+    endpoint: "/admin/suppliers",
+    emptyLabel: "Nenhum fornecedor cadastrado.",
+    deleteLabel: "Excluir",
+    primaryKey: "idSupplier",
   },
   {
     key: "roles",
@@ -104,9 +102,8 @@ const resourceConfigList: ResourceConfig[] = [
     title: "Formas de Pagamento",
     endpoint: "/admin/payment-types",
     emptyLabel: "Nenhuma forma de pagamento cadastrada.",
-    deleteLabel: "Desativar",
+    deleteLabel: "Excluir",
     primaryKey: "idPaymentType",
-    isSoftDelete: true,
   },
 ];
 
@@ -137,16 +134,25 @@ const simpleInitialForm = {
   desc: "",
 };
 
-const paymentTypeInitialForm: PaymentTypeForm = {
-  desc: "",
-  kind: "CASH",
+const supplierInitialForm = {
+  fullName: "",
+  tradeName: "",
+  contactName: "",
+  document: "",
+  rg: "",
+  street: "",
+  neighborhood: "",
+  city: "",
+  state: "",
+  zipCode: "",
+  phoneCommercial1: "",
+  phoneCommercial2: "",
+  fax: "",
+  phoneMobile: "",
+  email: "",
+  comment: "",
   active: true,
-  requiresDueDate: false,
-  allowsEntryAmount: false,
-  allowsInstallments: false,
-  maxInstallments: "1",
-  defaultInstallments: "1",
-  financialFlow: "IMMEDIATE_CASH",
+  blocked: false,
 };
 
 function formatDate(value: Primitive) {
@@ -182,6 +188,7 @@ export default function AdminPage() {
     useState<AdminResourceKey>("employees");
   const [resourceRows, setResourceRows] = useState<Record<AdminResourceKey, GenericRecord[]>>({
     employees: [],
+    suppliers: [],
     roles: [],
     colors: [],
     sizes: [],
@@ -198,8 +205,8 @@ export default function AdminPage() {
   const [pageSize, setPageSize] = useState(5);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [employeeForm, setEmployeeForm] = useState(employeeInitialForm);
+  const [supplierForm, setSupplierForm] = useState(supplierInitialForm);
   const [simpleForm, setSimpleForm] = useState(simpleInitialForm);
-  const [paymentTypeForm, setPaymentTypeForm] = useState<PaymentTypeForm>(paymentTypeInitialForm);
 
   const currentConfig = useMemo(
     () => resourceConfigList.find((item) => item.key === selectedResource)!,
@@ -251,8 +258,8 @@ export default function AdminPage() {
     setEditingId(null);
     setError("");
     setEmployeeForm(employeeInitialForm);
+    setSupplierForm(supplierInitialForm);
     setSimpleForm(simpleInitialForm);
-    setPaymentTypeForm(paymentTypeInitialForm);
   }, [selectedResource]);
 
   const employeeRows = useMemo(() => {
@@ -311,17 +318,26 @@ export default function AdminPage() {
       return;
     }
 
-    if (selectedResource === "payment-types") {
-      setPaymentTypeForm({
-        desc: String(row.desc ?? ""),
-        kind: String(row.kind ?? "CASH"),
+    if (selectedResource === "suppliers") {
+      setSupplierForm({
+        fullName: String(row.fullName ?? ""),
+        tradeName: String(row.tradeName ?? ""),
+        contactName: String(row.contactName ?? ""),
+        document: String(row.document ?? ""),
+        rg: String(row.rg ?? ""),
+        street: String(row.street ?? ""),
+        neighborhood: String(row.neighborhood ?? ""),
+        city: String(row.city ?? ""),
+        state: String(row.state ?? ""),
+        zipCode: String(row.zipCode ?? ""),
+        phoneCommercial1: String(row.phoneCommercial1 ?? ""),
+        phoneCommercial2: String(row.phoneCommercial2 ?? ""),
+        fax: String(row.fax ?? ""),
+        phoneMobile: String(row.phoneMobile ?? ""),
+        email: String(row.email ?? ""),
+        comment: String(row.comment ?? ""),
         active: Boolean(row.active),
-        requiresDueDate: Boolean(row.requiresDueDate),
-        allowsEntryAmount: Boolean(row.allowsEntryAmount),
-        allowsInstallments: Boolean(row.allowsInstallments),
-        maxInstallments: String(row.maxInstallments ?? 1),
-        defaultInstallments: String(row.defaultInstallments ?? 1),
-        financialFlow: String(row.financialFlow ?? "IMMEDIATE_CASH"),
+        blocked: Boolean(row.blocked),
       });
       return;
     }
@@ -335,8 +351,8 @@ export default function AdminPage() {
     setEditingId(null);
     setError("");
     setEmployeeForm(employeeInitialForm);
+    setSupplierForm(supplierInitialForm);
     setSimpleForm(simpleInitialForm);
-    setPaymentTypeForm(paymentTypeInitialForm);
     setIsFormOpen(true);
   }
 
@@ -349,8 +365,8 @@ export default function AdminPage() {
     setEditingId(null);
     setError("");
     setEmployeeForm(employeeInitialForm);
+    setSupplierForm(supplierInitialForm);
     setSimpleForm(simpleInitialForm);
-    setPaymentTypeForm(paymentTypeInitialForm);
     setIsFormOpen(false);
   }
 
@@ -367,17 +383,9 @@ export default function AdminPage() {
               ...employeeForm,
               roleId: employeeForm.roleId ? Number(employeeForm.roleId) : null,
             }
-          : selectedResource === "payment-types"
-            ? {
-                ...paymentTypeForm,
-                maxInstallments: paymentTypeForm.maxInstallments
-                  ? Number(paymentTypeForm.maxInstallments)
-                  : null,
-                defaultInstallments: paymentTypeForm.defaultInstallments
-                  ? Number(paymentTypeForm.defaultInstallments)
-                  : 1,
-              }
-            : simpleForm;
+          : selectedResource === "suppliers"
+            ? supplierForm
+          : simpleForm;
 
       if (editingId) {
         await updateRequest(`${currentConfig.endpoint}/${editingId}`, payload);
@@ -391,13 +399,8 @@ export default function AdminPage() {
       }
       resetForm();
     } catch (err: unknown) {
-      const maybeAxiosError = err as {
-        response?: { data?: { message?: string } };
-      };
       console.error(err);
-      setError(
-        maybeAxiosError.response?.data?.message || "Não foi possível salvar o registro.",
-      );
+      setError(getUserFacingApiErrorMessage(err, "Não foi possível salvar o registro."));
     } finally {
       setSubmitting(false);
     }
@@ -408,6 +411,8 @@ export default function AdminPage() {
     const label =
       selectedResource === "employees"
         ? String(row.fullName ?? row.shortName ?? id)
+        : selectedResource === "suppliers"
+          ? String(row.tradeName ?? row.fullName ?? id)
         : String(row.desc ?? id);
 
     const confirmed = window.confirm(
@@ -428,13 +433,8 @@ export default function AdminPage() {
         resetForm();
       }
     } catch (err: unknown) {
-      const maybeAxiosError = err as {
-        response?: { data?: { message?: string } };
-      };
       console.error(err);
-      setError(
-        maybeAxiosError.response?.data?.message || "Não foi possível remover o registro.",
-      );
+      setError(getUserFacingApiErrorMessage(err, "Não foi possível remover o registro."));
     } finally {
       setSubmitting(false);
     }
@@ -495,19 +495,74 @@ export default function AdminPage() {
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">ID</th>
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Descricao</th>
-              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Fluxo</th>
-              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Regras</th>
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary text-right">Acoes</th>
             </tr>
           </thead>
           <tbody>
             {(paginatedRows as GenericRecord[]).map((row) => (
               <tr key={String(row.idPaymentType)} className="bg-surface-lowest">
-                <td className="px-4 py-3 text-[14px] font-semibold text-primary">{String(row.idPaymentType ?? "")}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{String(row.desc ?? "")}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{String(row.financialFlow ?? "IMMEDIATE_CASH")}</td>
+                <td className="px-4 py-3 text-[14px] font-semibold text-primary">
+                  {String(row.idPaymentType ?? "")}
+                </td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
-                  {row.allowsEntryAmount ? "Entrada" : "Sem entrada"} • {row.allowsInstallments ? "Parcela" : "Sem parcelas"} • {row.requiresDueDate ? "Com vencimento" : "Sem vencimento"}
+                  {String(row.desc ?? "")}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex justify-end gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => startEdit(row)}>
+                      <Pencil size={14} />
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(row)}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function renderSuppliersTable() {
+    return (
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full border-separate border-spacing-y-2">
+          <thead>
+            <tr className="text-left">
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Nome</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Contato</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Cidade</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Telefone</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">Status</th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary text-right">Acoes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(paginatedRows as GenericRecord[]).map((row) => (
+              <tr key={String(row.idSupplier)} className="bg-surface-lowest">
+                <td className="px-4 py-3">
+                  <p className="text-[15px] font-semibold text-primary">
+                    {String(row.tradeName || row.fullName || "")}
+                  </p>
+                  <p className="text-[12px] uppercase tracking-[0.08em] text-neutral-700">
+                    {String(row.fullName ?? "")}
+                  </p>
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {String(row.contactName ?? "-")}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {String(row.city ?? "-")} {row.state ? `/ ${String(row.state)}` : ""}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {formatPhone(row.phoneCommercial1) !== "-"
+                    ? formatPhone(row.phoneCommercial1)
+                    : formatPhone(row.phoneMobile)}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {row.blocked ? "Bloqueado" : row.active ? "Ativo" : "Inativo"}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
@@ -576,14 +631,23 @@ export default function AdminPage() {
                   {formatPhone(row.primaryPhone)} • {String(row.email ?? "sem email")}
                 </p>
               </>
+            ) : selectedResource === "suppliers" ? (
+              <>
+                <p className="text-base font-semibold text-primary">
+                  {String(row.tradeName || row.fullName || "")}
+                </p>
+                <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                  {String(row.fullName ?? "")}
+                </p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  {String(row.city ?? "sem cidade")} {row.state ? `/ ${String(row.state)}` : ""}
+                </p>
+              </>
             ) : selectedResource === "payment-types" ? (
               <>
                 <p className="text-base font-semibold text-primary">{String(row.desc ?? "")}</p>
                 <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
-                  ID {String(row.idPaymentType ?? "")} • {String(row.financialFlow ?? "IMMEDIATE_CASH")}
-                </p>
-                <p className="mt-1 text-sm text-neutral-700">
-                  {row.allowsEntryAmount ? "Permite entrada" : "Sem entrada"} • {row.allowsInstallments ? "Permite parcelas" : "Sem parcelas"}
+                  ID {String(row.idPaymentType ?? "")}
                 </p>
               </>
             ) : (
@@ -681,9 +745,11 @@ export default function AdminPage() {
                   <>
                     {selectedResource === "employees"
                       ? renderEmployeeTable()
-                      : selectedResource === "payment-types"
-                        ? renderPaymentTypesTable()
-                        : renderSimpleTable()}
+                      : selectedResource === "suppliers"
+                        ? renderSuppliersTable()
+                        : selectedResource === "payment-types"
+                          ? renderPaymentTypesTable()
+                          : renderSimpleTable()}
                     {renderMobileCards()}
                     <div className="mt-4 hidden items-center justify-between md:flex">
                       <p className="text-[13px] tracking-[0.04em] text-neutral-700">
@@ -750,8 +816,10 @@ export default function AdminPage() {
         subtitle={
           selectedResource === "employees"
             ? "Preencha os dados da funcionaria e salve para atualizar a tabela."
+            : selectedResource === "suppliers"
+              ? "Preencha os dados do fornecedor e confirme para salvar."
             : selectedResource === "payment-types"
-              ? "Configure as regras operacionais da forma de pagamento."
+              ? "Edite a descricao da forma de pagamento e confirme para salvar."
               : "Edite a descricao e confirme para salvar o cadastro."
         }
       >
@@ -813,48 +881,49 @@ export default function AdminPage() {
                   Funcionaria ativa
                 </label>
               </>
-            ) : selectedResource === "payment-types" ? (
+            ) : selectedResource === "suppliers" ? (
               <>
-                <input value={paymentTypeForm.desc} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, desc: e.target.value }))} placeholder="Descricao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
+                <input value={supplierForm.fullName} onChange={(e) => setSupplierForm((prev) => ({ ...prev, fullName: e.target.value }))} placeholder="Nome completo / razao social" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
+                <input value={supplierForm.tradeName} onChange={(e) => setSupplierForm((prev) => ({ ...prev, tradeName: e.target.value }))} placeholder="Nome fantasia" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
                 <div className="grid gap-3 md:grid-cols-2">
-                  <select value={paymentTypeForm.kind} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, kind: e.target.value }))} className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary">
-                    <option value="CASH">Dinheiro</option>
-                    <option value="CHECK">Cheque</option>
-                    <option value="BOOKLET">Carne</option>
-                    <option value="INVOICE">Duplicata</option>
-                    <option value="CARD">Cartao</option>
-                  </select>
-                  <select value={paymentTypeForm.financialFlow} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, financialFlow: e.target.value }))} className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary">
-                    <option value="IMMEDIATE_CASH">Recebimento imediato</option>
-                    <option value="FUTURE_CUSTOMER">A receber do cliente</option>
-                    <option value="FUTURE_OPERATOR">A receber da operadora</option>
-                  </select>
+                  <input value={supplierForm.contactName} onChange={(e) => setSupplierForm((prev) => ({ ...prev, contactName: e.target.value }))} placeholder="Contato" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.email} onChange={(e) => setSupplierForm((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.active} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, active: e.target.checked }))} />
-                    Forma ativa
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.requiresDueDate} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, requiresDueDate: e.target.checked }))} />
-                    Exige vencimento
-                  </label>
+                  <input value={supplierForm.document} onChange={(e) => setSupplierForm((prev) => ({ ...prev, document: e.target.value }))} placeholder="CPF/CNPJ" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.rg} onChange={(e) => setSupplierForm((prev) => ({ ...prev, rg: e.target.value }))} placeholder="RG/IE" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.allowsEntryAmount} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, allowsEntryAmount: e.target.checked }))} />
-                    Permite entrada
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input type="checkbox" checked={paymentTypeForm.allowsInstallments} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, allowsInstallments: e.target.checked, maxInstallments: e.target.checked ? prev.maxInstallments : "1", defaultInstallments: e.target.checked ? prev.defaultInstallments : "1" }))} />
-                    Permite parcelamento
-                  </label>
+                  <input value={supplierForm.phoneCommercial1} onChange={(e) => setSupplierForm((prev) => ({ ...prev, phoneCommercial1: e.target.value }))} placeholder="Telefone comercial 1" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.phoneCommercial2} onChange={(e) => setSupplierForm((prev) => ({ ...prev, phoneCommercial2: e.target.value }))} placeholder="Telefone comercial 2" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <input type="number" min="1" value={paymentTypeForm.defaultInstallments} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, defaultInstallments: e.target.value }))} placeholder="Parcelas padrao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
-                  <input type="number" min="1" value={paymentTypeForm.maxInstallments} onChange={(e) => setPaymentTypeForm((prev) => ({ ...prev, maxInstallments: e.target.value }))} placeholder="Maximo de parcelas" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" disabled={!paymentTypeForm.allowsInstallments} />
+                  <input value={supplierForm.phoneMobile} onChange={(e) => setSupplierForm((prev) => ({ ...prev, phoneMobile: e.target.value }))} placeholder="Celular" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.fax} onChange={(e) => setSupplierForm((prev) => ({ ...prev, fax: e.target.value }))} placeholder="Fax" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.zipCode} onChange={(e) => setSupplierForm((prev) => ({ ...prev, zipCode: e.target.value }))} placeholder="CEP" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.state} onChange={(e) => setSupplierForm((prev) => ({ ...prev, state: e.target.value }))} placeholder="UF" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <input value={supplierForm.street} onChange={(e) => setSupplierForm((prev) => ({ ...prev, street: e.target.value }))} placeholder="Endereco" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <input value={supplierForm.neighborhood} onChange={(e) => setSupplierForm((prev) => ({ ...prev, neighborhood: e.target.value }))} placeholder="Bairro" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                  <input value={supplierForm.city} onChange={(e) => setSupplierForm((prev) => ({ ...prev, city: e.target.value }))} placeholder="Cidade" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" />
+                </div>
+                <textarea value={supplierForm.comment} onChange={(e) => setSupplierForm((prev) => ({ ...prev, comment: e.target.value }))} placeholder="Observacoes" className="min-h-24 w-full border border-outline-variant/50 bg-white px-3 py-2 text-sm text-primary" />
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm text-primary">
+                    <input type="checkbox" checked={supplierForm.active} onChange={(e) => setSupplierForm((prev) => ({ ...prev, active: e.target.checked }))} />
+                    Fornecedor ativo
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-primary">
+                    <input type="checkbox" checked={supplierForm.blocked} onChange={(e) => setSupplierForm((prev) => ({ ...prev, blocked: e.target.checked }))} />
+                    Fornecedor bloqueado
+                  </label>
                 </div>
               </>
+            ) : selectedResource === "payment-types" ? (
+              <input value={simpleForm.desc} onChange={(e) => setSimpleForm({ desc: e.target.value })} placeholder="Descricao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
             ) : (
               <input value={simpleForm.desc} onChange={(e) => setSimpleForm({ desc: e.target.value })} placeholder="Descricao" className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary" required />
             )}

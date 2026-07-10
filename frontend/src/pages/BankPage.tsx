@@ -1,72 +1,99 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Button } from "../components/Button";
+import { getRequest } from "../services/request";
+import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { getCategoryBadgeClassName } from "../utils/categoryBadge";
 import { formatCurrency } from "../utils/currency";
 
 type Scope = "LOJA" | "PESSOAL";
-type Movement = "ENTRADA" | "SAIDA";
 
 interface BankRow {
   id: number;
   date: string;
-  scope: Scope;
   bank: string;
-  movement: Movement;
+  movement: string;
   category: string;
   description: string;
   amount: number;
 }
 
-const mockBankRows: BankRow[] = [
-  { id: 1, date: "2026-05-02", scope: "LOJA", bank: "Nubank PJ", movement: "ENTRADA", category: "Recebimento", description: "Pix cliente #1021", amount: 780 },
-  { id: 2, date: "2026-05-03", scope: "LOJA", bank: "Nubank PJ", movement: "SAIDA", category: "Fornecedor", description: "Compra de tecido", amount: 340 },
-  { id: 3, date: "2026-05-04", scope: "PESSOAL", bank: "Itau", movement: "SAIDA", category: "Moradia", description: "Aluguel", amount: 1200 },
-  { id: 4, date: "2026-05-05", scope: "PESSOAL", bank: "Itau", movement: "ENTRADA", category: "Transferencia", description: "Pro-labore", amount: 2200 },
-  { id: 5, date: "2026-05-08", scope: "LOJA", bank: "Nubank PJ", movement: "ENTRADA", category: "Recebimento", description: "Cartao venda balcao", amount: 520 },
-  { id: 6, date: "2026-05-09", scope: "PESSOAL", bank: "Inter", movement: "SAIDA", category: "Saude", description: "Farmacia", amount: 180 },
-];
+interface BankListResponse {
+  items: BankRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  summary: {
+    totalIn: number;
+    totalOut: number;
+    balance: number;
+  };
+}
+
+const PAGE_SIZE = 10;
 
 const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
-
-const parseLocalDate = (value: string, endOfDay = false) => {
-  const [year, month, day] = value.split("-").map(Number);
-  return endOfDay
-    ? new Date(year, month - 1, day, 23, 59, 59, 999)
-    : new Date(year, month - 1, day, 0, 0, 0, 0);
-};
 
 export default function BankPage() {
   const [scope, setScope] = useState<Scope>("LOJA");
   const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [rows, setRows] = useState<BankRow[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalRows, setTotalRows] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, balance: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const rows = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return mockBankRows.filter((item) => {
-      const byScope = item.scope === scope;
-      const itemDate = parseLocalDate(item.date);
-      const byStartDate = !startDate || itemDate >= parseLocalDate(startDate);
-      const byEndDate = !endDate || itemDate <= parseLocalDate(endDate, true);
-      const byTerm =
-        !term ||
-        item.description.toLowerCase().includes(term) ||
-        item.category.toLowerCase().includes(term) ||
-        item.bank.toLowerCase().includes(term);
-      return byScope && byStartDate && byEndDate && byTerm;
-    });
-  }, [endDate, scope, search, startDate]);
+  useEffect(() => {
+    setPage(1);
+  }, [scope, search, startDate, endDate]);
 
-  const totalIn = rows
-    .filter((row) => row.movement === "ENTRADA")
-    .reduce((acc, row) => acc + row.amount, 0);
+  useEffect(() => {
+    const fetchRows = async () => {
+      try {
+        setLoading(true);
+        setError("");
 
-  const totalOut = rows
-    .filter((row) => row.movement === "SAIDA")
-    .reduce((acc, row) => acc + row.amount, 0);
+        const params = new URLSearchParams({
+          scope,
+          page: String(page),
+          pageSize: String(PAGE_SIZE),
+        });
+
+        if (search.trim()) params.set("search", search.trim());
+        if (startDate) params.set("startDate", startDate);
+        if (endDate) params.set("endDate", endDate);
+
+        const data = (await getRequest(`/bank?${params.toString()}`)) as BankListResponse;
+        setRows(Array.isArray(data.items) ? data.items : []);
+        setTotalRows(Number(data.total) || 0);
+        setTotalPages(Number(data.totalPages) || 1);
+        setSummary({
+          totalIn: Number(data.summary?.totalIn || 0),
+          totalOut: Number(data.summary?.totalOut || 0),
+          balance: Number(data.summary?.balance || 0),
+        });
+      } catch (err: unknown) {
+        setRows([]);
+        setTotalRows(0);
+        setTotalPages(1);
+        setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
+        setError(getUserFacingApiErrorMessage(err, "Não foi possível carregar o banco."));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRows();
+  }, [endDate, page, scope, search, startDate]);
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-      <h1 className="mb-5 pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">Banco</h1>
+      <h1 className="mb-5 pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">Banco</h1>
 
       <div className="mb-5 border-b border-outline-variant/35">
         <div className="flex gap-2">
@@ -97,11 +124,11 @@ export default function BankPage() {
 
       <div className="mb-5 flex w-full flex-col gap-3 md:flex-row md:items-end">
         <div className="flex-1">
-          <label className="mb-2 block text-sm font-semibold text-primary">Buscar movimentacao</label>
+          <label className="mb-2 block text-sm font-semibold text-primary">Buscar movimentação</label>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Descricao, categoria ou banco"
+            placeholder="Descrição, categoria ou banco"
             className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
           />
         </div>
@@ -116,7 +143,7 @@ export default function BankPage() {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Ate</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">Até</label>
             <input
               type="date"
               value={endDate}
@@ -127,11 +154,30 @@ export default function BankPage() {
         </div>
       </div>
 
+      {error ? (
+        <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
+          {error}
+        </div>
+      ) : null}
+
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Entradas</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalIn)}</p></div>
-        <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Saidas</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalOut)}</p></div>
-        <div className="bg-surface-lowest p-4"><p className="text-xs uppercase text-neutral-700">Saldo</p><p className="text-lg font-semibold text-primary">{formatCurrency(totalIn - totalOut)}</p></div>
+        <div className="bg-surface-lowest p-4">
+          <p className="text-xs uppercase text-neutral-700">Entradas</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalIn)}</p>
+        </div>
+        <div className="bg-surface-lowest p-4">
+          <p className="text-xs uppercase text-neutral-700">Saídas</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalOut)}</p>
+        </div>
+        <div className="bg-surface-lowest p-4">
+          <p className="text-xs uppercase text-neutral-700">Saldo</p>
+          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.balance)}</p>
+        </div>
       </div>
+
+      <p className="mb-3 text-sm text-neutral-700">
+        {loading ? "Carregando movimentações..." : `${totalRows} movimentação(ões) encontrada(s).`}
+      </p>
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
@@ -141,34 +187,99 @@ export default function BankPage() {
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Banco</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Tipo</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Categoria</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Descricao</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Descrição</th>
               <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Valor</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.id} className="bg-surface-lowest transition-colors hover:bg-surface">
-                <td className="px-4 py-3 text-[14px] font-semibold text-primary">{formatDate(row.date)}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{row.bank}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{row.movement}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{row.category}</td>
-                <td className="px-4 py-3 text-[14px] text-neutral-700">{row.description}</td>
-                <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">{formatCurrency(row.amount)}</td>
+            {loading ? (
+              <tr>
+                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                  Carregando movimentações...
+                </td>
               </tr>
-            ))}
+            ) : rows.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                  Nenhuma movimentação bancária cadastrada.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id} className="bg-surface-lowest">
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(row.date)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.bank}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.movement}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                        row.category,
+                      )}`}
+                    >
+                      {row.category}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.description}</td>
+                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">{formatCurrency(row.amount)}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
-        {rows.map((row) => (
-          <div key={row.id} className="px-4 py-4">
-            <p className="text-sm font-semibold text-primary">{formatDate(row.date)} - {row.bank}</p>
-            <p className="text-xs text-neutral-700">{row.category} - {row.movement}</p>
-            <p className="text-xs text-neutral-700">{row.description}</p>
-            <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(row.amount)}</p>
+        {loading ? (
+          <div className="px-4 py-6 text-center text-sm text-neutral-700">
+            Carregando movimentações...
           </div>
-        ))}
+        ) : rows.length === 0 ? (
+          <div className="px-4 py-6 text-center text-sm text-neutral-700">
+            Nenhuma movimentação bancária cadastrada.
+          </div>
+        ) : (
+          rows.map((row) => (
+            <div key={row.id} className="px-4 py-4">
+              <p className="text-sm font-semibold text-primary">{formatDate(row.date)} - {row.bank}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                    row.category,
+                  )}`}
+                >
+                  {row.category}
+                </span>
+                <span className="text-xs text-neutral-700">{row.movement}</span>
+              </div>
+              <p className="text-xs text-neutral-700">{row.description}</p>
+              <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(row.amount)}</p>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-neutral-700">
+          Página {page} de {totalPages}
+        </p>
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+            disabled={loading || page <= 1}
+          >
+            Anterior
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            disabled={loading || page >= totalPages}
+          >
+            Próxima
+          </Button>
+        </div>
       </div>
     </div>
   );

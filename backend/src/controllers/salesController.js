@@ -2,8 +2,35 @@ const service = require("../services/salesService");
 
 async function createSaleController(req, res, next) {
   try {
-    const created = await service.createSale(req.body);
+    const created = await service.createQuote(req.body);
     return res.status(201).json(created);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function listSalesController(req, res, next) {
+  try {
+    const data = await service.listSales(req.query);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function finalizeSaleController(req, res, next) {
+  try {
+    const finalized = await service.finalizeSale(req.params.id, req.body);
+    return res.status(200).json(finalized);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function getSaleByIdController(req, res, next) {
+  try {
+    const data = await service.getSaleById(req.params.id);
+    return res.status(200).json(data);
   } catch (error) {
     return next(error);
   }
@@ -11,4 +38,7 @@ async function createSaleController(req, res, next) {
 
 module.exports = {
   createSaleController,
+  finalizeSaleController,
+  getSaleByIdController,
+  listSalesController,
 };

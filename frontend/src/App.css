@@ -9,7 +9,7 @@
   --color-secondary: #d8a9b3;
   --color-background: #f2e7e9;
   --color-surface: #B5999E;
-  --color-surface-low: #B5999E33;
+  --color-surface-low: #B5999E22;
   --color-surface-lowest: #B5999E33;
   --color-text: #1b1718;
   --color-muted: #5f595a;
@@ -46,12 +46,10 @@ body {
   color: var(--color-text);
 }
 
-h1,
-h2,
-h3,
-.font-editorial {
+h1 ,h2, .font-editorial{
   font-family: var(--font-heading);
 }
+
 
 .hairline-outline {
   outline: 1px solid var(--color-secondary);

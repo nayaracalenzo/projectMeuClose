@@ -28,23 +28,38 @@ async function getBirthdaysOfMonth(query) {
     .sort(sortBirthdays);
 }
 
-async function getAllClients() {
-  const clients = await repository.getAllClients();
+async function getAllClients(query = {}) {
+  const page = Math.max(1, Number(query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 10));
+  const search = query.search ? String(query.search).trim() : undefined;
+  const status = query.status ? String(query.status).trim().toLowerCase() : undefined;
+  const result = await repository.getAllClients({
+    search,
+    status,
+    page,
+    pageSize,
+  });
 
-  return clients.map((client) => ({
-    id: client.idCustomer,
-    fullName: client.fullName,
-    typeCustomer: client.typeCustomer,
-    companyName: client.companyName,
-    document: client.document,
-    rg: client.rg,
-    phone: client.phone,
-    email: client.email,
-    city: client.city,
-    state: client.state,
-    active: client.active,
-    blocked: client.blocked,
-  }));
+  return {
+    items: result.rows.map((client) => ({
+      id: client.idCustomer,
+      fullName: client.fullName,
+      typeCustomer: client.typeCustomer,
+      companyName: client.companyName,
+      document: client.document,
+      rg: client.rg,
+      phone: client.phone,
+      email: client.email,
+      city: client.city,
+      state: client.state,
+      active: client.active,
+      blocked: client.blocked,
+    })),
+    total: Number(result.count || 0),
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(Number(result.count || 0) / pageSize)),
+  };
 }
 
 async function getClientById(id) {

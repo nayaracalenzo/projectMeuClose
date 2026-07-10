@@ -16,7 +16,13 @@ const SaleItemsSchema = (sequelize, DataTypes) => {
         allowNull: true,
       },
       itemType: {
-        type: DataTypes.ENUM("READY_MADE", "CUSTOM_MADE"),
+        type: DataTypes.ENUM(
+          "READY_MADE",
+          "CUSTOM_MADE",
+          "ACCESSORY",
+          "SERVICE",
+          "MISC",
+        ),
         allowNull: false,
       },
       description: {
@@ -58,6 +64,9 @@ const SaleItemsSchema = (sequelize, DataTypes) => {
   SaleItems.associate = (models) => {
     SaleItems.belongsTo(models.Sales, {
       foreignKey: "saleId",
+    });
+    SaleItems.belongsTo(models.Products, {
+      foreignKey: "productId",
     });
   };
 

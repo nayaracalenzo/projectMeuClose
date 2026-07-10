@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useState } from "react";
 import CustomerModal from "./CustomerModal";
 import CustomerRecordsTable from "./CustomerRecordsTable";
 
@@ -30,14 +30,6 @@ const filterOptions: Array<{ value: ReceivablesFilter; label: string }> = [
   { value: "TODAS", label: "Todas" },
 ];
 
-const mockRows: ReceivableRow[] = [
-  { parcela: "001/003", vencimento: "10/05/2026", status: "A Receber", forma: "Carnê", valor: "R$ 180,00", recebido: "R$ 0,00", saldo: "R$ 180,00", filter: "A_RECEBER" },
-  { parcela: "002/003", vencimento: "18/05/2026", status: "Vencido Hoje", forma: "Carnê", valor: "R$ 180,00", recebido: "R$ 0,00", saldo: "R$ 180,00", filter: "VENCIDO_HOJE" },
-  { parcela: "003/003", vencimento: "10/06/2026", status: "A Vencer", forma: "Carnê", valor: "R$ 180,00", recebido: "R$ 0,00", saldo: "R$ 180,00", filter: "A_VENCER" },
-  { parcela: "001/001", vencimento: "02/05/2026", status: "Recebida", forma: "Pix", valor: "R$ 220,00", recebido: "R$ 220,00", saldo: "R$ 0,00", filter: "RECEBIDAS" },
-  { parcela: "001/002", vencimento: "08/05/2026", status: "Atrasada", forma: "Cartão", valor: "R$ 95,00", recebido: "R$ 0,00", saldo: "R$ 95,00", filter: "ATRASADAS" },
-];
-
 type Props = {
   open: boolean;
   clientName: string;
@@ -47,10 +39,7 @@ type Props = {
 function CustomerReceivablesModalComponent({ open, clientName, onClose }: Props) {
   const [filter, setFilter] = useState<ReceivablesFilter>("A_RECEBER");
 
-  const rows = useMemo(() => {
-    if (filter === "TODAS") return mockRows;
-    return mockRows.filter((row) => row.filter === filter);
-  }, [filter]);
+  const rows: ReceivableRow[] = [];
 
   return (
     <CustomerModal
@@ -85,6 +74,7 @@ function CustomerReceivablesModalComponent({ open, clientName, onClose }: Props)
           { key: "saldo", label: "Saldo", align: "right" },
         ]}
         rows={rows}
+        emptyMessage="Nenhum título a receber cadastrado para este cliente."
       />
     </CustomerModal>
   );

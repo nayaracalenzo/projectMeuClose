@@ -1,4 +1,4 @@
-import {
+﻿import {
   ArrowDownCircle,
   ArrowUpCircle,
   Banknote,
@@ -32,7 +32,8 @@ export default function Sidebar() {
   const navigation: NavItem[] = useMemo(
     () => [
       { title: "Home", path: "/home", icon: Home },
-      { title: "Pedidos", path: "/pedidos", icon: Package },
+      { title: "Vendas", path: "/vendas", icon: Wallet },
+      { title: "Produção", path: "/producao", icon: Package },
       { title: "Clientes", path: "/clientes", icon: Users },
       { title: "A Receber", path: "/a-receber", icon: ArrowDownCircle },
       { title: "A Pagar", path: "/a-pagar", icon: ArrowUpCircle },
@@ -54,8 +55,8 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="hidden w-60 bg-surface-lowest/95 backdrop-blur-sm md:block">
-        <div className="w-56 px-6 pb-7 pt-8">
+      <aside className="hidden h-screen max-h-screen w-60 shrink-0 border-r border-outline-variant/35 bg-surface-lowest/95 backdrop-blur-sm md:block">
+        <div className="flex h-full flex-col overflow-hidden px-4 pb-6 pt-8">
           <div className="flex items-center gap-2">
             <img className="h-16 opacity-75" src="/manequim.png" alt="logo" />
             <h1 className="font-editorial text-[31px] uppercase tracking-[0.06em] text-primary">
@@ -65,10 +66,8 @@ export default function Sidebar() {
           <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-neutral-700">
             Ateliê
           </p>
-        </div>
-
-        <div className="flex h-[calc(100vh-120px)] flex-col border-r border-outline-variant/35 pb-6">
-          <ul className="flex-1 space-y-1 pr-2">
+        
+          <ul className="flex-1 space-y-1 mt-3">
             {navigation.map((item) => {
               const Icon = item.icon;
 
@@ -77,7 +76,7 @@ export default function Sidebar() {
                   <NavLink
                     to={item.path}
                     className={({ isActive }) =>
-                      `mx-2 flex items-center gap-3 px-4 py-3.5 transition-colors ${
+                      ` flex items-center gap-3 px-4 py-3.5 transition-colors ${
                         isActive
                           ? "bg-surface text-primary"
                           : "text-neutral-700 hover:bg-surface hover:text-primary"
@@ -102,7 +101,7 @@ export default function Sidebar() {
             })}
           </ul>
 
-          <div className="px-4 pt-4">
+          <div className="mt-auto px-4 pt-4">
             <button
               type="button"
               onClick={() => logoutAndRedirect("logged_out")}

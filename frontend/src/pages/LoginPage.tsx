@@ -1,4 +1,4 @@
-import axios from "axios";
+﻿import axios from "axios";
 import { Eye, EyeClosed } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
@@ -141,6 +141,7 @@ export default function LoginPage() {
               name="user"
               id="user"
               onChange={handleChange}
+              autoComplete="username"
               placeholder="Digite seu usuario"
             />
           </div>
@@ -150,6 +151,7 @@ export default function LoginPage() {
               className="h-12 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 pr-10 text-xl text-[#2a2526] placeholder:text-[#8b8284] shadow-xs transition duration-200 focus:ring-2 focus:ring-[#8a4d5dcf] focus:outline-none"
               type={showPassword ? "text" : "password"}
               name="password"
+              autoComplete="current-password"
               id="password"
               onChange={handleChange}
               placeholder="Digite sua senha"

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { getRequest } from "../services/request.ts";
 import type { ICustomer } from "../interfaces/ICustomer.ts";
 import { ChevronRight } from "lucide-react";
@@ -8,28 +8,39 @@ import { formatContact } from "../utils/formatContact.ts";
 import { Button } from "../components/Button.tsx";
 import { useNavigate } from "react-router-dom";
 
-export default function CustomersPage() {
-  type CustomerRow = {
-    id: number;
-    "Nome do Cliente": string;
-    "CPF/CNPJ": string;
-    Contato: string;
-    Ativo: boolean;
-    Bloqueado?: string;
-    email: string;
-  };
+type CustomerRow = {
+  id: number;
+  "Nome do Cliente": string;
+  "CPF/CNPJ": string;
+  Contato: string;
+  Ativo: boolean;
+  email: string;
+};
 
+interface CustomersResponse {
+  items: ICustomer[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+const PAGE_SIZE = 10;
+
+export default function CustomersPage() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [statusFilter, setStatusFilter] = useState("ativo");
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth < 768 : false,
   );
-  const pageSize = 5;
 
   useEffect(() => {
     const handleResize = () => {
@@ -41,11 +52,26 @@ export default function CustomersPage() {
   }, []);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearch, statusFilter]);
+
+  useEffect(() => {
     const fetchCustomers = async () => {
       try {
         setLoading(true);
-        const data = await getRequest("/clients");
-        const customer = data.map((customer: ICustomer) => ({
+        const params = new URLSearchParams({
+          page: String(currentPage),
+          pageSize: String(PAGE_SIZE),
+          status: statusFilter,
+        });
+
+        if (deferredSearch.trim()) {
+          params.set("search", deferredSearch.trim());
+        }
+
+        const data = (await getRequest(`/clients?${params.toString()}`)) as CustomersResponse;
+        const items = Array.isArray(data.items) ? data.items : [];
+        const customer = items.map((customer: ICustomer) => ({
           id: Number(customer.id),
           "Nome do Cliente": customer.fullName ?? "",
           "CPF/CNPJ": formatDocument(customer.document),
@@ -53,78 +79,46 @@ export default function CustomersPage() {
           Ativo: customer.active,
           email: customer.email?.trim() ?? "",
         }));
+
         setCustomers(customer);
+        setTotalCustomers(Number(data.total) || 0);
+        setTotalPages(Number(data.totalPages) || 1);
       } catch (error) {
         console.error(error);
+        setCustomers([]);
+        setTotalCustomers(0);
+        setTotalPages(1);
       } finally {
         setLoading(false);
       }
     };
 
     fetchCustomers();
-  }, []);
+  }, [currentPage, deferredSearch, statusFilter]);
 
-  const filteredCustomers = customers.filter((customer) => {
-    const searchLower = search.toLowerCase();
-
-    const matchSearch =
-      customer["Nome do Cliente"].toLowerCase().includes(searchLower) ||
-      customer["CPF/CNPJ"].toLowerCase().includes(searchLower);
-
-    const matchStatus =
-      statusFilter === "todos"
-        ? true
-        : statusFilter === "ativo"
-          ? customer.Ativo === true
-          : statusFilter === "inativo"
-            ? customer.Ativo === false
-            : customer.Bloqueado === "bloqueado";
-
-    return matchSearch && matchStatus;
-  });
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredCustomers.length / pageSize),
-  );
-  const startIndex = (currentPage - 1) * pageSize;
-  const paginatedCustomers = filteredCustomers.slice(
-    startIndex,
-    startIndex + pageSize,
-  );
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
+  const catchIdFromTable = (id: number) => {
+    if (selectedId === id) {
+      setSelectedId(null);
+      return;
     }
-  }, [currentPage, totalPages]);
 
-  const catchIdFromTable = (e: number) => {
-    if (selectedId === e) {
-      setSelectedId(0);
-    } else {
-      setSelectedId(e);
-    }
+    setSelectedId(id);
   };
 
   return (
-    <>
-      {loading ? (
+    <div className="w-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
+      {loading && customers.length === 0 ? (
         <div className="mt-50 flex w-full items-center justify-center">
           <CircularProgress />
         </div>
       ) : (
-        <div className="w-full min-w-0 bg-white md:bg-surface-low p-3 sm:p-5">
+        <>
           <div>
-            <div className="mb-5 flex md:justify-between justify-center gap-4">
-              <h1 className="pt-12 pb-6 text-6xl md:text-4xl font-semibold text-primary">
+            <div className="mb-5 flex justify-center gap-4 md:justify-between">
+              <h1 className="pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">
                 Clientes
               </h1>
-              <div className="hidden md:flex gap-2">
+              <div className="hidden gap-2 md:flex">
                 <Button
                   variant="primary"
                   size="md"
@@ -138,9 +132,7 @@ export default function CustomersPage() {
                   disabled={!selectedId}
                   size="md"
                   className="px-5"
-                  onClick={() =>
-                    selectedId && navigate(`/cliente/${selectedId}`)
-                  }
+                  onClick={() => selectedId && navigate(`/cliente/${selectedId}`)}
                 >
                   Mostrar Detalhes
                 </Button>
@@ -149,10 +141,10 @@ export default function CustomersPage() {
             <div className="mb-5 flex w-full min-w-0 flex-col gap-3 md:mb-0 md:flex-row">
               <input
                 type="text"
-                placeholder=" Buscar por nome ou CPF/CNPJ..."
+                placeholder="Buscar por nome ou CPF/CNPJ..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="placeholder:text-xl h-11 py-5 w-full min-w-0 flex-1 rounded-4xl md:rounded border border-gray-800 md:border-outline-variant/50 bg-white px-4 text-[18px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                className="h-11 w-full min-w-0 flex-1 rounded-4xl border border-gray-800 bg-white px-4 py-5 text-[18px] text-primary placeholder:text-xl focus:outline-none focus:ring-2 focus:ring-secondary/70 md:rounded md:border-outline-variant/50"
               />
               {!isMobile && (
                 <FormControl size="medium" className="w-full md:w-auto">
@@ -173,7 +165,6 @@ export default function CustomersPage() {
                   >
                     <MenuItem value="ativo">Clientes Ativos</MenuItem>
                     <MenuItem value="inativo">Clientes Inativos</MenuItem>
-                    <MenuItem value="inativo">Clientes Bloqueados</MenuItem>
                     <MenuItem value="todos">Todos</MenuItem>
                   </Select>
                 </FormControl>
@@ -181,8 +172,19 @@ export default function CustomersPage() {
             </div>
           </div>
 
+          <p className="mb-4 mt-4 text-[13px] tracking-[0.04em] text-neutral-700">
+            {totalCustomers} cliente(s) encontrado(s).
+          </p>
+
+          {loading ? (
+            <div className="mb-4 flex items-center gap-2 text-sm text-neutral-700">
+              <CircularProgress size={18} />
+              Atualizando clientes...
+            </div>
+          ) : null}
+
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full border-separate border-spacing-y-2 mt-2">
+            <table className="mt-2 w-full border-separate border-spacing-y-2">
               <thead>
                 <tr className="text-left">
                   <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
@@ -200,7 +202,7 @@ export default function CustomersPage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedCustomers.map((customer) => (
+                {customers.map((customer) => (
                   <tr
                     key={customer.id}
                     onClick={() => catchIdFromTable(customer.id)}
@@ -247,15 +249,15 @@ export default function CustomersPage() {
             </table>
           </div>
 
-          <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:bg-surface-lowest  md:hidden">
-            {filteredCustomers.map((customer) => (
+          <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
+            {customers.map((customer) => (
               <button
                 key={customer.id}
                 type="button"
                 onClick={() => navigate(`/cliente/${customer.id}`)}
                 className="flex w-full items-center justify-between px-4 py-10 text-left transition-colors hover:bg-surface"
               >
-                <div className="min-w-0 pr-3 flex gap-2">
+                <div className="flex min-w-0 gap-2 pr-3">
                   <p className="truncate text-lg font-semibold text-primary">
                     {customer["Nome do Cliente"]}
                   </p>
@@ -278,9 +280,7 @@ export default function CustomersPage() {
 
           <div className="mt-4 hidden items-center justify-between md:flex">
             <p className="text-[13px] tracking-[0.04em] text-neutral-700">
-              Exibindo {filteredCustomers.length === 0 ? 0 : startIndex + 1}-
-              {Math.min(startIndex + pageSize, filteredCustomers.length)} de{" "}
-              {filteredCustomers.length}
+              Página {currentPage} de {totalPages}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -291,23 +291,18 @@ export default function CustomersPage() {
               >
                 Anterior
               </Button>
-              <span className="px-2 text-sm text-primary">
-                {currentPage} / {totalPages}
-              </span>
               <Button
                 variant="secondary"
                 size="sm"
                 disabled={currentPage === totalPages}
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                }
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
               >
                 Próxima
               </Button>
             </div>
           </div>
-        </div>
+        </>
       )}
-    </>
+    </div>
   );
 }

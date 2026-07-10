@@ -10,7 +10,7 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
       },
       saleId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       receivableInstallmentId: {
         type: DataTypes.INTEGER,
@@ -18,6 +18,10 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
       },
       paymentTypeId: {
         type: DataTypes.INTEGER,
+        allowNull: false,
+      },
+      receiptType: {
+        type: DataTypes.ENUM("ENTRY", "SALE_FULL", "INSTALLMENT"),
         allowNull: false,
       },
       amount: {

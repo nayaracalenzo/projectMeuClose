@@ -32,8 +32,8 @@ const SalesSchema = (sequelize, DataTypes) => {
         allowNull: false,
       },
       status: {
-        type: DataTypes.ENUM("OPEN", "COMPLETED", "CANCELLED"),
-        defaultValue: "OPEN",
+        type: DataTypes.ENUM("BUDGET", "COMPLETED", "CANCELLED"),
+        defaultValue: "BUDGET",
       },
       dueDate: {
         type: DataTypes.DATE,
