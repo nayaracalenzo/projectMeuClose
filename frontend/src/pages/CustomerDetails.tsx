@@ -678,6 +678,7 @@ export default function CustomerDetails() {
 
       <CustomerSalesModal
         open={isSalesModalOpen}
+        clientId={client.id}
         clientName={String(client.fullName || client.companyName || "Cliente")}
         onClose={() => setIsSalesModalOpen(false)}
       />
@@ -737,6 +738,7 @@ export default function CustomerDetails() {
 
       <CustomerReceivablesModal
         open={isReceivablesModalOpen}
+        clientId={client.id}
         clientName={String(client.fullName || client.companyName || "Cliente")}
         onClose={() => setIsReceivablesModalOpen(false)}
       />

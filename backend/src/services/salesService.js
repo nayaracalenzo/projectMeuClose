@@ -863,16 +863,21 @@ async function getSaleById(id) {
   return mapSaleDetails(sale);
 }
 
-async function listSales({ page, pageSize, status, search } = {}) {
+async function listSales({ page, pageSize, status, search, customerId } = {}) {
   const normalizedPage = Math.max(1, Number(page) || 1);
   const normalizedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 10));
   const normalizedSearch = search ? String(search).trim() : undefined;
   const normalizedStatus = status ? String(status).trim().toUpperCase() : undefined;
+  const normalizedCustomerId =
+    Number.isInteger(Number(customerId)) && Number(customerId) > 0
+      ? Number(customerId)
+      : undefined;
   const result = await repository.listSales({
     page: normalizedPage,
     pageSize: normalizedPageSize,
     status: normalizedStatus,
     search: normalizedSearch,
+    customerId: normalizedCustomerId,
   });
   const total = Number(result.count || 0);
 

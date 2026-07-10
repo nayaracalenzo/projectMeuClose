@@ -389,9 +389,13 @@ async function getSaleById(idSale) {
   });
 }
 
-async function listSales({ page = 1, pageSize = 10, status, search } = {}) {
+async function listSales({ page = 1, pageSize = 10, status, search, customerId } = {}) {
   const where = buildStatusWhere(status);
   const legacyCompletedSignal = buildLegacyCompletedSignal();
+
+  if (customerId && Number(customerId) > 0) {
+    where.customerId = Number(customerId);
+  }
 
   return Sales.findAndCountAll({
     where,
