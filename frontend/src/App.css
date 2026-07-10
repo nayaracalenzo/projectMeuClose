@@ -46,7 +46,7 @@ body {
   color: var(--color-text);
 }
 
-h1 , .font-editorial{
+h1 ,h2, .font-editorial{
   font-family: var(--font-heading);
 }
 

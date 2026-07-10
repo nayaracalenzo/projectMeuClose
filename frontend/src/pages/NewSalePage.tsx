@@ -1049,7 +1049,7 @@ export default function NewSalePage() {
     }
 
     setSaveMessage(
-      "OrÃ§amento gerado com sucesso. Agora informe a forma de pagamento para concluir o pedido.",
+      "Orçamento gerado com sucesso. Agora informe a forma de pagamento para concluir o pedido.",
     );
     setStep(4);
   };

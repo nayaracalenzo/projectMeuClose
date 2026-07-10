@@ -52,9 +52,11 @@ const formatCustomerName = (value?: string | null) => {
 };
 
 const formatSaleStatusLabel = (value?: string | null) => {
-  const normalized = String(value || "").trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
 
-  if (normalized === "BUDGET") return "OrÃ§amento";
+  if (normalized === "BUDGET") return "Orçamento";
   if (normalized === "COMPLETED") return "ConcluÃ­do";
   if (normalized === "CANCELLED") return "Cancelado";
 
@@ -79,7 +81,10 @@ export default function SalesPage() {
     return Number.isInteger(value) && value > 0 ? value : null;
   }, [searchParams]);
 
-  const hasExplicitTabParam = useMemo(() => searchParams.has("tab"), [searchParams]);
+  const hasExplicitTabParam = useMemo(
+    () => searchParams.has("tab"),
+    [searchParams],
+  );
 
   useEffect(() => {
     if (requestedTab === "budgets" || requestedTab === "orders") {
@@ -102,8 +107,12 @@ export default function SalesPage() {
     const resolveDefaultTab = async () => {
       try {
         const [completedData, budgetData] = await Promise.all([
-          getRequest("/sales?page=1&pageSize=1&status=COMPLETED") as Promise<SalesCountResponse>,
-          getRequest("/sales?page=1&pageSize=1&status=BUDGET") as Promise<SalesCountResponse>,
+          getRequest(
+            "/sales?page=1&pageSize=1&status=COMPLETED",
+          ) as Promise<SalesCountResponse>,
+          getRequest(
+            "/sales?page=1&pageSize=1&status=BUDGET",
+          ) as Promise<SalesCountResponse>,
         ]);
 
         const completedTotal = Number(completedData?.total) || 0;
@@ -111,11 +120,14 @@ export default function SalesPage() {
 
         if (completedTotal === 0 && budgetTotal > 0) {
           setViewMode("budgets");
-          setSearchParams((current) => {
-            const next = new URLSearchParams(current);
-            next.set("tab", "budgets");
-            return next;
-          }, { replace: true });
+          setSearchParams(
+            (current) => {
+              const next = new URLSearchParams(current);
+              next.set("tab", "budgets");
+              return next;
+            },
+            { replace: true },
+          );
         }
       } catch {
         // Keep the default tab when counts cannot be loaded.
@@ -137,7 +149,9 @@ export default function SalesPage() {
           status: viewMode === "budgets" ? "BUDGET" : "COMPLETED",
         });
 
-        const data = (await getRequest(`/sales?${params.toString()}`)) as SalesResponse;
+        const data = (await getRequest(
+          `/sales?${params.toString()}`,
+        )) as SalesResponse;
         setSales(Array.isArray(data.items) ? data.items : []);
         setTotalItems(Number(data.total) || 0);
         setTotalPages(Number(data.totalPages) || 1);
@@ -156,9 +170,9 @@ export default function SalesPage() {
 
   const headingText = loading
     ? viewMode === "budgets"
-      ? "Carregando orÃ§amentos..."
+      ? "Carregando orçamentos..."
       : "Carregando pedidos..."
-    : `${totalItems} ${viewMode === "budgets" ? "orÃ§amento(s)" : "pedido(s)"} encontrado(s).`;
+    : `${totalItems} ${viewMode === "budgets" ? "orçamento(s)" : "pedido(s)"} encontrado(s).`;
 
   const changeTab = (nextTab: SalesViewMode) => {
     const nextParams = new URLSearchParams(searchParams);
@@ -175,7 +189,9 @@ export default function SalesPage() {
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5 flex justify-center gap-4 md:justify-between">
         <div>
-          <h1 className="pb-2 pt-12 text-6xl font-semibold text-primary md:text-4xl">Vendas</h1>
+          <h1 className="pb-2 pt-12 text-6xl font-semibold text-primary md:text-4xl">
+            Vendas
+          </h1>
           <p className="text-sm text-neutral-700">{headingText}</p>
         </div>
         <div className="hidden gap-2 md:flex">
@@ -185,7 +201,7 @@ export default function SalesPage() {
             className="px-5"
             onClick={() => navigate("/nova-venda")}
           >
-            + Nova Venda/OrÃ§amento
+            + Nova Venda/Orçamento
           </Button>
         </div>
       </div>
@@ -212,7 +228,7 @@ export default function SalesPage() {
                 : "text-neutral-700"
             }`}
           >
-            OrÃ§amentos
+            Orçamentos
           </button>
         </div>
       </div>
@@ -228,12 +244,20 @@ export default function SalesPage() {
           <thead>
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
-                {viewMode === "budgets" ? "OrÃ§amento" : "Pedido"}
+                {viewMode === "budgets" ? "Orçamento" : "Pedido"}
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Cliente</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Itens</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Data</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Status</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Cliente
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Itens
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Data
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Status
+              </th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary text-right">
                 Valor
               </th>
@@ -242,14 +266,22 @@ export default function SalesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                <td
+                  colSpan={6}
+                  className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
+                >
                   Carregando vendas...
                 </td>
               </tr>
             ) : sales.length === 0 ? (
               <tr>
-                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
-                  {viewMode === "budgets" ? "Nenhum orÃ§amento cadastrado" : "Nenhum pedido cadastrado"}
+                <td
+                  colSpan={6}
+                  className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
+                >
+                  {viewMode === "budgets"
+                    ? "Nenhum orçamento cadastrado"
+                    : "Nenhum pedido cadastrado"}
                 </td>
               </tr>
             ) : (
@@ -261,12 +293,18 @@ export default function SalesPage() {
                   }`}
                   onClick={() => navigate(`/venda/${sale.id}`)}
                 >
-                  <td className="px-4 py-3 text-[14px] font-medium text-primary">#{sale.id}</td>
+                  <td className="px-4 py-3 text-[14px] font-medium text-primary">
+                    #{sale.id}
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatCustomerName(sale.customerName)}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{sale.itemsCount}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(sale.createdAt)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {sale.itemsCount}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {formatDate(sale.createdAt)}
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     <span className="inline-flex rounded-full bg-secondary px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-primary">
                       {formatSaleStatusLabel(sale.status)}
@@ -284,10 +322,14 @@ export default function SalesPage() {
 
       <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
         {loading ? (
-          <div className="px-4 py-6 text-center text-sm text-neutral-700">Carregando vendas...</div>
+          <div className="px-4 py-6 text-center text-sm text-neutral-700">
+            Carregando vendas...
+          </div>
         ) : sales.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
-            {viewMode === "budgets" ? "Nenhum orÃ§amento cadastrado" : "Nenhum pedido cadastrado"}
+            {viewMode === "budgets"
+              ? "Nenhum orçamento cadastrado"
+              : "Nenhum pedido cadastrado"}
           </div>
         ) : (
           sales.map((sale) => (
@@ -300,13 +342,23 @@ export default function SalesPage() {
               onClick={() => navigate(`/venda/${sale.id}`)}
             >
               <p className="text-xs text-neutral-700">
-                {viewMode === "budgets" ? "OrÃ§amento" : "Pedido"} #{sale.id}
+                {viewMode === "budgets" ? "Orçamento" : "Pedido"} #{sale.id}
               </p>
-              <p className="text-sm font-semibold text-primary">{formatCustomerName(sale.customerName)}</p>
-              <p className="text-xs text-neutral-700">Itens: {sale.itemsCount}</p>
-              <p className="text-xs text-neutral-700">Data: {formatDate(sale.createdAt)}</p>
-              <p className="text-xs text-neutral-700">Status: {formatSaleStatusLabel(sale.status)}</p>
-              <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(sale.finalAmount)}</p>
+              <p className="text-sm font-semibold text-primary">
+                {formatCustomerName(sale.customerName)}
+              </p>
+              <p className="text-xs text-neutral-700">
+                Itens: {sale.itemsCount}
+              </p>
+              <p className="text-xs text-neutral-700">
+                Data: {formatDate(sale.createdAt)}
+              </p>
+              <p className="text-xs text-neutral-700">
+                Status: {formatSaleStatusLabel(sale.status)}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-primary">
+                {formatCurrency(sale.finalAmount)}
+              </p>
             </button>
           ))
         )}
@@ -328,7 +380,9 @@ export default function SalesPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
             disabled={loading || page >= totalPages}
           >
             PrÃ³xima
@@ -338,4 +392,3 @@ export default function SalesPage() {
     </div>
   );
 }
-

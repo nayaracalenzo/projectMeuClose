@@ -591,19 +591,17 @@ export default function CustomerDetails() {
               : "Salvar alteracoes antes de sair?"
         }
         subtitle={
-          confirmationModal.type === "delete"
-            ? "Esta exclusao e logica: o cliente sai do sistema, mas permanece salvo no banco."
-            : confirmationModal.type === "deactivate"
+          confirmationModal.type === "deactivate"
               ? "A desativacao impede novas compras para este cliente."
-              : "Voce fez alteracoes neste cadastro."
+              : ""
         }
         onClose={closeConfirmationModal}
       >
         {confirmationModal.type === "delete" ? (
           <div className="space-y-5">
             <p className="text-sm text-neutral-700">
-              Tem certeza que deseja excluir este cliente? Caso ele tenha debitos, estes tambem
-              serao excluidos.
+              Tem certeza que deseja excluir este cliente? Caso ele tenha débitos, estes também
+              serão excluidos.
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="secondary" size="md" onClick={closeConfirmationModal}>
