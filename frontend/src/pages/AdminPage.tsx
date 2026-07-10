@@ -1250,7 +1250,7 @@ export default function AdminPage() {
                       fullName: e.target.value,
                     }))
                   }
-                  placeholder="Nome completo / razao social"
+                  placeholder="Nome completo / razão social"
                   className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
                   required
                 />

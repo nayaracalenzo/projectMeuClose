@@ -109,25 +109,25 @@ function validatePayload(resource, payload, isCreate) {
 
   if (resource === "suppliers") {
     if (isCreate && !payload.fullName) {
-      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
+      throw createAdminResourceError("Nome do fornecedor é obrigatório.");
     }
     if (!isCreate && "fullName" in payload && !payload.fullName) {
-      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
+      throw createAdminResourceError("Nome do fornecedor é obrigatório.");
     }
     return;
   }
 
   if (resource === "employees") {
     if (isCreate && !payload.fullName) {
-      throw createAdminResourceError("Nome da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Nome da funcionaria é obrigatório.");
     }
 
     if (isCreate && !payload.shortName) {
-      throw createAdminResourceError("Nome curto da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Nome curto da funcionaria é obrigatório.");
     }
 
     if (isCreate && !payload.roleId) {
-      throw createAdminResourceError("Cargo da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Cargo da funcionaria é obrigatório.");
     }
   } else if (isCreate && !payload.desc) {
     throw createAdminResourceError("Descrição e obrigatoria.");
@@ -167,7 +167,7 @@ async function updateResource(resource, id, body) {
   }
 
   if (updated === undefined) {
-    throw notFoundError("Registro nao encontrado.");
+    throw notFoundError("Registro não encontrado.");
   }
 
   return updated;
@@ -181,7 +181,7 @@ async function deleteResource(resource, id) {
   }
 
   if (removed === undefined) {
-    throw notFoundError("Registro nao encontrado.");
+    throw notFoundError("Registro não encontrado.");
   }
 
   return true;

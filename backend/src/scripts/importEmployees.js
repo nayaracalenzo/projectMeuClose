@@ -152,7 +152,7 @@ function parseLegacyDateTime(value) {
 }
 
 function resolveDocument(row) {
-  const documentValue = getFirstFilled(row, [ "cpf"]);
+  const documentValue = getFirstFilled(row, ["cpf"]);
   return normalizeDigits(documentValue);
 }
 
@@ -186,11 +186,11 @@ function getEmployeeValidationIssues(employee) {
   const issues = [];
 
   if (!employee.fullName) {
-    issues.push("Nome completo e obrigatorio.");
+    issues.push("Nome completo é obrigatório.");
   }
 
   if (!employee.shortName) {
-    issues.push("Nome curto e obrigatorio.");
+    issues.push("Nome curto é obrigatório.");
   }
 
   if (employee.document && employee.document.length !== 11 && employee.document.length !== 14) {
@@ -202,7 +202,7 @@ function getEmployeeValidationIssues(employee) {
   }
 
   if (!employee.roleId) {
-    issues.push("RoleId e obrigatorio.");
+    issues.push("RoleId é obrigatório.");
   }
 
   return issues;
@@ -253,16 +253,16 @@ async function importEmployees() {
             fullName: normalizeText(getFirstFilled(row, ["nom"])),
             shortName: uniqueShortName,
             document: resolveDocument(row),
-            rg: normalizeText(getFirstFilled(row, ["rg", ])),
+            rg: normalizeText(getFirstFilled(row, ["rg",])),
             zipCode: normalizeDigits(getFirstFilled(row, ["cep"])),
-            street: normalizeText(getFirstFilled(row, [ "ende"])),
+            street: normalizeText(getFirstFilled(row, ["ende"])),
             number: null,
             complement: null,
             neighborhood: normalizeText(getFirstFilled(row, ["bai"])),
             city: normalizeText(getFirstFilled(row, ["mun"])),
             state: normalizeText(getFirstFilled(row, ["uf"]))?.toUpperCase() || null,
             primaryPhone: normalizePhone(getFirstFilled(row, ["cel"])),
-            secondaryPhone: normalizePhone(getFirstFilled(row, ["telCom","telRes"])),
+            secondaryPhone: normalizePhone(getFirstFilled(row, ["telCom", "telRes"])),
             nameSecPhone: null,
             email: normalizeEmail(getFirstFilled(row, ["ema"])),
             comment: normalizeText(getFirstFilled(row, ["obs"])),

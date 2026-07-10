@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
-import CustomerFormFields, { type CustomerFormValues } from "../components/CustomerFormFields";
+import CustomerFormFields, {
+  type CustomerFormValues,
+} from "../components/CustomerFormFields";
 import CustomerModal from "../components/CustomerModal";
+import NoticeToast from "../components/NoticeToast";
 import { getRequest, postRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { maskPhone } from "../utils/maskPhone";
@@ -15,47 +18,106 @@ type ProfessionOption = {
   name: string;
 };
 
+type ValidationIssue = {
+  key: "document" | "phone" | "fullName" | "companyName";
+  label: string;
+  message: string;
+};
+
+type NoticeState = {
+  open: boolean;
+  tone: "success" | "warning" | "error";
+  title?: string;
+  message: string;
+};
+
 type NewCustomerForm = CustomerFormValues;
+
+const EMPTY_NOTICE: NoticeState = {
+  open: false,
+  tone: "warning",
+  title: undefined,
+  message: "",
+};
 
 const onlyDigits = (value: string) => value.replace(/\D/g, "");
 
-const getCustomerValidationMessage = (form: NewCustomerForm) => {
+const getCustomerValidationIssues = (
+  form: NewCustomerForm,
+): ValidationIssue[] => {
+  const issues: ValidationIssue[] = [];
   const documentDigits = onlyDigits(form.document);
   const phoneDigits = onlyDigits(form.phone);
 
-  if (!form.typeCustomer) {
-    return "Tipo e obrigatorio.";
-  }
-
   if (!phoneDigits) {
-    return "Telefone e obrigatorio.";
+    issues.push({
+      key: "phone",
+      label: "Telefone",
+      message: "Telefone é obrigatório.",
+    });
   }
 
   if (form.typeCustomer === "INDIVIDUAL") {
-    if (!documentDigits) return "CPF e obrigatorio.";
-    if (documentDigits.length !== 11) return "CPF deve conter 11 digitos.";
-    if (!form.fullName.trim()) return "Nome completo e obrigatorio para pessoa fisica.";
+    if (!documentDigits) {
+      issues.push({
+        key: "document",
+        label: "CPF",
+        message: "CPF é obrigatório.",
+      });
+    } else if (documentDigits.length !== 11) {
+      issues.push({
+        key: "document",
+        label: "CPF",
+        message: "CPF deve conter 11 digitos.",
+      });
+    }
+
+    if (!form.fullName.trim()) {
+      issues.push({
+        key: "fullName",
+        label: "Nome",
+        message: "Nome completo é obrigatório para pessoa fisica.",
+      });
+    }
   }
 
   if (form.typeCustomer === "COMPANY") {
-    if (!documentDigits) return "CNPJ e obrigatorio.";
-    if (documentDigits.length !== 14) return "CNPJ deve conter 14 digitos.";
-    if (!form.companyName.trim()) return "Razão social é obrigatória para pessoa jurídica.";
+    if (!documentDigits) {
+      issues.push({
+        key: "document",
+        label: "CNPJ",
+        message: "CNPJ é obrigatório.",
+      });
+    } else if (documentDigits.length !== 14) {
+      issues.push({
+        key: "document",
+        label: "CNPJ",
+        message: "CNPJ deve conter 14 digitos.",
+      });
+    }
+
+    if (!form.companyName.trim()) {
+      issues.push({
+        key: "companyName",
+        label: "Razão social",
+        message: "Razão social é obrigatória para pessoa jurídica.",
+      });
+    }
   }
 
-  return null;
+  return issues;
 };
 
 export default function NewCustomer() {
   const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [zipLookupMessage, setZipLookupMessage] = useState("");
   const [professionModalOpen, setProfessionModalOpen] = useState(false);
   const [professionName, setProfessionName] = useState("");
   const [professionError, setProfessionError] = useState("");
   const [professionSaving, setProfessionSaving] = useState(false);
   const [professions, setProfessions] = useState<ProfessionOption[]>([]);
+  const [notice, setNotice] = useState<NoticeState>(EMPTY_NOTICE);
   const [form, setForm] = useState<NewCustomerForm>({
     typeCustomer: "INDIVIDUAL",
     document: "",
@@ -105,7 +167,7 @@ export default function NewCustomer() {
       setZipLookupMessage("Buscando endereco pelo CEP...");
       const address = await fetchAddressByZipCode(digits);
       if (!address) {
-        setZipLookupMessage("CEP nao encontrado.");
+        setZipLookupMessage("CEP não encontrado.");
         return;
       }
 
@@ -151,7 +213,9 @@ export default function NewCustomer() {
     setProfessionSaving(false);
   };
 
-  const handleCreateProfession = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleCreateProfession = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
 
     const normalizedName = professionName.trim().replace(/\s+/g, " ");
@@ -170,13 +234,18 @@ export default function NewCustomer() {
       })) as ProfessionOption;
 
       setProfessions((prev) =>
-        [...prev, created].sort((left, right) => left.name.localeCompare(right.name, "pt-BR")),
+        [...prev, created].sort((left, right) =>
+          left.name.localeCompare(right.name, "pt-BR"),
+        ),
       );
       setField("professionId", String(created.id));
       closeProfessionModal();
     } catch (error: unknown) {
       setProfessionError(
-        getUserFacingApiErrorMessage(error, "Nao foi possivel cadastrar a profissao."),
+        getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel cadastrar a profissao.",
+        ),
       );
     } finally {
       setProfessionSaving(false);
@@ -186,15 +255,19 @@ export default function NewCustomer() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const validationMessage = getCustomerValidationMessage(form);
-    if (validationMessage) {
-      setMessage(validationMessage);
+    const validationIssues = getCustomerValidationIssues(form);
+    if (validationIssues.length > 0) {
+      setNotice({
+        open: true,
+        tone: "warning",
+        title: "Campos obrigatórios",
+        message: validationIssues.map((issue) => issue.message).join(" "),
+      });
       return;
     }
 
     try {
       setSaving(true);
-      setMessage("");
 
       await postRequest("/clients", {
         typeCustomer: form.typeCustomer,
@@ -219,7 +292,15 @@ export default function NewCustomer() {
 
       navigate("/clientes");
     } catch (error: unknown) {
-      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível salvar o cliente."));
+      setNotice({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel salvar",
+        message: getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel salvar o cliente.",
+        ),
+      });
     } finally {
       setSaving(false);
     }
@@ -245,10 +326,12 @@ export default function NewCustomer() {
             onCreateProfessionRequest={() => setProfessionModalOpen(true)}
           />
 
-          {message && <p className="text-sm text-neutral-700">{message}</p>}
-
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate(-1)}
+            >
               Cancelar
             </Button>
             <Button type="submit" variant="primary" disabled={saving}>
@@ -273,7 +356,10 @@ export default function NewCustomer() {
 
           <form className="space-y-4" onSubmit={handleCreateProfession}>
             <div>
-              <label className="mb-1 block text-sm text-primary" htmlFor="profession-name-create">
+              <label
+                className="mb-1 block text-sm text-primary"
+                htmlFor="profession-name-create"
+              >
                 Nome da profissao
               </label>
               <input
@@ -287,16 +373,32 @@ export default function NewCustomer() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={closeProfessionModal}>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={closeProfessionModal}
+              >
                 Cancelar
               </Button>
-              <Button type="submit" variant="primary" disabled={professionSaving}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={professionSaving}
+              >
                 {professionSaving ? "Salvando..." : "Salvar profissao"}
               </Button>
             </div>
           </form>
         </div>
       </CustomerModal>
+
+      <NoticeToast
+        open={notice.open}
+        tone={notice.tone}
+        title={notice.title}
+        message={notice.message}
+        onClose={() => setNotice(EMPTY_NOTICE)}
+      />
     </div>
   );
 }

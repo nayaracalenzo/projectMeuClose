@@ -2,7 +2,9 @@ import { CircularProgress } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/Button";
-import CustomerFormFields, { type CustomerFormValues } from "../components/CustomerFormFields";
+import CustomerFormFields, {
+  type CustomerFormValues,
+} from "../components/CustomerFormFields";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
 import CustomerReceivablesModal from "../components/CustomerReceivablesModal";
@@ -103,8 +105,11 @@ const toEditableForm = (clientData: ClientDetails): Partial<ClientDetails> => ({
   zipCode: maskCep(clientData.zipCode || ""),
 });
 
-const toSharedFormValues = (form: Partial<ClientDetails>): CustomerFormValues => ({
-  typeCustomer: (form.typeCustomer || "INDIVIDUAL") as CustomerFormValues["typeCustomer"],
+const toSharedFormValues = (
+  form: Partial<ClientDetails>,
+): CustomerFormValues => ({
+  typeCustomer: (form.typeCustomer ||
+    "INDIVIDUAL") as CustomerFormValues["typeCustomer"],
   document: String(form.document || ""),
   rg: String(form.rg || ""),
   fullName: String(form.fullName || ""),
@@ -121,7 +126,9 @@ const toSharedFormValues = (form: Partial<ClientDetails>): CustomerFormValues =>
   city: String(form.city || ""),
   state: String(form.state || ""),
   professionId:
-    form.professionId === null || form.professionId === undefined ? "" : String(form.professionId),
+    form.professionId === null || form.professionId === undefined
+      ? ""
+      : String(form.professionId),
   comment: String(form.comment || ""),
 });
 
@@ -132,7 +139,9 @@ const serializeEditableState = (form: Partial<ClientDetails>) =>
     blocked: Boolean(form.blocked),
   });
 
-const getClientValidationIssues = (form: Partial<ClientDetails>): ValidationIssue[] => {
+const getClientValidationIssues = (
+  form: Partial<ClientDetails>,
+): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
   const typeCustomer = form.typeCustomer;
   const documentDigits = onlyDigits(form.document);
@@ -144,13 +153,17 @@ const getClientValidationIssues = (form: Partial<ClientDetails>): ValidationIssu
     issues.push({
       key: "phone",
       label: "Telefone",
-      message: "Telefone e obrigatorio.",
+      message: "Telefone é obrigatório.",
     });
   }
 
   if (typeCustomer === "INDIVIDUAL") {
     if (!documentDigits) {
-      issues.push({ key: "document", label: "CPF", message: "CPF e obrigatorio." });
+      issues.push({
+        key: "document",
+        label: "CPF",
+        message: "CPF é obrigatório.",
+      });
     } else if (documentDigits.length !== 11) {
       issues.push({
         key: "document",
@@ -163,14 +176,18 @@ const getClientValidationIssues = (form: Partial<ClientDetails>): ValidationIssu
       issues.push({
         key: "fullName",
         label: "Nome",
-        message: "Nome completo e obrigatorio para pessoa fisica.",
+        message: "Nome completo é obrigatório para pessoa fisica.",
       });
     }
   }
 
   if (typeCustomer === "COMPANY") {
     if (!documentDigits) {
-      issues.push({ key: "document", label: "CNPJ", message: "CNPJ e obrigatorio." });
+      issues.push({
+        key: "document",
+        label: "CNPJ",
+        message: "CNPJ é obrigatório.",
+      });
     } else if (documentDigits.length !== 14) {
       issues.push({
         key: "document",
@@ -182,8 +199,8 @@ const getClientValidationIssues = (form: Partial<ClientDetails>): ValidationIssu
     if (!companyName) {
       issues.push({
         key: "companyName",
-        label: "Razao social",
-        message: "Razao social e obrigatoria para pessoa juridica.",
+        label: "Razão social",
+        message: "Razão social é obrigatória para pessoa jurídica.",
       });
     }
   }
@@ -198,7 +215,6 @@ export default function CustomerDetails() {
   const [error, setError] = useState("");
   const [client, setClient] = useState<ClientDetails | null>(null);
   const [saving, setSaving] = useState(false);
-  const [saveMessage, setSaveMessage] = useState("");
   const [zipLookupMessage, setZipLookupMessage] = useState("");
   const [professionModalOpen, setProfessionModalOpen] = useState(false);
   const [professionName, setProfessionName] = useState("");
@@ -209,9 +225,8 @@ export default function CustomerDetails() {
   const [isReceivablesModalOpen, setIsReceivablesModalOpen] = useState(false);
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(EMPTY_NOTICE);
-  const [confirmationModal, setConfirmationModal] = useState<ConfirmationModalState>(
-    EMPTY_CONFIRMATION_MODAL,
-  );
+  const [confirmationModal, setConfirmationModal] =
+    useState<ConfirmationModalState>(EMPTY_CONFIRMATION_MODAL);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -228,7 +243,7 @@ export default function CustomerDetails() {
       } catch (err: unknown) {
         const maybeAxiosError = err as { response?: { status?: number } };
         if (maybeAxiosError.response?.status === 404) {
-          setError("Cliente nao encontrado.");
+          setError("Cliente não encontrado.");
         } else {
           setError("Erro ao carregar detalhes do cliente.");
         }
@@ -275,7 +290,7 @@ export default function CustomerDetails() {
       const address = await fetchAddressByZipCode(digits);
 
       if (!address) {
-        setZipLookupMessage("CEP nao encontrado.");
+        setZipLookupMessage("CEP não encontrado.");
         return;
       }
 
@@ -317,7 +332,12 @@ export default function CustomerDetails() {
     }
 
     if (key === "state") {
-      setField("state", String(value || "").toUpperCase().slice(0, 2));
+      setField(
+        "state",
+        String(value || "")
+          .toUpperCase()
+          .slice(0, 2),
+      );
       return;
     }
 
@@ -331,7 +351,9 @@ export default function CustomerDetails() {
     setProfessionSaving(false);
   };
 
-  const handleCreateProfession = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleCreateProfession = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
 
     const normalizedName = professionName.trim().replace(/\s+/g, " ");
@@ -350,13 +372,18 @@ export default function CustomerDetails() {
       })) as ProfessionOption;
 
       setProfessions((prev) =>
-        [...prev, created].sort((left, right) => left.name.localeCompare(right.name, "pt-BR")),
+        [...prev, created].sort((left, right) =>
+          left.name.localeCompare(right.name, "pt-BR"),
+        ),
       );
       setField("professionId", Number(created.id));
       closeProfessionModal();
     } catch (err: unknown) {
       setProfessionError(
-        getUserFacingApiErrorMessage(err, "Nao foi possivel cadastrar a profissao."),
+        getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel cadastrar a profissao.",
+        ),
       );
     } finally {
       setProfessionSaving(false);
@@ -385,7 +412,10 @@ export default function CustomerDetails() {
     });
   };
 
-  const validationIssues = useMemo(() => getClientValidationIssues(form), [form]);
+  const validationIssues = useMemo(
+    () => getClientValidationIssues(form),
+    [form],
+  );
 
   const buildPayload = (overrides: Partial<ClientDetails> = {}) => ({
     typeCustomer: overrides.typeCustomer ?? form.typeCustomer,
@@ -408,7 +438,7 @@ export default function CustomerDetails() {
         ? String(overrides.state ?? form.state ?? "")
             .toUpperCase()
             .slice(0, 2)
-        : overrides.state ?? form.state,
+        : (overrides.state ?? form.state),
     active: overrides.active ?? form.active,
     blocked: overrides.blocked ?? form.blocked,
     professionId: overrides.professionId ?? form.professionId,
@@ -422,15 +452,14 @@ export default function CustomerDetails() {
       setNotice({
         open: true,
         tone: "warning",
-        title: "Campos obrigatorios",
-        message: validationIssues[0].message,
+        title: "Campos obrigatórios",
+        message: validationIssues.map((issue) => issue.message).join(" "),
       });
       return false;
     }
 
     try {
       setSaving(true);
-      setSaveMessage("");
 
       const updated = await updateRequest(`/clients/${id}`, buildPayload());
       setClient(updated as ClientDetails);
@@ -443,9 +472,15 @@ export default function CustomerDetails() {
       });
       return true;
     } catch (err: unknown) {
-      setSaveMessage(
-        getUserFacingApiErrorMessage(err, "Nao foi possivel salvar as alteracoes."),
-      );
+      setNotice({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel salvar",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel salvar as alteracoes.",
+        ),
+      });
       return false;
     } finally {
       setSaving(false);
@@ -457,13 +492,16 @@ export default function CustomerDetails() {
 
     try {
       setSaving(true);
-      setSaveMessage("");
-      await updateRequest(`/clients/${id}`, buildPayload({ active: false, blocked: true }));
+      await updateRequest(
+        `/clients/${id}`,
+        buildPayload({ active: false, blocked: true }),
+      );
       setNotice({
         open: true,
         tone: "success",
         title: "Cliente excluido",
-        message: "O cliente foi removido da listagem e mantido no banco como excluido.",
+        message:
+          "O cliente foi removido da listagem e mantido no banco como excluido.",
       });
       navigate("/clientes");
     } catch (err: unknown) {
@@ -548,8 +586,14 @@ export default function CustomerDetails() {
         <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">
           Detalhe do Cliente
         </h1>
-        <p className="mb-4 text-neutral-700">{error || "Cliente nao encontrado."}</p>
-        <Button variant="secondary" size="md" onClick={() => navigate("/clientes")}>
+        <p className="mb-4 text-neutral-700">
+          {error || "Cliente não encontrado."}
+        </p>
+        <Button
+          variant="secondary"
+          size="md"
+          onClick={() => navigate("/clientes")}
+        >
           Voltar para clientes
         </Button>
       </div>
@@ -565,10 +609,18 @@ export default function CustomerDetails() {
           Detalhe do Cliente
         </h1>
         <div className="hidden gap-2 md:flex">
-          <Button variant="secondary" size="md" onClick={() => void handleLeavePage("/clientes")}>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => void handleLeavePage("/clientes")}
+          >
             Voltar
           </Button>
-          <Button variant="secondary" size="md" onClick={() => setIsSalesModalOpen(true)}>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setIsSalesModalOpen(true)}
+          >
             Vendas do Cliente
           </Button>
           <Button
@@ -588,9 +640,6 @@ export default function CustomerDetails() {
           </Button>
         </div>
       </div>
-
-      {saveMessage ? <p className="mb-4 text-sm text-neutral-700">{saveMessage}</p> : null}
-
       <div className="bg-surface-lowest p-6 shadow-sm">
         <CustomerFormFields
           form={displayForm}
@@ -609,11 +658,15 @@ export default function CustomerDetails() {
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 py-2">
             <p className="text-sm text-primary">Criado em</p>
-            <p className="font-medium text-[#2a2526]">{formatDate(client.createdAt)}</p>
+            <p className="font-medium text-[#2a2526]">
+              {formatDate(client.createdAt)}
+            </p>
           </div>
           <div className="rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 py-2">
             <p className="text-sm text-primary">Atualizado em</p>
-            <p className="font-medium text-[#2a2526]">{formatDate(client.updatedAt)}</p>
+            <p className="font-medium text-[#2a2526]">
+              {formatDate(client.updatedAt)}
+            </p>
           </div>
         </div>
       </div>
@@ -639,7 +692,10 @@ export default function CustomerDetails() {
 
           <form className="space-y-4" onSubmit={handleCreateProfession}>
             <div>
-              <label className="mb-1 block text-sm text-primary" htmlFor="profession-name-edit">
+              <label
+                className="mb-1 block text-sm text-primary"
+                htmlFor="profession-name-edit"
+              >
                 Nome da profissao
               </label>
               <input
@@ -653,10 +709,20 @@ export default function CustomerDetails() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" size="md" onClick={closeProfessionModal}>
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={closeProfessionModal}
+              >
                 Cancelar
               </Button>
-              <Button type="submit" variant="primary" size="md" disabled={professionSaving}>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                disabled={professionSaving}
+              >
                 {professionSaving ? "Salvando..." : "Salvar profissao"}
               </Button>
             </div>
@@ -681,22 +747,30 @@ export default function CustomerDetails() {
         }
         subtitle={
           confirmationModal.type === "deactivate"
-              ? "A desativação impede novas compras para este cliente."
-              : ""
+            ? "A desativação impede novas compras para este cliente."
+            : ""
         }
         onClose={closeConfirmationModal}
       >
         {confirmationModal.type === "delete" ? (
           <div className="space-y-5">
             <p className="text-sm text-neutral-700">
-              Tem certeza que deseja excluir este cliente? Caso ele tenha débitos, estes também
-              serão excluidos.
+              Tem certeza que deseja excluir este cliente? Caso ele tenha
+              débitos, estes também serão excluidos.
             </p>
             <div className="flex justify-end gap-3">
-              <Button variant="secondary" size="md" onClick={closeConfirmationModal}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={closeConfirmationModal}
+              >
                 Cancelar
               </Button>
-              <Button variant="danger" size="md" onClick={() => void handleConfirmation()}>
+              <Button
+                variant="danger"
+                size="md"
+                onClick={() => void handleConfirmation()}
+              >
                 Confirmar exclusão
               </Button>
             </div>
@@ -704,14 +778,22 @@ export default function CustomerDetails() {
         ) : confirmationModal.type === "deactivate" ? (
           <div className="space-y-5">
             <p className="text-sm text-neutral-700">
-              Confirme se deseja desativar este cliente. Ele não poderá realizar novas compras
-              enquanto estiver inativo.
+              Confirme se deseja desativar este cliente. Ele não poderá realizar
+              novas compras enquanto estiver inativo.
             </p>
             <div className="flex justify-end gap-3">
-              <Button variant="secondary" size="md" onClick={closeConfirmationModal}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={closeConfirmationModal}
+              >
                 Cancelar
               </Button>
-              <Button variant="primary" size="md" onClick={() => void handleConfirmation()}>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => void handleConfirmation()}
+              >
                 Confirmar desativação
               </Button>
             </div>
@@ -719,16 +801,29 @@ export default function CustomerDetails() {
         ) : (
           <div className="space-y-5">
             <p className="text-sm text-neutral-700">
-              Se continuar, podemos salvar suas alteracoes antes de voltar para a listagem.
+              Se continuar, podemos salvar suas alteracoes antes de voltar para
+              a listagem.
             </p>
             <div className="flex justify-end gap-3">
-              <Button variant="secondary" size="md" onClick={handleDiscardChanges}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={handleDiscardChanges}
+              >
                 Sair sem salvar
               </Button>
-              <Button variant="secondary" size="md" onClick={closeConfirmationModal}>
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={closeConfirmationModal}
+              >
                 Cancelar
               </Button>
-              <Button variant="primary" size="md" onClick={() => void handleConfirmation()}>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => void handleConfirmation()}
+              >
                 Salvar e sair
               </Button>
             </div>

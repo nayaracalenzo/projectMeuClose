@@ -157,7 +157,7 @@ async function createPayable(body = {}) {
   const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
 
   if (!description || !category || !beneficiary) {
-    throw createPayablesValidationError("Descrição, categoria e favorecido sao obrigatorios.");
+    throw createPayablesValidationError("Descrição, categoria e favorecido sao obrigatórios.");
   }
 
   const amount = normalizeAmount(body.amount, "Valor");

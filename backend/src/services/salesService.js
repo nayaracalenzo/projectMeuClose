@@ -163,7 +163,7 @@ function normalizeSaleItem(item = {}) {
   const subtotal = normalizeDecimal(item.subtotal, "Subtotal do item");
 
   if (unitPrice === null || subtotal === null) {
-    throw createSalesValidationError("Valores do item sao obrigatorios.");
+    throw createSalesValidationError("Valores do item sao obrigatórios.");
   }
 
   return {
@@ -528,7 +528,7 @@ function normalizeQuoteBase(body = {}) {
   const finalAmount = normalizeDecimal(body.finalAmount, "Valor final");
 
   if (totalAmount === null || finalAmount === null) {
-    throw createSalesValidationError("Valores totais sao obrigatorios.");
+    throw createSalesValidationError("Valores totais sao obrigatórios.");
   }
 
   const customerMeasurements = Array.isArray(body.customerMeasurements)
@@ -616,7 +616,7 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
       : null;
 
     if (isImmediateCheckPaymentType(mainPaymentType) && !paymentReferenceCode) {
-      throw createSalesValidationError("Numero do cheque e obrigatorio.");
+      throw createSalesValidationError("Numero do cheque é obrigatório.");
     }
 
     entryReceipt = {

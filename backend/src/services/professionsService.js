@@ -17,7 +17,7 @@ function normalizeProfessionName(body = {}) {
     .replace(/\s+/g, " ");
 
   if (!name) {
-    throw validationError("Nome da profissao e obrigatorio.");
+    throw validationError("Nome da profissao é obrigatório.");
   }
 
   return name;
