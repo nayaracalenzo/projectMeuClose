@@ -374,6 +374,28 @@ function mapReceivableInstallment(installment) {
   };
 }
 
+function buildSalePaymentSummary(sale) {
+  const paymentNames = [];
+  const pushName = (value) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) return;
+    if (paymentNames.includes(normalized)) return;
+    paymentNames.push(normalized);
+  };
+
+  const paymentType = sale.PaymentType || sale.PaymentTypes;
+  pushName(paymentType?.desc);
+
+  if (Array.isArray(sale.PaymentReceipts)) {
+    sale.PaymentReceipts.forEach((receipt) => {
+      const receiptPaymentType = receipt.PaymentType || receipt.PaymentTypes;
+      pushName(receiptPaymentType?.desc);
+    });
+  }
+
+  return paymentNames.join(" + ") || null;
+}
+
 function resolveReceivableOrigin(receivable, customer) {
   const supplier = receivable?.Supplier || receivable?.Suppliers || null;
   const supplierName = supplier?.tradeName || supplier?.fullName || null;
@@ -496,14 +518,13 @@ function mapSaleDetails(sale) {
 
 function mapSaleListItem(sale) {
   const customer = sale.Customer || sale.Customers;
-  const paymentType = sale.PaymentType || sale.PaymentTypes;
   const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
 
   return {
     id: sale.idSale,
     status: resolveSaleStatus(sale),
     customerName: customer?.fullName || customer?.companyName || "Sem cliente",
-    paymentTypeName: paymentType?.desc || null,
+    paymentTypeName: buildSalePaymentSummary(sale),
     itemsCount: items.length,
     firstItemDescription: items[0]?.description || null,
     finalAmount: Number(sale.finalAmount || 0),

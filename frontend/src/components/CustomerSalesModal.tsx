@@ -9,7 +9,6 @@ type SaleRow = {
   cod: string;
   data: string;
   cliente: string;
-  usuario: string;
   formaPagto: string;
   valorVista: string;
   valorPrazo: string;
@@ -67,13 +66,12 @@ function CustomerSalesModalComponent({ open, clientId, clientName, onClose }: Pr
         setRows(
           Array.isArray(data.items)
             ? data.items.map((item) => ({
-                cod: `#${item.id}`,
-                data: formatDate(item.createdAt),
-                cliente: item.customerName || "-",
-                usuario: "-",
-                formaPagto: item.paymentTypeName || "-",
-                valorVista: "-",
-                valorPrazo: "-",
+              cod: `#${item.id}`,
+              data: formatDate(item.createdAt),
+              cliente: item.customerName || "-",
+              formaPagto: item.paymentTypeName || "-",
+              valorVista: "-",
+              valorPrazo: "-",
                 totalVenda: formatCurrency(Number(item.finalAmount || 0)),
                 descProd:
                   item.itemsCount > 1
@@ -112,7 +110,6 @@ function CustomerSalesModalComponent({ open, clientId, clientName, onClose }: Pr
           { key: "cod", label: "Cod." },
           { key: "data", label: "Data" },
           { key: "cliente", label: "Cliente" },
-          { key: "usuario", label: "Usuario" },
           { key: "formaPagto", label: "Forma pagto" },
           { key: "valorVista", label: "Valor a vista", align: "right" },
           { key: "valorPrazo", label: "Valor a prazo", align: "right" },

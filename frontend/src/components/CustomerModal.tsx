@@ -20,7 +20,7 @@ function CustomerModalComponent({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded bg-white shadow-(--ambient-shadow)">
+      <div className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded bg-white shadow-(--ambient-shadow)">
         <div className="flex items-start justify-between  bg-outline-variant/20  px-5 py-4">
           <div>
             <h3 className="text-lg font-medium text-primary">{title}</h3>

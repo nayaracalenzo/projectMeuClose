@@ -422,6 +422,18 @@ async function listSales({ page = 1, pageSize = 10, status, search, customerId }
         required: false,
       },
       {
+        model: PaymentReceipts,
+        attributes: ["idPaymentReceipt", "paymentTypeId", "receiptType"],
+        required: false,
+        include: [
+          {
+            model: PaymentTypes,
+            attributes: ["idPaymentType", "desc"],
+            required: false,
+          },
+        ],
+      },
+      {
         model: SaleItems,
         attributes: ["idSaleItem", "description", "itemType", "subtotal"],
       },
