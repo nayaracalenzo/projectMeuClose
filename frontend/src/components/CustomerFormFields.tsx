@@ -67,7 +67,8 @@ export default function CustomerFormFields({
     "flex min-h-10 w-full items-center rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526]";
 
   const professionOptions = useMemo(
-    () => professions.map((item) => ({ value: String(item.id), label: item.name })),
+    () =>
+      professions.map((item) => ({ value: String(item.id), label: item.name })),
     [professions],
   );
 
@@ -127,7 +128,9 @@ export default function CustomerFormFields({
   const addressFields = fields.filter((field) => field.section === "address");
 
   const professionLabel =
-    professions.find((item) => String(item.id) === String(form.professionId ?? ""))?.name || "";
+    professions.find(
+      (item) => String(item.id) === String(form.professionId ?? ""),
+    )?.name || "";
 
   const getDisplayValue = (field: FieldConfig) => {
     const rawValue = String(form[field.key] ?? "").trim();
@@ -157,14 +160,23 @@ export default function CustomerFormFields({
       return (
         <div key={field.key}>
           <label className="mb-1 block text-sm text-primary">{label}</label>
-          <div className={isProfessionField && onCreateProfessionRequest ? "grid grid-cols-[minmax(0,1fr)_42px] gap-2" : ""}>
+          <div
+            className={
+              isProfessionField && onCreateProfessionRequest
+                ? "grid grid-cols-[minmax(0,1fr)_42px] gap-2"
+                : ""
+            }
+          >
             <select
               value={String(form[field.key] ?? "")}
               onChange={(e) => onFieldChange(field.key, e.target.value)}
               className={baseClass}
             >
               {(field.options || []).map((option) => (
-                <option key={`${field.key}-${option.value}`} value={option.value}>
+                <option
+                  key={`${field.key}-${option.value}`}
+                  value={option.value}
+                >
                   {option.label}
                 </option>
               ))}
@@ -174,7 +186,7 @@ export default function CustomerFormFields({
                 type="button"
                 onClick={onCreateProfessionRequest}
                 className="h-10 rounded-lg border border-[#a59797] bg-white text-lg text-primary transition hover:bg-surface-low"
-                aria-label="Cadastrar nova profissao"
+                aria-label="Cadastrar nova profissão"
               >
                 +
               </button>
@@ -194,7 +206,9 @@ export default function CustomerFormFields({
           className={baseClass}
         />
         {field.key === "zipCode" && zipCodeHelperMessage ? (
-          <p className="mt-1 text-xs text-neutral-700">{zipCodeHelperMessage}</p>
+          <p className="mt-1 text-xs text-neutral-700">
+            {zipCodeHelperMessage}
+          </p>
         ) : null}
       </div>
     );
@@ -205,7 +219,9 @@ export default function CustomerFormFields({
       <div className="py-4">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div className="min-w-0">
-            <label className="mb-3 block text-sm text-primary">Tipo de cliente *</label>
+            <label className="mb-3 block text-sm text-primary">
+              Tipo de cliente *
+            </label>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
               <label className="flex items-center gap-2 text-sm text-primary">
                 <input
@@ -213,7 +229,9 @@ export default function CustomerFormFields({
                   name="typeCustomer"
                   value="INDIVIDUAL"
                   checked={form.typeCustomer === "INDIVIDUAL"}
-                  onChange={(e) => onTypeCustomerChange(e.target.value as "INDIVIDUAL")}
+                  onChange={(e) =>
+                    onTypeCustomerChange(e.target.value as "INDIVIDUAL")
+                  }
                   className="h-4 w-4 accent-primary"
                   disabled={readOnly}
                 />
@@ -225,7 +243,9 @@ export default function CustomerFormFields({
                   name="typeCustomer"
                   value="COMPANY"
                   checked={form.typeCustomer === "COMPANY"}
-                  onChange={(e) => onTypeCustomerChange(e.target.value as "COMPANY")}
+                  onChange={(e) =>
+                    onTypeCustomerChange(e.target.value as "COMPANY")
+                  }
                   className="h-4 w-4 accent-primary"
                   disabled={readOnly}
                 />

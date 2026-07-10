@@ -24,7 +24,7 @@ async function updateProfession(req, res, next) {
     const updated = await service.updateProfessionById(req.params.id, req.body);
 
     if (!updated) {
-      throw notFoundError("Profissao nao encontrada.");
+      throw notFoundError("Profissão nao encontrada.");
     }
 
     return res.status(200).json(updated);
@@ -38,10 +38,10 @@ async function deleteProfession(req, res, next) {
     const deleted = await service.deleteProfessionById(req.params.id);
 
     if (!deleted) {
-      throw notFoundError("Profissao nao encontrada.");
+      throw notFoundError("Profissão nao encontrada.");
     }
 
-    return res.status(200).json({ message: "Profissao removida com sucesso." });
+    return res.status(200).json({ message: "Profissão removida com sucesso." });
   } catch (error) {
     return next(error);
   }

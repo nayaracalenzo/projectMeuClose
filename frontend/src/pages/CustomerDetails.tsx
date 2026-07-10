@@ -359,7 +359,7 @@ export default function CustomerDetails() {
     const normalizedName = professionName.trim().replace(/\s+/g, " ");
 
     if (!normalizedName) {
-      setProfessionError("Informe o nome da profissao.");
+      setProfessionError("Informe o nome da profissão.");
       return;
     }
 
@@ -382,7 +382,7 @@ export default function CustomerDetails() {
       setProfessionError(
         getUserFacingApiErrorMessage(
           err,
-          "Nao foi possivel cadastrar a profissao.",
+          "Nao foi possivel cadastrar a profissão.",
         ),
       );
     } finally {
@@ -670,7 +670,12 @@ export default function CustomerDetails() {
         </div>
 
         <div className="mt-6 flex justify-end">
-          <Button variant="danger" size="md" onClick={handleDeleteRequest} disabled={saving}>
+          <Button
+            variant="danger"
+            size="md"
+            onClick={handleDeleteRequest}
+            disabled={saving}
+          >
             Excluir cliente
           </Button>
         </div>
@@ -686,8 +691,8 @@ export default function CustomerDetails() {
       <CustomerModal
         open={professionModalOpen}
         onClose={closeProfessionModal}
-        title="Nova profissao"
-        subtitle="Cadastre uma nova profissao sem sair do cliente."
+        title="Nova profissão"
+        subtitle="Cadastre uma nova profissão sem sair do cliente."
       >
         <div className="mx-auto max-w-xl">
           {professionError ? (
@@ -702,7 +707,7 @@ export default function CustomerDetails() {
                 className="mb-1 block text-sm text-primary"
                 htmlFor="profession-name-edit"
               >
-                Nome da profissao
+                Nome da profissão
               </label>
               <input
                 id="profession-name-edit"
@@ -729,7 +734,7 @@ export default function CustomerDetails() {
                 size="md"
                 disabled={professionSaving}
               >
-                {professionSaving ? "Salvando..." : "Salvar profissao"}
+                {professionSaving ? "Salvando..." : "Salvar profissão"}
               </Button>
             </div>
           </form>

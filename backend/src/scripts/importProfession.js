@@ -7,7 +7,7 @@ const { Professions } = require('../models');
 async function importProfession() {
   const results = [];
 
-  const filePath = path.join(__dirname, 'profissao.csv');
+  const filePath = path.join(__dirname, 'profissão.csv');
   console.log('Lendo arquivo em:', filePath);
 
   fs.createReadStream(filePath)

@@ -221,7 +221,7 @@ export default function NewCustomer() {
     const normalizedName = professionName.trim().replace(/\s+/g, " ");
 
     if (!normalizedName) {
-      setProfessionError("Informe o nome da profissao.");
+      setProfessionError("Informe o nome da profissão.");
       return;
     }
 
@@ -244,7 +244,7 @@ export default function NewCustomer() {
       setProfessionError(
         getUserFacingApiErrorMessage(
           error,
-          "Nao foi possivel cadastrar a profissao.",
+          "Nao foi possivel cadastrar a profissão.",
         ),
       );
     } finally {
@@ -344,8 +344,8 @@ export default function NewCustomer() {
       <CustomerModal
         open={professionModalOpen}
         onClose={closeProfessionModal}
-        title="Nova profissao"
-        subtitle="Cadastre uma nova profissao sem sair do cliente."
+        title="Nova profissão"
+        subtitle="Cadastre uma nova profissão sem sair do cliente."
       >
         <div className="mx-auto max-w-xl">
           {professionError ? (
@@ -360,7 +360,7 @@ export default function NewCustomer() {
                 className="mb-1 block text-sm text-primary"
                 htmlFor="profession-name-create"
               >
-                Nome da profissao
+                Nome da profissão
               </label>
               <input
                 id="profession-name-create"
@@ -385,7 +385,7 @@ export default function NewCustomer() {
                 variant="primary"
                 disabled={professionSaving}
               >
-                {professionSaving ? "Salvando..." : "Salvar profissao"}
+                {professionSaving ? "Salvando..." : "Salvar profissão"}
               </Button>
             </div>
           </form>

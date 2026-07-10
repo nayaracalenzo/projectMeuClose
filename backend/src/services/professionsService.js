@@ -17,7 +17,7 @@ function normalizeProfessionName(body = {}) {
     .replace(/\s+/g, " ");
 
   if (!name) {
-    throw validationError("Nome da profissao é obrigatório.");
+    throw validationError("Nome da profissão é obrigatório.");
   }
 
   return name;
@@ -29,7 +29,7 @@ async function createProfession(body = {}) {
   const existing = await repository.findProfessionByName(name);
 
   if (existing) {
-    throw conflictError("Profissao ja cadastrada.");
+    throw conflictError("Profissão ja cadastrada.");
   }
 
   const created = await repository.createProfession({
@@ -47,14 +47,14 @@ async function updateProfessionById(id, body = {}) {
   const professionId = Number(id);
 
   if (!Number.isInteger(professionId) || professionId <= 0) {
-    throw validationError("Profissao invalida.");
+    throw validationError("Profissão invalida.");
   }
 
   const name = normalizeProfessionName(body);
   const existing = await repository.findProfessionByName(name);
 
   if (existing && Number(existing.idProfession) !== professionId) {
-    throw conflictError("Profissao ja cadastrada.");
+    throw conflictError("Profissão ja cadastrada.");
   }
 
   const updated = await repository.updateProfessionById(professionId, {
@@ -76,7 +76,7 @@ async function deleteProfessionById(id) {
   const professionId = Number(id);
 
   if (!Number.isInteger(professionId) || professionId <= 0) {
-    throw validationError("Profissao invalida.");
+    throw validationError("Profissão invalida.");
   }
 
   return repository.deleteProfessionById(professionId);

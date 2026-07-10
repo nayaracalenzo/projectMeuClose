@@ -57,7 +57,7 @@ const formatSaleStatusLabel = (value?: string | null) => {
     .toUpperCase();
 
   if (normalized === "BUDGET") return "Orçamento";
-  if (normalized === "COMPLETED") return "ConcluÃ­do";
+  if (normalized === "COMPLETED") return "Concluído";
   if (normalized === "CANCELLED") return "Cancelado";
 
   return value || "-";
@@ -366,7 +366,7 @@ export default function SalesPage() {
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
-          PÃ¡gina {page} de {totalPages}
+          Página {page} de {totalPages}
         </p>
         <div className="flex gap-2">
           <Button

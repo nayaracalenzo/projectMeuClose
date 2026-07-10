@@ -165,6 +165,7 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
   const customerAttributes = summary ? [] : ["idCustomer", "fullName", "companyName"];
   const supplierAttributes = summary ? [] : ["idSupplier", "fullName", "tradeName"];
   const cardTransactionAttributes = summary ? [] : ["operatorLabel"];
+  const saleReceiptAttributes = summary ? [] : ["idPaymentReceipt", "receiptType"];
   const paymentTypeAttributes = summary ? [] : ["idPaymentType", "desc"];
 
   return [
@@ -180,7 +181,19 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
       include: [
         { model: Customers, attributes: customerAttributes },
         { model: Suppliers, attributes: supplierAttributes, required: false },
-        { model: Sales, attributes: baseAttributes },
+        {
+          model: Sales,
+          attributes: baseAttributes,
+          include: summary
+            ? []
+            : [
+                {
+                  model: PaymentReceipts,
+                  attributes: saleReceiptAttributes,
+                  required: false,
+                },
+              ],
+        },
         { model: CardTransactions, attributes: cardTransactionAttributes, required: false },
       ],
     },
