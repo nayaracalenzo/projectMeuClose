@@ -13,6 +13,19 @@ const {
   Status,
 } = require("../models");
 
+async function syncProductsSequence(transaction) {
+  await Products.sequelize.query(
+    `
+      SELECT setval(
+        pg_get_serial_sequence('"products"', 'id'),
+        COALESCE((SELECT MAX("id") FROM "products"), 1),
+        true
+      );
+    `,
+    { transaction },
+  );
+}
+
 function normalizeText(value) {
   const normalized = String(value || "").trim();
   return normalized || null;
@@ -196,6 +209,7 @@ async function createProductsFromSale(sale, items, transaction) {
     payloads.push(await buildProductPayload(sale.customerId, item, transaction));
   }
 
+  await syncProductsSequence(transaction);
   return Products.bulkCreate(payloads, { transaction });
 }
 
@@ -204,6 +218,8 @@ async function listProducts(filters = {}) {
     filters.statusId === undefined || filters.statusId === null || filters.statusId === ""
       ? null
       : Number(filters.statusId);
+  const productionOnly =
+    String(filters.productionOnly || "").trim().toLowerCase() === "true";
   const normalizedPage = Math.max(1, Number(filters.page) || 1);
   const normalizedPageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 20));
   const normalizedSortBy = String(filters.sortBy || "createdAtDesc");
@@ -217,6 +233,14 @@ async function listProducts(filters = {}) {
     dsbl: false,
     ...statusWhere,
   };
+
+  if (productionOnly) {
+    where[Sequelize.Op.or] = [
+      { productTypeId: 4 },
+      { productTypeId: 5 },
+      { categoryId: 3 },
+    ];
+  }
 
   const orderMap = {
     createdAtDesc: [
@@ -331,5 +355,6 @@ module.exports = {
   getProductUpdateDependencies,
   listProducts,
   listProductStatuses,
+  syncProductsSequence,
   updateProductById,
 };

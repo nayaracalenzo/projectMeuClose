@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
@@ -8,7 +8,6 @@ import CustomMadeClothing, {
 } from "../components/CustomMadeClothing";
 import GeneralCatalogItems, {
   type GeneralCatalogProductDraft,
-  type GeneralCatalogSummaryItem,
 } from "../components/GeneralCatalogItems";
 import ReadyMadeClothing, {
   type ReadyMadeProductDraft,
@@ -119,6 +118,12 @@ const DEFAULT_CATEGORIES: SaleCategoryOption[] = [
 function getCategoryLabelByCode(code: SaleCategoryCode) {
   return DEFAULT_CATEGORIES.find((item) => item.code === code)?.label || "Categoria";
 }
+
+const paymentFieldClassName =
+  "h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";
+
+const paymentReadonlyFieldClassName =
+  "h-11 w-full rounded-lg border border-outline-variant/60 bg-surface-lowest px-3 text-[15px] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-100";
 
 export default function NewSalePage() {
   const [step, setStep] = useState(1);
@@ -328,6 +333,13 @@ export default function NewSalePage() {
     () => Number(tableItems.reduce((acc, item) => acc + item.discountAmount, 0).toFixed(2)),
     [tableItems],
   );
+  const saleDiscountPayload = useMemo(
+    () => ({
+      discountType: discountAmount > 0 ? ("FIXED" as const) : null,
+      discountValue: discountAmount > 0 ? discountAmount : null,
+    }),
+    [discountAmount],
+  );
   const discountedTotalValue = useMemo(
     () => Number(tableItems.reduce((acc, item) => acc + item.finalValue, 0).toFixed(2)),
     [tableItems],
@@ -362,9 +374,7 @@ export default function NewSalePage() {
     [discountedTotalValue, parsedEntryAmount],
   );
   const parsedCashReceivedAmount = useMemo(() => {
-    if (!cashReceivedAmount.trim()) return 0;
-    const parsed = Number(cashReceivedAmount.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : 0;
+    return parseCurrencyToNumber(cashReceivedAmount);
   }, [cashReceivedAmount]);
   const changeAmount = useMemo(() => {
     if (!isImmediateCashPayment) return 0;
@@ -421,6 +431,28 @@ export default function NewSalePage() {
       currency: "BRL",
     }).format(value);
 
+  const handleModalSummaryChange = useCallback((items: ModalSummaryItem[]) => {
+    setModalItems(items);
+  }, []);
+
+  const handleModalReadyMadeProductsChange = useCallback((items: ReadyMadeProductDraft[]) => {
+    setModalReadyMadeProducts(items);
+  }, []);
+
+  const handleModalCustomMadeProductsChange = useCallback(
+    (items: CustomMadeProductDraft[]) => {
+      setModalCustomMadeProducts(items);
+    },
+    [],
+  );
+
+  const handleModalGeneralProductsChange = useCallback(
+    (items: GeneralCatalogProductDraft[]) => {
+      setModalGeneralProducts(items);
+    },
+    [],
+  );
+
   const openModal = (type: ModalType) => {
     setModalType(type);
     setModalItems([]);
@@ -444,7 +476,7 @@ export default function NewSalePage() {
     return null;
   };
 
-  const ensureCashSessionBeforeCashPayment = async (message: string) => {
+  const ensureCashSessionBeforeCashPayment = async () => {
     try {
       const data = await getRequest("/cash/session-status");
       const parsed = (data as CashSessionStatusResponse) || null;
@@ -454,7 +486,7 @@ export default function NewSalePage() {
         setCashSessionNotes(parsed.currentSession.notes || "");
         setCountedBalanceInput(formatCurrencyInput("0"));
         setCloseCashModalOpen(true);
-        setSaveMessage(message);
+        setSaveMessage("");
         return false;
       }
 
@@ -462,7 +494,7 @@ export default function NewSalePage() {
         setOpeningBalanceInput(formatCurrencyInput("0"));
         setCashSessionNotes("");
         setOpenCashModalOpen(true);
-        setSaveMessage("Abra o caixa da loja antes de usar dinheiro no pagamento.");
+        setSaveMessage("");
         return false;
       }
 
@@ -491,9 +523,7 @@ export default function NewSalePage() {
       return;
     }
 
-    await ensureCashSessionBeforeCashPayment(
-      "Existe um caixa da loja pendente. Regularize o caixa antes de continuar com pagamento em dinheiro.",
-    );
+    await ensureCashSessionBeforeCashPayment();
   };
 
   const handleEntryPaymentTypeChange = async (value: string) => {
@@ -504,9 +534,7 @@ export default function NewSalePage() {
       return;
     }
 
-    await ensureCashSessionBeforeCashPayment(
-      "Existe um caixa da loja pendente. Regularize o caixa antes de usar dinheiro na entrada.",
-    );
+    await ensureCashSessionBeforeCashPayment();
   };
 
   useEffect(() => {
@@ -688,8 +716,8 @@ export default function NewSalePage() {
         customerId: selectedCustomer.id,
         totalAmount: totalValue,
         finalAmount: discountedTotalValue,
-        discountType: null,
-        discountValue: null,
+        discountType: saleDiscountPayload.discountType,
+        discountValue: saleDiscountPayload.discountValue,
         paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
         installmentCount: previewInstallmentCount,
         dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
@@ -982,8 +1010,8 @@ export default function NewSalePage() {
         customerId: selectedCustomer.id,
         totalAmount: totalValue,
         finalAmount: discountedTotalValue,
-        discountType: null,
-        discountValue: null,
+        discountType: saleDiscountPayload.discountType,
+        discountValue: saleDiscountPayload.discountValue,
         items: buildSaleItemsPayload(),
         customerMeasurements: buildCustomerMeasurementsPayload(),
       });
@@ -1010,7 +1038,7 @@ export default function NewSalePage() {
       return;
     }
 
-    setSaveMessage("OrÃ§amento gerado com sucesso.");
+    navigate(`/vendas?tab=budgets&highlight=${createdDraftSaleId}`);
   };
 
   const handleStartFinalizeSale = async () => {
@@ -1076,9 +1104,20 @@ export default function NewSalePage() {
       await resetSaleForm();
       setSaveMessage("Pedido concluído com sucesso.");
     } catch (error: unknown) {
-      setSaveMessage(
-        getUserFacingApiErrorMessage(error, "Não foi possível concluir o pedido."),
+      const message = getUserFacingApiErrorMessage(
+        error,
+        "Não foi possível concluir o pedido.",
       );
+
+      if (
+        message.includes("Existe um caixa da loja aberto de dia anterior") ||
+        message.includes("Feche o caixa antes de continuar") ||
+        message.includes("Abra o caixa da loja antes de registrar")
+      ) {
+        await ensureCashSessionBeforeCashPayment();
+      } else {
+        setSaveMessage(message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -1217,7 +1256,7 @@ export default function NewSalePage() {
                       value={selectedCategoryCode}
                       onChange={(e) => handleCategoryChange(e.target.value)}
                       disabled={hasGeneratedQuote}
-                      className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                      className={paymentFieldClassName}
                     >
                       <option value="">Selecione...</option>
                       {categories.map((category) => (
@@ -1241,7 +1280,7 @@ export default function NewSalePage() {
                           )
                         }
                         disabled={hasGeneratedQuote}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                        className={paymentFieldClassName}
                       >
                         <option value="">Selecione...</option>
                         <option value="READY_MADE">Roupa pronta</option>
@@ -1484,8 +1523,15 @@ export default function NewSalePage() {
                       />
                     </div>
                   ) : (
-                    <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
-                      Parcelas previstas: {previewInstallmentCount}
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Parcelas previstas
+                      </label>
+                      <input
+                        value={String(previewInstallmentCount)}
+                        disabled
+                        className={paymentReadonlyFieldClassName}
+                      />
                     </div>
                   )}
 
@@ -1498,7 +1544,7 @@ export default function NewSalePage() {
                         type="date"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                        className={paymentFieldClassName}
                       />
                     </div>
                   ) : selectedPaymentType?.financialFlow ===
@@ -1513,12 +1559,19 @@ export default function NewSalePage() {
                         onChange={(e) =>
                           setCardExpectedSettlementDate(e.target.value)
                         }
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                        className={paymentFieldClassName}
                       />
                     </div>
                   ) : (
-                    <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
-                      Recebimento imediato no caixa.
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Destino do recebimento
+                      </label>
+                      <input
+                        value="Recebimento imediato no caixa."
+                        disabled
+                        className={paymentReadonlyFieldClassName}
+                      />
                     </div>
                   )}
                 </div>
@@ -1534,12 +1587,19 @@ export default function NewSalePage() {
                         onChange={(e) =>
                           setPaymentReferenceCode(e.target.value)
                         }
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                         placeholder="Digite o número do cheque"
                       />
                     </div>
-                    <div className="rounded-lg border border-outline-variant/45 bg-surface-lowest px-3 py-2 text-sm text-neutral-700">
-                      Total a pagar: {formatCurrency(discountedTotalValue)}
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Total a pagar
+                      </label>
+                      <input
+                        value={formatCurrency(discountedTotalValue)}
+                        disabled
+                        className={paymentReadonlyFieldClassName}
+                      />
                     </div>
                   </div>
                 )}
@@ -1551,20 +1611,35 @@ export default function NewSalePage() {
                         Valor recebido
                       </label>
                       <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                        type="text"
+                        inputMode="numeric"
                         value={cashReceivedAmount}
-                        onChange={(e) => setCashReceivedAmount(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-                        placeholder="0,00"
+                        onChange={(e) =>
+                          setCashReceivedAmount(formatCurrencyInput(e.target.value))
+                        }
+                        className={paymentFieldClassName}
+                        placeholder="R$ 0,00"
                       />
                     </div>
-                    <div className="rounded-lg border border-outline-variant/45 bg-surface-lowest px-3 py-2 text-sm text-neutral-700">
-                      Total a pagar: {formatCurrency(discountedTotalValue)}
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Total a pagar
+                      </label>
+                      <input
+                        value={formatCurrency(discountedTotalValue)}
+                        disabled
+                        className={paymentReadonlyFieldClassName}
+                      />
                     </div>
-                    <div className="rounded-lg border border-outline-variant/45 bg-surface-lowest px-3 py-2 text-sm text-neutral-700">
-                      Troco: {formatCurrency(changeAmount)}
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Troco
+                      </label>
+                      <input
+                        value={formatCurrency(changeAmount)}
+                        disabled
+                        className={paymentReadonlyFieldClassName}
+                      />
                     </div>
                   </div>
                 )}
@@ -1581,7 +1656,7 @@ export default function NewSalePage() {
                         step="0.01"
                         value={entryAmount}
                         onChange={(e) => setEntryAmount(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                     <div>
@@ -1593,7 +1668,7 @@ export default function NewSalePage() {
                         onChange={(e) =>
                           void handleEntryPaymentTypeChange(e.target.value)
                         }
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       >
                         <option value="">Selecione...</option>
                         {entryPaymentTypeOptions.map((item) => (
@@ -1611,7 +1686,7 @@ export default function NewSalePage() {
                         type="date"
                         value={entryPaidAt}
                         onChange={(e) => setEntryPaidAt(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                     <div>
@@ -1621,7 +1696,7 @@ export default function NewSalePage() {
                       <input
                         value={entryReferenceCode}
                         onChange={(e) => setEntryReferenceCode(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                   </div>
@@ -1636,7 +1711,7 @@ export default function NewSalePage() {
                       <input
                         value={cardOperatorLabel}
                         onChange={(e) => setCardOperatorLabel(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                     <div>
@@ -1646,7 +1721,7 @@ export default function NewSalePage() {
                       <input
                         value={cardBrand}
                         onChange={(e) => setCardBrand(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                     <div>
@@ -1658,7 +1733,7 @@ export default function NewSalePage() {
                         onChange={(e) =>
                           setCardAuthorizationCode(e.target.value)
                         }
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                     <div>
@@ -1672,7 +1747,7 @@ export default function NewSalePage() {
                         onChange={(e) =>
                           setCardClientInstallmentCount(e.target.value)
                         }
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                     <div>
@@ -1685,22 +1760,42 @@ export default function NewSalePage() {
                         step="0.01"
                         value={cardFeeAmount}
                         onChange={(e) => setCardFeeAmount(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                        className={paymentFieldClassName}
                       />
                     </div>
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
-                    Subtotal dos itens: {formatCurrency(totalValue)}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-primary">
+                      Subtotal dos itens
+                    </label>
+                    <input
+                      value={formatCurrency(totalValue)}
+                      disabled
+                      className={paymentReadonlyFieldClassName}
+                    />
                   </div>
-                  <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
-                    Desconto dos itens: {formatCurrency(discountAmount)}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-primary">
+                      Desconto dos itens
+                    </label>
+                    <input
+                      value={formatCurrency(discountAmount)}
+                      disabled
+                      className={paymentReadonlyFieldClassName}
+                    />
                   </div>
-                  <div className="rounded-lg border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-700">
-                    Valor final dos itens:{" "}
-                    {formatCurrency(discountedTotalValue)}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-primary">
+                      Valor final dos itens
+                    </label>
+                    <input
+                      value={formatCurrency(discountedTotalValue)}
+                      disabled
+                      className={paymentReadonlyFieldClassName}
+                    />
                   </div>
                 </div>
 
@@ -1807,14 +1902,14 @@ export default function NewSalePage() {
             {modalType === "Roupa pronta" ? (
               <ReadyMadeClothing
                 key={`ready-${modalSessionKey}`}
-                onSummaryChange={(items) => setModalItems(items)}
-                onProductsChange={(items) => setModalReadyMadeProducts(items)}
+                onSummaryChange={handleModalSummaryChange}
+                onProductsChange={handleModalReadyMadeProductsChange}
               />
             ) : modalType === "Sob medida" ? (
               <CustomMadeClothing
                 key={`custom-${modalSessionKey}`}
-                onSummaryChange={(items) => setModalItems(items)}
-                onProductsChange={(items) => setModalCustomMadeProducts(items)}
+                onSummaryChange={handleModalSummaryChange}
+                onProductsChange={handleModalCustomMadeProductsChange}
               />
             ) : (
               <GeneralCatalogItems
@@ -1822,10 +1917,8 @@ export default function NewSalePage() {
                 title={`Dados de ${modalType.toLowerCase()}`}
                 itemLabel={modalType}
                 defaultSummaryLabel={modalType}
-                onSummaryChange={(items: GeneralCatalogSummaryItem[]) =>
-                  setModalItems(items)
-                }
-                onProductsChange={(items) => setModalGeneralProducts(items)}
+                onSummaryChange={handleModalSummaryChange}
+                onProductsChange={handleModalGeneralProductsChange}
               />
             )}
 

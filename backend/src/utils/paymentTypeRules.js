@@ -4,6 +4,7 @@ const BOOKLET_KIND = "BOOKLET";
 const INVOICE_KIND = "INVOICE";
 const CHECK_KIND = "CHECK";
 const CASH_KIND = "CASH";
+const TRANSFER_KIND = "TRANSFER";
 const IMMEDIATE_CASH_FLOW = "IMMEDIATE_CASH";
 const FUTURE_CUSTOMER_FLOW = "FUTURE_CUSTOMER";
 const FUTURE_OPERATOR_FLOW = "FUTURE_OPERATOR";
@@ -79,6 +80,16 @@ const PAYMENT_TYPE_RULES_BY_ID = {
     defaultInstallments: 1,
     financialFlow: FUTURE_OPERATOR_FLOW,
   },
+  8: {
+    kind: TRANSFER_KIND,
+    requiresDueDate: false,
+    allowsEntryAmount: false,
+    allowedEntryPaymentKinds: [],
+    allowsInstallments: false,
+    maxInstallments: 1,
+    defaultInstallments: 1,
+    financialFlow: IMMEDIATE_CASH_FLOW,
+  },
 };
 
 function normalizePaymentTypeDesc(desc) {
@@ -111,6 +122,19 @@ function getLegacyPaymentTypePreset(paymentType = {}) {
   if (normalizedDesc === "CHEQUE DIA") {
     return {
       kind: CHECK_KIND,
+      requiresDueDate: false,
+      allowsEntryAmount: false,
+      allowedEntryPaymentKinds: [],
+      allowsInstallments: false,
+      maxInstallments: 1,
+      defaultInstallments: 1,
+      financialFlow: IMMEDIATE_CASH_FLOW,
+    };
+  }
+
+  if (normalizedDesc === "PIX") {
+    return {
+      kind: TRANSFER_KIND,
       requiresDueDate: false,
       allowsEntryAmount: false,
       allowedEntryPaymentKinds: [],
@@ -224,7 +248,13 @@ function isImmediateEntryPaymentType(paymentType) {
 }
 
 function isImmediateCashPaymentType(paymentType) {
-  return paymentType?.kind === CASH_KIND && paymentType?.financialFlow === IMMEDIATE_CASH_FLOW;
+  const paymentTypeId = Number(paymentType?.id || paymentType?.idPaymentType);
+  const paymentTypeName = normalizePaymentTypeDesc(paymentType?.name || paymentType?.desc);
+
+  return (
+    (paymentTypeId === 1 || paymentTypeName === "DINHEIRO") &&
+    paymentType?.financialFlow === IMMEDIATE_CASH_FLOW
+  );
 }
 
 function isImmediateCheckPaymentType(paymentType) {
@@ -237,6 +267,7 @@ module.exports = {
   CARD_KIND,
   CHECK_KIND,
   CASH_KIND,
+  TRANSFER_KIND,
   IMMEDIATE_CASH_FLOW,
   FUTURE_CUSTOMER_FLOW,
   FUTURE_OPERATOR_FLOW,

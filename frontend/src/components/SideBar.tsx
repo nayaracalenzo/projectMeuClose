@@ -32,7 +32,8 @@ export default function Sidebar() {
   const navigation: NavItem[] = useMemo(
     () => [
       { title: "Home", path: "/home", icon: Home },
-      { title: "Pedidos", path: "/pedidos", icon: Package },
+      { title: "Vendas", path: "/vendas", icon: Wallet },
+      { title: "Produção", path: "/producao", icon: Package },
       { title: "Clientes", path: "/clientes", icon: Users },
       { title: "A Receber", path: "/a-receber", icon: ArrowDownCircle },
       { title: "A Pagar", path: "/a-pagar", icon: ArrowUpCircle },

@@ -56,6 +56,10 @@ function getInstallmentFilter(status, dueDate, paidAmount, amount) {
   return "A_VENCER";
 }
 
+function getStandaloneReceiptFilter() {
+  return "RECEBIDAS";
+}
+
 function resolveReceivableOrigin({ debtorType, operatorLabel, supplier, customer }) {
   const supplierName = supplier?.tradeName || supplier?.fullName || null;
   const customerName = customer?.fullName || customer?.companyName || null;
@@ -122,9 +126,12 @@ async function listInstallments({
   const startDate = normalizeOptionalDate(rawStartDate, "Data inicial");
   const endDate = normalizeOptionalDate(rawEndDate, "Data final", { endOfDay: true });
   const search = rawSearch ? String(rawSearch).trim() : undefined;
+  const includeStandaloneReceipts = status === "RECEBIDAS" || status === "TODAS";
+  const installmentsPageSize = includeStandaloneReceipts ? undefined : pageSize;
+  const installmentsPage = includeStandaloneReceipts ? undefined : page;
   const result = await repository.listInstallments({
-    page,
-    pageSize,
+    page: installmentsPage,
+    pageSize: installmentsPageSize,
     startDate,
     endDate,
     search,
@@ -139,7 +146,7 @@ async function listInstallments({
     customerId,
   });
 
-  const items = result.rows
+  const installmentItems = result.rows
     .map((item) => {
       const customer = item.Receivable?.Customer || item.Receivable?.Customers || null;
       const supplier = item.Receivable?.Supplier || item.Receivable?.Suppliers || null;
@@ -188,8 +195,63 @@ async function listInstallments({
         openAmount: openBalance,
       };
     });
+  const standaloneReceipts = includeStandaloneReceipts
+    ? await repository.listStandaloneReceipts({
+        startDate,
+        endDate,
+        search,
+        customerId,
+      })
+    : [];
+  const standaloneSummary = includeStandaloneReceipts
+    ? await repository.summarizeStandaloneReceipts({
+        startDate,
+        endDate,
+        search,
+        customerId,
+      })
+    : { totalReceived: 0 };
 
-  const total = Number(result.count || 0);
+  const standaloneItems = standaloneReceipts.map((receipt) => {
+    const sale = receipt.Sale || receipt.Sales || null;
+    const customer = sale?.Customer || sale?.Customers || null;
+    const paymentType = receipt.PaymentType || receipt.PaymentTypes || null;
+
+    return {
+      id: -Number(receipt.idPaymentReceipt),
+      receivableId: null,
+      saleId: sale?.idSale || receipt.saleId || null,
+      customerId: customer?.idCustomer || sale?.customerId || null,
+      supplierId: null,
+      debtorType: "CUSTOMER",
+      operatorLabel: null,
+      customerName: customer?.fullName || customer?.companyName || "Cliente",
+      supplierName: null,
+      originType: "CUSTOMER",
+      originName: customer?.fullName || customer?.companyName || "Cliente",
+      parcela: receipt.receiptType === "ENTRY" ? "ENTRADA" : "A VISTA",
+      installmentNumber: null,
+      totalInstallments: null,
+      dueDate: receipt.paidAt,
+      status: "PAID",
+      filter: getStandaloneReceiptFilter(),
+      paymentTypeId: paymentType?.idPaymentType || receipt.paymentTypeId || null,
+      paymentTypeName: paymentType?.desc || null,
+      amount: Number(receipt.amount || 0),
+      paidAmount: Number(receipt.amount || 0),
+      openAmount: 0,
+    };
+  });
+
+  const items = includeStandaloneReceipts
+    ? [...installmentItems, ...standaloneItems]
+        .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())
+        .slice((page - 1) * pageSize, page * pageSize)
+    : installmentItems;
+
+  const total = includeStandaloneReceipts
+    ? installmentItems.length + standaloneItems.length
+    : Number(result.count || 0);
 
   return {
     items,
@@ -199,7 +261,9 @@ async function listInstallments({
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
     summary: {
       totalOpen: Number(Number(summary.totalOpen || 0).toFixed(2)),
-      totalReceived: Number(Number(summary.totalReceived || 0).toFixed(2)),
+      totalReceived: Number(
+        Number((summary.totalReceived || 0) + (standaloneSummary.totalReceived || 0)).toFixed(2),
+      ),
     },
   };
 }

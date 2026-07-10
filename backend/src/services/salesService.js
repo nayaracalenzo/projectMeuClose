@@ -320,6 +320,19 @@ function mapSaleItem(item) {
   };
 }
 
+function resolveSaleStatus(sale) {
+  const isLegacyCompleted =
+    typeof sale?.get === "function"
+      ? Boolean(sale.get("isLegacyCompleted"))
+      : Boolean(sale?.isLegacyCompleted);
+
+  if (sale?.status === "BUDGET" && isLegacyCompleted) {
+    return "COMPLETED";
+  }
+
+  return sale?.status || null;
+}
+
 function mapPaymentReceipt(receipt) {
   const paymentType = receipt.PaymentType || receipt.PaymentTypes;
 
@@ -412,7 +425,7 @@ function mapSaleDetails(sale) {
 
   return {
     id: sale.idSale,
-    status: sale.status,
+    status: resolveSaleStatus(sale),
     customer: customer
       ? {
           id: customer.idCustomer,
@@ -488,7 +501,7 @@ function mapSaleListItem(sale) {
 
   return {
     id: sale.idSale,
-    status: sale.status,
+    status: resolveSaleStatus(sale),
     customerName: customer?.fullName || customer?.companyName || "Sem cliente",
     paymentTypeName: paymentType?.desc || null,
     itemsCount: items.length,

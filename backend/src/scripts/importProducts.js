@@ -245,6 +245,14 @@ async function importProducts() {
           ignoreDuplicates: true,
         });
 
+        await Products.sequelize.query(`
+          SELECT setval(
+            pg_get_serial_sequence('"products"', 'id'),
+            COALESCE((SELECT MAX("id") FROM "products"), 1),
+            true
+          );
+        `);
+
         console.log("Importacao de produtos finalizada.");
         console.log(`Inseridos: ${productsToInsert.length}`);
         console.log(`Ignorados: ${skipped}`);

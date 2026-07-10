@@ -147,10 +147,23 @@ async function importSales() {
       try {
         console.log("Inserindo vendas no banco...");
 
-        await Sales.bulkCreate(salesToInsert, {
+        const existingIds = new Set(
+          (
+            await Sales.findAll({
+              attributes: ["idSale"],
+              raw: true,
+            })
+          ).map((item) => Number(item.idSale)),
+        );
+
+        const duplicateIds = salesToInsert.filter((sale) => existingIds.has(Number(sale.idSale))).length;
+
+        const insertedRows = await Sales.bulkCreate(salesToInsert, {
           validate: true,
           ignoreDuplicates: true,
         });
+
+        const totalAfterInsert = await Sales.count();
 
         await Sales.sequelize.query(`
           SELECT setval(
@@ -161,7 +174,10 @@ async function importSales() {
         `);
 
         console.log("Importacao de vendas finalizada.");
-        console.log(`Inseridas: ${salesToInsert.length}`);
+        console.log(`Preparadas para insercao: ${salesToInsert.length}`);
+        console.log(`Ja existentes (ignoradas por duplicate): ${duplicateIds}`);
+        console.log(`Retornadas pelo bulkCreate: ${Array.isArray(insertedRows) ? insertedRows.length : 0}`);
+        console.log(`Total atual na tabela sales: ${totalAfterInsert}`);
         console.log(`Ignoradas: ${skipped}`);
       } catch (error) {
         console.error("Erro geral ao inserir vendas:", error.message);
@@ -177,4 +193,8 @@ async function importSales() {
     });
 }
 
-importSales();
+if (require.main === module) {
+  importSales();
+}
+
+module.exports = importSales;

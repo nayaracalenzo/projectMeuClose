@@ -16,7 +16,13 @@ const SaleItemsSchema = (sequelize, DataTypes) => {
         allowNull: true,
       },
       itemType: {
-        type: DataTypes.STRING(30),
+        type: DataTypes.ENUM(
+          "READY_MADE",
+          "CUSTOM_MADE",
+          "ACCESSORY",
+          "SERVICE",
+          "MISC",
+        ),
         allowNull: false,
       },
       description: {

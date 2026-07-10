@@ -306,7 +306,7 @@ export default function Dashboard() {
               </h2>
               <button
                 type="button"
-                onClick={() => navigate("/pedidos")}
+                onClick={() => navigate("/producao")}
                 className="text-sm font-medium text-primary underline-offset-2 hover:underline"
               >
                 Ver todos

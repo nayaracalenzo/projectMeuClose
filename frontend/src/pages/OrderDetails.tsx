@@ -332,8 +332,8 @@ export default function OrderDetails() {
         <div className="mx-auto max-w-4xl rounded-2xl border border-[#c76767] bg-[#fdecec] px-6 py-8 text-center text-sm text-[#7a1717]">
           <p>{error}</p>
           <div className="mt-4 flex justify-center gap-3">
-            <Button variant="secondary" onClick={() => navigate("/pedidos")}>
-              Voltar para pedidos
+            <Button variant="secondary" onClick={() => navigate("/producao")}>
+              Voltar para produção
             </Button>
           </div>
         </div>
@@ -352,10 +352,10 @@ export default function OrderDetails() {
           <div>
             <button
               type="button"
-              onClick={() => navigate("/pedidos")}
+              onClick={() => navigate("/producao")}
               className="mb-4 text-sm text-neutral-700 underline-offset-2 hover:underline"
             >
-              Voltar para pedidos
+              Voltar para produção
             </button>
             <h1 className="font-editorial text-5xl text-primary md:text-4xl">
               Detalhes do Pedido

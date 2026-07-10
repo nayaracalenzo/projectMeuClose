@@ -37,7 +37,8 @@ function App() {
             <Route path="/home" element={<Dashboard />} />
             <Route path="/clientes" element={<Customers />} />
             <Route path="/cliente/:id" element={<CustomerDetails />} />
-            <Route path="/pedidos" element={<Orders />} />
+            <Route path="/pedidos" element={<Navigate to="/producao" replace />} />
+            <Route path="/producao" element={<Orders />} />
             <Route path="/pedido/:id" element={<OrderDetails />} />
             <Route path="/caixa" element={<Registers />} />
             <Route path="/vendas" element={<SalesPage />} />

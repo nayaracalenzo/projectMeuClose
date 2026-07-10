@@ -163,6 +163,11 @@ function formatSaleStatus(value?: string | null) {
   return value || "-";
 }
 
+function isProductionItem(item?: SaleDetailItem | null) {
+  if (!item?.productId) return false;
+  return item.itemType === "CUSTOM_MADE" || item.itemType === "SERVICE";
+}
+
 export default function SaleDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -190,7 +195,7 @@ export default function SaleDetailsPage() {
       }
     };
 
-    fetchSale();
+    void fetchSale();
   }, [id]);
 
   const totalItemDiscount = useMemo(() => {
@@ -201,6 +206,11 @@ export default function SaleDetailsPage() {
   const totalReceived = useMemo(() => {
     if (!sale) return 0;
     return Number(sale.receipts.reduce((acc, receipt) => acc + receipt.amount, 0).toFixed(2));
+  }, [sale]);
+
+  const firstProductionItem = useMemo(() => {
+    if (!sale) return null;
+    return sale.items.find((item) => isProductionItem(item)) || null;
   }, [sale]);
 
   if (loading) {
@@ -242,18 +252,21 @@ export default function SaleDetailsPage() {
             >
               Voltar para vendas
             </button>
-            <h1 className="font-editorial text-5xl text-primary md:text-4xl">
-              Detalhes da Venda
-            </h1>
+            <h1 className="font-editorial text-5xl text-primary md:text-4xl">Detalhes da Venda</h1>
             <p className="mt-2 text-sm text-neutral-700">
               Visualize os itens, recebimentos e parcelas vinculadas a esta venda.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => navigate(`/pedido/${sale.items[0]?.productId || sale.id}`)} disabled={!sale.items[0]?.productId}>
-              Abrir primeiro pedido
-            </Button>
+            {firstProductionItem?.productId ? (
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/pedido/${firstProductionItem.productId}`)}
+              >
+                Abrir pedido de produção
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -319,7 +332,9 @@ export default function SaleDetailsPage() {
                         <div className="flex flex-col gap-1">
                           <span className="font-medium text-primary">{item.description}</span>
                           <span className="text-xs text-neutral-600">
-                            {item.productId ? `Pedido #${item.productId}` : "Sem pedido vinculado"}
+                            {isProductionItem(item)
+                              ? `Pedido #${item.productId}`
+                              : "Sem produção vinculada"}
                           </span>
                         </div>
                       </td>
@@ -356,16 +371,12 @@ export default function SaleDetailsPage() {
                   >
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-primary">
-                          {formatReceiptType(receipt.receiptType)}
-                        </p>
+                        <p className="text-sm font-semibold text-primary">{formatReceiptType(receipt.receiptType)}</p>
                         <p className="text-sm text-neutral-700">
                           {receipt.paymentType?.name || "Forma não identificada"}
                         </p>
                       </div>
-                      <p className="text-sm font-semibold text-primary">
-                        {formatCurrency(receipt.amount)}
-                      </p>
+                      <p className="text-sm font-semibold text-primary">{formatCurrency(receipt.amount)}</p>
                     </div>
                     <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                       <p>Data: {formatDateTime(receipt.paidAt)}</p>

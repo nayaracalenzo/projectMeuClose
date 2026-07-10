@@ -192,6 +192,56 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
   ];
 }
 
+function buildStandaloneReceiptsWhere({ startDate, endDate, search } = {}) {
+  const where = {
+    receivableInstallmentId: null,
+    receiptType: {
+      [Op.in]: ["SALE_FULL", "ENTRY"],
+    },
+  };
+
+  if (startDate || endDate) {
+    where.paidAt = {};
+    if (startDate) {
+      where.paidAt[Op.gte] = startDate;
+    }
+    if (endDate) {
+      where.paidAt[Op.lte] = endDate;
+    }
+  }
+
+  if (search) {
+    const term = `%${search}%`;
+    where[Op.or] = [
+      Sequelize.where(Sequelize.cast(Sequelize.col("PaymentReceipts.saleId"), "TEXT"), {
+        [Op.iLike]: term,
+      }),
+      {
+        "$PaymentType.desc$": {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        "$Sale.Customer.fullName$": {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        "$Sale.Customer.companyName$": {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        referenceCode: {
+          [Op.iLike]: term,
+        },
+      },
+    ];
+  }
+
+  return where;
+}
+
 async function listInstallments({
   page,
   pageSize,
@@ -202,15 +252,27 @@ async function listInstallments({
   customerId,
 } = {}) {
   const where = buildStatusWhere(status, buildInstallmentsWhere({ startDate, endDate, search }));
-
-  return ReceivableInstallments.findAndCountAll({
+  const query = {
     where,
     include: buildReceivablesInclude({ customerId }),
     order: [["dueDate", "ASC"], ["installmentNumber", "ASC"]],
-    limit: pageSize,
-    offset: (page - 1) * pageSize,
     distinct: true,
-  });
+  };
+
+  if (Number.isInteger(pageSize) && pageSize > 0) {
+    query.limit = pageSize;
+  }
+
+  if (
+    Number.isInteger(page) &&
+    page > 0 &&
+    Number.isInteger(pageSize) &&
+    pageSize > 0
+  ) {
+    query.offset = (page - 1) * pageSize;
+  }
+
+  return ReceivableInstallments.findAndCountAll(query);
 }
 
 async function summarizeInstallments({ startDate, endDate, search, status, customerId } = {}) {
@@ -239,6 +301,78 @@ async function summarizeInstallments({ startDate, endDate, search, status, custo
   return {
     totalReceived: Number(totals?.totalReceived || 0),
     totalOpen: Number(totals?.totalOpen || 0),
+  };
+}
+
+async function listStandaloneReceipts({ startDate, endDate, search, customerId } = {}) {
+  const saleWhere =
+    customerId && Number(customerId) > 0
+      ? {
+          customerId: Number(customerId),
+        }
+      : undefined;
+
+  return PaymentReceipts.findAll({
+    where: buildStandaloneReceiptsWhere({ startDate, endDate, search }),
+    include: [
+      {
+        model: Sales,
+        required: true,
+        where: saleWhere,
+        include: [
+          {
+            model: Customers,
+            attributes: ["idCustomer", "fullName", "companyName"],
+          },
+        ],
+      },
+      {
+        model: PaymentTypes,
+        attributes: ["idPaymentType", "desc"],
+        required: false,
+      },
+    ],
+    order: [["paidAt", "DESC"], ["idPaymentReceipt", "DESC"]],
+  });
+}
+
+async function summarizeStandaloneReceipts({ startDate, endDate, search, customerId } = {}) {
+  const saleWhere =
+    customerId && Number(customerId) > 0
+      ? {
+          customerId: Number(customerId),
+        }
+      : undefined;
+
+  const [totals] = await PaymentReceipts.findAll({
+    where: buildStandaloneReceiptsWhere({ startDate, endDate, search }),
+    include: [
+      {
+        model: Sales,
+        required: true,
+        where: saleWhere,
+        attributes: [],
+        include: [
+          {
+            model: Customers,
+            attributes: [],
+          },
+        ],
+      },
+      {
+        model: PaymentTypes,
+        attributes: [],
+        required: false,
+      },
+    ],
+    attributes: [
+      [sequelize.fn("COALESCE", sequelize.fn("SUM", sequelize.col("PaymentReceipts.amount")), 0), "totalReceived"],
+    ],
+    raw: true,
+  });
+
+  return {
+    totalReceived: Number(totals?.totalReceived || 0),
   };
 }
 
@@ -325,5 +459,7 @@ module.exports = {
   createStandaloneReceipt,
   listInstallments,
   summarizeInstallments,
+  listStandaloneReceipts,
+  summarizeStandaloneReceipts,
   registerReceipt,
 };

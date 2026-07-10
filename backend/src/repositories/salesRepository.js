@@ -20,6 +20,60 @@ const { createBankEntry, createCashEntry } = require("../services/financialEntri
 const productsRepository = require("./productsRepository");
 const receivablesRepository = require("./receivablesRepository");
 
+function buildLegacyCompletedSignalSql() {
+  return `
+    (
+      "Sales"."paymentTypeId" IS NOT NULL
+      OR EXISTS (
+        SELECT 1
+        FROM "payment_receipts" AS pr
+        WHERE pr."saleId" = "Sales"."idSale"
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM "receivables" AS r
+        WHERE r."saleId" = "Sales"."idSale"
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM "card_transactions" AS ct
+        WHERE ct."saleId" = "Sales"."idSale"
+      )
+    )
+  `;
+}
+
+function buildLegacyCompletedSignal() {
+  return sequelize.literal(buildLegacyCompletedSignalSql());
+}
+
+function buildStatusWhere(status) {
+  if (!status) {
+    return {};
+  }
+
+  const legacyCompletedSignal = buildLegacyCompletedSignal();
+
+  if (status === "COMPLETED") {
+    return {
+      [Op.or]: [
+        { status: "COMPLETED" },
+        {
+          [Op.and]: [{ status: "BUDGET" }, legacyCompletedSignal],
+        },
+      ],
+    };
+  }
+
+  if (status === "BUDGET") {
+    return {
+      [Op.and]: [{ status: "BUDGET" }, sequelize.literal(`NOT ${buildLegacyCompletedSignalSql()}`)],
+    };
+  }
+
+  return { status };
+}
+
 async function createSale({
   sale,
   items,
@@ -158,7 +212,12 @@ async function getSaleForFinalization(idSale, transaction) {
       },
     ],
     transaction,
-    lock: transaction ? transaction.LOCK.UPDATE : undefined,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: Sales,
+        }
+      : undefined,
   });
 }
 
@@ -248,9 +307,14 @@ async function finalizeSale(
 }
 
 async function getSaleById(idSale) {
+  const legacyCompletedSignal = buildLegacyCompletedSignal();
+
   return Sales.findOne({
     where: {
       idSale,
+    },
+    attributes: {
+      include: [[legacyCompletedSignal, "isLegacyCompleted"]],
     },
     include: [
       {
@@ -326,14 +390,14 @@ async function getSaleById(idSale) {
 }
 
 async function listSales({ page = 1, pageSize = 10, status, search } = {}) {
-  const where = {};
-
-  if (status) {
-    where.status = status;
-  }
+  const where = buildStatusWhere(status);
+  const legacyCompletedSignal = buildLegacyCompletedSignal();
 
   return Sales.findAndCountAll({
     where,
+    attributes: {
+      include: [[legacyCompletedSignal, "isLegacyCompleted"]],
+    },
     include: [
       {
         model: Customers,
