@@ -27,7 +27,7 @@ async function importClothingsType() {
           const desc = row.desc || row.des || row.nome || row.name;
 
           if (!desc) {
-            console.warn(`Ignorando linha sem descricao: ${JSON.stringify(row)}`);
+            console.warn(`Ignorando linha sem descrição: ${JSON.stringify(row)}`);
             skipped += 1;
             continue;
           }

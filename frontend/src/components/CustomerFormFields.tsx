@@ -41,6 +41,8 @@ type CustomerFormFieldsProps = {
   professions: ProfessionOption[];
   onFieldChange: (field: keyof CustomerFormValues, value: string) => void;
   onTypeCustomerChange: (value: "INDIVIDUAL" | "COMPANY") => void;
+  zipCodeHelperMessage?: string;
+  onCreateProfessionRequest?: () => void;
   readOnly?: boolean;
   showStatusFields?: boolean;
   active?: boolean;
@@ -53,6 +55,8 @@ export default function CustomerFormFields({
   professions,
   onFieldChange,
   onTypeCustomerChange,
+  zipCodeHelperMessage = "",
+  onCreateProfessionRequest,
   readOnly = false,
   showStatusFields = false,
   active = false,
@@ -150,20 +154,34 @@ export default function CustomerFormFields({
     }
 
     if (field.type === "select") {
+      const isProfessionField = field.key === "professionId";
+
       return (
         <div key={field.key}>
           <label className="mb-1 block text-sm text-primary">{label}</label>
-          <select
-            value={String(form[field.key] ?? "")}
-            onChange={(e) => onFieldChange(field.key, e.target.value)}
-            className={baseClass}
-          >
-            {(field.options || []).map((option) => (
-              <option key={`${field.key}-${option.value}`} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className={isProfessionField && onCreateProfessionRequest ? "grid grid-cols-[minmax(0,1fr)_42px] gap-2" : ""}>
+            <select
+              value={String(form[field.key] ?? "")}
+              onChange={(e) => onFieldChange(field.key, e.target.value)}
+              className={baseClass}
+            >
+              {(field.options || []).map((option) => (
+                <option key={`${field.key}-${option.value}`} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {isProfessionField && onCreateProfessionRequest ? (
+              <button
+                type="button"
+                onClick={onCreateProfessionRequest}
+                className="h-10 rounded-lg border border-[#a59797] bg-white text-lg text-primary transition hover:bg-surface-low"
+                aria-label="Cadastrar nova profissao"
+              >
+                +
+              </button>
+            ) : null}
+          </div>
         </div>
       );
     }
@@ -177,6 +195,9 @@ export default function CustomerFormFields({
           onChange={(e) => onFieldChange(field.key, e.target.value)}
           className={baseClass}
         />
+        {field.key === "zipCode" && zipCodeHelperMessage ? (
+          <p className="mt-1 text-xs text-neutral-700">{zipCodeHelperMessage}</p>
+        ) : null}
       </div>
     );
   };

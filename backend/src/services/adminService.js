@@ -99,10 +99,10 @@ function sanitizePayload(resource, body = {}) {
 function validatePayload(resource, payload, isCreate) {
   if (resource === "payment-types") {
     if (isCreate && !payload.desc) {
-      throw createAdminResourceError("Descricao e obrigatoria.");
+      throw createAdminResourceError("Descrição e obrigatoria.");
     }
     if (!isCreate && "desc" in payload && !payload.desc) {
-      throw createAdminResourceError("Descricao e obrigatoria.");
+      throw createAdminResourceError("Descrição e obrigatoria.");
     }
     return;
   }
@@ -130,7 +130,7 @@ function validatePayload(resource, payload, isCreate) {
       throw createAdminResourceError("Cargo da funcionaria e obrigatorio.");
     }
   } else if (isCreate && !payload.desc) {
-    throw createAdminResourceError("Descricao e obrigatoria.");
+    throw createAdminResourceError("Descrição e obrigatoria.");
   }
 }
 

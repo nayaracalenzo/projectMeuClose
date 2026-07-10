@@ -90,10 +90,15 @@ export default function Registers() {
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, balance: 0 });
+  const [summary, setSummary] = useState({
+    totalIn: 0,
+    totalOut: 0,
+    balance: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sessionStatus, setSessionStatus] = useState<CashSessionStatusResponse | null>(null);
+  const [sessionStatus, setSessionStatus] =
+    useState<CashSessionStatusResponse | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionActionLoading, setSessionActionLoading] = useState(false);
   const [openSessionModal, setOpenSessionModal] = useState(false);
@@ -103,7 +108,9 @@ export default function Registers() {
   const [countedBalanceInput, setCountedBalanceInput] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
   const [transferAmountInput, setTransferAmountInput] = useState("");
-  const [transferDate, setTransferDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [transferDate, setTransferDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [transferDescription, setTransferDescription] = useState(
     "Transferência do caixa para o banco",
   );
@@ -121,7 +128,9 @@ export default function Registers() {
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
 
-    const data = (await getRequest(`/cash?${params.toString()}`)) as CashListResponse;
+    const data = (await getRequest(
+      `/cash?${params.toString()}`,
+    )) as CashListResponse;
     setRows(Array.isArray(data.items) ? data.items : []);
     setTotalRows(Number(data.total) || 0);
     setTotalPages(Number(data.totalPages) || 1);
@@ -170,7 +179,12 @@ export default function Registers() {
         setTotalRows(0);
         setTotalPages(1);
         setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
-        setError(getUserFacingApiErrorMessage(err, "Nao foi possivel carregar o caixa."));
+        setError(
+          getUserFacingApiErrorMessage(
+            err,
+            "Nao foi possivel carregar o caixa.",
+          ),
+        );
       } finally {
         setLoading(false);
       }
@@ -224,7 +238,10 @@ export default function Registers() {
         open: true,
         tone: "error",
         title: "Nao foi possivel abrir",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel abrir o caixa."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel abrir o caixa.",
+        ),
       });
     } finally {
       setSessionActionLoading(false);
@@ -251,7 +268,10 @@ export default function Registers() {
         open: true,
         tone: "error",
         title: "Nao foi possivel fechar",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel fechar o caixa."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel fechar o caixa.",
+        ),
       });
     } finally {
       setSessionActionLoading(false);
@@ -273,7 +293,8 @@ export default function Registers() {
         open: true,
         tone: "success",
         title: "Transferência registrada",
-        message: "A saída do caixa e a entrada no banco foram registradas com sucesso.",
+        message:
+          "A saída do caixa e a entrada no banco foram registradas com sucesso.",
       });
     } catch (err: unknown) {
       setToast({
@@ -331,19 +352,23 @@ export default function Registers() {
                 Sessao do Caixa da Loja
               </p>
               {sessionLoading ? (
-                <p className="mt-1 text-sm text-neutral-700">Carregando sessao...</p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  Carregando sessao...
+                </p>
               ) : currentSession ? (
                 <>
                   <p className="mt-1 text-sm font-semibold text-primary">
                     Aberto em {formatDateTime(currentSession.openedAt)}
                   </p>
                   <p className="text-sm text-neutral-700">
-                    Saldo inicial: {formatCurrency(currentSession.openingBalance)} | Entradas:{" "}
+                    Saldo inicial:{" "}
+                    {formatCurrency(currentSession.openingBalance)} | Entradas:{" "}
                     {formatCurrency(currentSession.totalIn)} | Saidas:{" "}
                     {formatCurrency(currentSession.totalOut)}
                   </p>
                   <p className="text-sm text-neutral-700">
-                    Saldo esperado: {formatCurrency(currentSession.expectedBalance)}
+                    Saldo esperado:{" "}
+                    {formatCurrency(currentSession.expectedBalance)}
                   </p>
                 </>
               ) : (
@@ -391,8 +416,9 @@ export default function Registers() {
             <div className="rounded-xl border border-[#c6a33a] bg-[#fff8df] px-4 py-3 text-sm text-[#6d5600]">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  O caixa da loja iniciado em {formatDate(currentSession!.openedAt)} ainda nao foi
-                  fechado. Deseja fechar esse caixa agora?
+                  O caixa da loja iniciado em{" "}
+                  {formatDate(currentSession!.openedAt)} ainda nao foi fechado.
+                  Deseja fechar esse caixa agora?
                 </div>
                 <button
                   type="button"
@@ -419,13 +445,15 @@ export default function Registers() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Descricao do lancamento"
+            placeholder="Descrição do lancamento"
             className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
           />
         </div>
         <div className="flex flex-col gap-3 md:flex-row">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">De</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              De
+            </label>
             <input
               type="date"
               value={startDate}
@@ -434,7 +462,9 @@ export default function Registers() {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Ate</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Ate
+            </label>
             <input
               type="date"
               value={endDate}
@@ -454,11 +484,15 @@ export default function Registers() {
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Entradas</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalIn)}</p>
+          <p className="text-lg font-semibold text-primary">
+            {formatCurrency(summary.totalIn)}
+          </p>
         </div>
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Saidas</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalOut)}</p>
+          <p className="text-lg font-semibold text-primary">
+            {formatCurrency(summary.totalOut)}
+          </p>
         </div>
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Saldo</p>
@@ -472,7 +506,9 @@ export default function Registers() {
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Data</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Data
+              </th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
                 Historico
               </th>
@@ -550,7 +586,9 @@ export default function Registers() {
         ) : (
           rows.map((row) => (
             <div key={row.id} className="px-4 py-4">
-              <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
+              <p className="text-sm font-semibold text-primary">
+                {formatDate(row.date)}
+              </p>
               <p className="text-xs text-neutral-700">{row.description}</p>
               <p
                 className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
@@ -575,7 +613,9 @@ export default function Registers() {
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
-          {loading ? "Carregando..." : `${totalRows} lançamento(s) | Página ${page} de ${totalPages}`}
+          {loading
+            ? "Carregando..."
+            : `${totalRows} lançamento(s) | Página ${page} de ${totalPages}`}
         </p>
         <div className="flex gap-2">
           <button
@@ -588,7 +628,9 @@ export default function Registers() {
           </button>
           <button
             type="button"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
             disabled={loading || page >= totalPages}
             className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm text-primary disabled:opacity-60"
           >
@@ -605,17 +647,23 @@ export default function Registers() {
       >
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Valor</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Valor
+            </label>
             <input
               value={transferAmountInput}
-              onChange={(e) => setTransferAmountInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setTransferAmountInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Data</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Data
+            </label>
             <input
               type="date"
               value={transferDate}
@@ -625,7 +673,9 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Descrição</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Descrição
+            </label>
             <input
               value={transferDescription}
               onChange={(e) => setTransferDescription(e.target.value)}
@@ -634,7 +684,9 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Referência</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Referência
+            </label>
             <input
               value={transferReferenceCode}
               onChange={(e) => setTransferReferenceCode(e.target.value)}
@@ -650,7 +702,9 @@ export default function Registers() {
               disabled={sessionActionLoading}
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
-              {sessionActionLoading ? "Transferindo..." : "Confirmar transferência"}
+              {sessionActionLoading
+                ? "Transferindo..."
+                : "Confirmar transferência"}
             </button>
             <button
               type="button"
@@ -676,7 +730,9 @@ export default function Registers() {
             </label>
             <input
               value={openingBalanceInput}
-              onChange={(e) => setOpeningBalanceInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setOpeningBalanceInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
@@ -724,7 +780,9 @@ export default function Registers() {
         <div className="space-y-4">
           {currentSession ? (
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
-              <p>Saldo inicial: {formatCurrency(currentSession.openingBalance)}</p>
+              <p>
+                Saldo inicial: {formatCurrency(currentSession.openingBalance)}
+              </p>
               <p>Entradas: {formatCurrency(currentSession.totalIn)}</p>
               <p>Saidas: {formatCurrency(currentSession.totalOut)}</p>
               <p className="font-semibold text-primary">
@@ -738,7 +796,9 @@ export default function Registers() {
             </label>
             <input
               value={countedBalanceInput}
-              onChange={(e) => setCountedBalanceInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setCountedBalanceInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />

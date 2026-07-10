@@ -7,7 +7,7 @@ import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
 import CustomerReceivablesModal from "../components/CustomerReceivablesModal";
 import CustomerSalesModal from "../components/CustomerSalesModal";
-import { getRequest, updateRequest } from "../services/request";
+import { getRequest, postRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { maskCep } from "../utils/maskCep";
 import { maskCpfCnpj } from "../utils/maskCpfCnpj";
@@ -200,6 +200,10 @@ export default function CustomerDetails() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [zipLookupMessage, setZipLookupMessage] = useState("");
+  const [professionModalOpen, setProfessionModalOpen] = useState(false);
+  const [professionName, setProfessionName] = useState("");
+  const [professionError, setProfessionError] = useState("");
+  const [professionSaving, setProfessionSaving] = useState(false);
   const [form, setForm] = useState<Partial<ClientDetails>>({});
   const [professions, setProfessions] = useState<ProfessionOption[]>([]);
   const [isReceivablesModalOpen, setIsReceivablesModalOpen] = useState(false);
@@ -320,6 +324,45 @@ export default function CustomerDetails() {
     setField(key as keyof ClientDetails, value);
   };
 
+  const closeProfessionModal = () => {
+    setProfessionModalOpen(false);
+    setProfessionName("");
+    setProfessionError("");
+    setProfessionSaving(false);
+  };
+
+  const handleCreateProfession = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedName = professionName.trim().replace(/\s+/g, " ");
+
+    if (!normalizedName) {
+      setProfessionError("Informe o nome da profissao.");
+      return;
+    }
+
+    try {
+      setProfessionSaving(true);
+      setProfessionError("");
+
+      const created = (await postRequest("/professions", {
+        name: normalizedName,
+      })) as ProfessionOption;
+
+      setProfessions((prev) =>
+        [...prev, created].sort((left, right) => left.name.localeCompare(right.name, "pt-BR")),
+      );
+      setField("professionId", Number(created.id));
+      closeProfessionModal();
+    } catch (err: unknown) {
+      setProfessionError(
+        getUserFacingApiErrorMessage(err, "Nao foi possivel cadastrar a profissao."),
+      );
+    } finally {
+      setProfessionSaving(false);
+    }
+  };
+
   const handleActiveChange = (value: boolean) => {
     if (value) {
       setForm((prev) => ({
@@ -392,7 +435,12 @@ export default function CustomerDetails() {
       const updated = await updateRequest(`/clients/${id}`, buildPayload());
       setClient(updated as ClientDetails);
       setForm(toEditableForm(updated as ClientDetails));
-      setSaveMessage("Cliente atualizado com sucesso.");
+      setNotice({
+        open: true,
+        tone: "success",
+        title: "Cliente atualizado",
+        message: "Cliente atualizado com sucesso.",
+      });
       return true;
     } catch (err: unknown) {
       setSaveMessage(
@@ -542,7 +590,6 @@ export default function CustomerDetails() {
       </div>
 
       {saveMessage ? <p className="mb-4 text-sm text-neutral-700">{saveMessage}</p> : null}
-      {zipLookupMessage ? <p className="mb-4 text-xs text-neutral-700">{zipLookupMessage}</p> : null}
 
       <div className="bg-surface-lowest p-6 shadow-sm">
         <CustomerFormFields
@@ -550,6 +597,8 @@ export default function CustomerDetails() {
           professions={professions}
           onFieldChange={(field, value) => handleFieldChange(field, value)}
           onTypeCustomerChange={(value) => setField("typeCustomer", value)}
+          zipCodeHelperMessage={zipLookupMessage}
+          onCreateProfessionRequest={() => setProfessionModalOpen(true)}
           readOnly={false}
           showStatusFields
           active={Boolean(form.active)}
@@ -575,6 +624,46 @@ export default function CustomerDetails() {
         onClose={() => setIsSalesModalOpen(false)}
       />
 
+      <CustomerModal
+        open={professionModalOpen}
+        onClose={closeProfessionModal}
+        title="Nova profissao"
+        subtitle="Cadastre uma nova profissao sem sair do cliente."
+      >
+        <div className="mx-auto max-w-xl">
+          {professionError ? (
+            <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-3 py-2 text-sm text-[#7a1717]">
+              {professionError}
+            </div>
+          ) : null}
+
+          <form className="space-y-4" onSubmit={handleCreateProfession}>
+            <div>
+              <label className="mb-1 block text-sm text-primary" htmlFor="profession-name-edit">
+                Nome da profissao
+              </label>
+              <input
+                id="profession-name-edit"
+                value={professionName}
+                onChange={(event) => setProfessionName(event.target.value)}
+                className="h-10 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526] shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" size="md" onClick={closeProfessionModal}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary" size="md" disabled={professionSaving}>
+                {professionSaving ? "Salvando..." : "Salvar profissao"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </CustomerModal>
+
       <CustomerReceivablesModal
         open={isReceivablesModalOpen}
         clientName={String(client.fullName || client.companyName || "Cliente")}
@@ -592,7 +681,7 @@ export default function CustomerDetails() {
         }
         subtitle={
           confirmationModal.type === "deactivate"
-              ? "A desativacao impede novas compras para este cliente."
+              ? "A desativação impede novas compras para este cliente."
               : ""
         }
         onClose={closeConfirmationModal}
@@ -608,14 +697,14 @@ export default function CustomerDetails() {
                 Cancelar
               </Button>
               <Button variant="danger" size="md" onClick={() => void handleConfirmation()}>
-                Confirmar exclusao
+                Confirmar exclusão
               </Button>
             </div>
           </div>
         ) : confirmationModal.type === "deactivate" ? (
           <div className="space-y-5">
             <p className="text-sm text-neutral-700">
-              Confirme se deseja desativar este cliente. Ele nao podera realizar novas compras
+              Confirme se deseja desativar este cliente. Ele não poderá realizar novas compras
               enquanto estiver inativo.
             </p>
             <div className="flex justify-end gap-3">
@@ -623,7 +712,7 @@ export default function CustomerDetails() {
                 Cancelar
               </Button>
               <Button variant="primary" size="md" onClick={() => void handleConfirmation()}>
-                Confirmar desativacao
+                Confirmar desativação
               </Button>
             </div>
           </div>
