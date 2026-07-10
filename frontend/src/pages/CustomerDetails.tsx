@@ -652,7 +652,6 @@ export default function CustomerDetails() {
           showStatusFields
           active={Boolean(form.active)}
           onActiveChange={handleActiveChange}
-          onDeleteRequest={handleDeleteRequest}
         />
 
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -668,6 +667,12 @@ export default function CustomerDetails() {
               {formatDate(client.updatedAt)}
             </p>
           </div>
+        </div>
+
+        <div className="mt-6 flex justify-end">
+          <Button variant="danger" size="md" onClick={handleDeleteRequest} disabled={saving}>
+            Excluir cliente
+          </Button>
         </div>
       </div>
 

@@ -47,7 +47,6 @@ type CustomerFormFieldsProps = {
   showStatusFields?: boolean;
   active?: boolean;
   onActiveChange?: (value: boolean) => void;
-  onDeleteRequest?: () => void;
 };
 
 export default function CustomerFormFields({
@@ -61,7 +60,6 @@ export default function CustomerFormFields({
   showStatusFields = false,
   active = false,
   onActiveChange,
-  onDeleteRequest,
 }: CustomerFormFieldsProps) {
   const baseClass =
     "h-10 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526] shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]";
@@ -237,7 +235,7 @@ export default function CustomerFormFields({
           </div>
 
           {showStatusFields ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_auto] lg:min-w-[280px] lg:justify-end">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto] lg:min-w-[140px] lg:justify-end">
               <label className="flex items-center gap-3 py-3 text-sm text-[#2a2526]">
                 <input
                   type="checkbox"
@@ -248,14 +246,6 @@ export default function CustomerFormFields({
                 />
                 <span className="font-medium">Ativo</span>
               </label>
-              <button
-                type="button"
-                onClick={onDeleteRequest}
-                className="rounded-lg border border-[#b33a3a] px-4 py-2 text-sm font-medium text-[#8a2323] transition hover:bg-[#fff3f3] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={readOnly}
-              >
-                Excluir cliente
-              </button>
             </div>
           ) : null}
         </div>
