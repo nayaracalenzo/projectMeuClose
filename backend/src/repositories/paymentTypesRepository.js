@@ -2,6 +2,9 @@ const { PaymentTypes } = require("../models");
 
 async function listPaymentTypes() {
   return PaymentTypes.findAll({
+    where: {
+      active: true,
+    },
     order: [["idPaymentType", "ASC"]],
   });
 }

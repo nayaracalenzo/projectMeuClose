@@ -30,6 +30,7 @@ const resourceConfig = {
   suppliers: {
     modelName: "Suppliers",
     primaryKey: "idSupplier",
+    softDelete: true,
     defaultOrder: [["tradeName", "ASC"], ["fullName", "ASC"]],
     editableFields: [
       "fullName",
@@ -55,8 +56,9 @@ const resourceConfig = {
   roles: {
     modelName: "Roles",
     primaryKey: "id",
+    softDelete: true,
     defaultOrder: [["desc", "ASC"]],
-    editableFields: ["desc"],
+    editableFields: ["desc", "active"],
   },
   colors: {
     modelName: "Colors",
@@ -97,8 +99,9 @@ const resourceConfig = {
   "payment-types": {
     modelName: "PaymentTypes",
     primaryKey: "idPaymentType",
+    softDelete: true,
     defaultOrder: [["idPaymentType", "ASC"]],
-    editableFields: ["desc"],
+    editableFields: ["desc", "active"],
   },
   audits: {
     modelName: "Audits",

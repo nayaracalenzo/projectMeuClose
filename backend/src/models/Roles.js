@@ -13,6 +13,11 @@ const Roles = sequelize.define(
       allowNull: false,
       unique: true,
     },
+    active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   },
   {
     tableName: "roles",

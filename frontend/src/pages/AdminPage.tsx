@@ -35,6 +35,7 @@ type DeleteModalState = {
 type RoleOption = {
   id: number;
   desc: string;
+  active?: boolean;
 };
 
 type AuditTypeOption = {
@@ -68,16 +69,18 @@ const resourceConfigList: ResourceConfig[] = [
     title: "Fornecedores",
     endpoint: "/admin/suppliers",
     emptyLabel: "Nenhum fornecedor cadastrado.",
-    deleteLabel: "Excluir",
+    deleteLabel: "Desativar",
     primaryKey: "idSupplier",
+    isSoftDelete: true,
   },
   {
     key: "roles",
     title: "Cargos",
     endpoint: "/admin/roles",
     emptyLabel: "Nenhum cargo cadastrado.",
-    deleteLabel: "Excluir",
+    deleteLabel: "Desativar",
     primaryKey: "id",
+    isSoftDelete: true,
   },
   {
     key: "professions",
@@ -124,8 +127,9 @@ const resourceConfigList: ResourceConfig[] = [
     title: "Formas de Pagamento",
     endpoint: "/admin/payment-types",
     emptyLabel: "Nenhuma forma de pagamento cadastrada.",
-    deleteLabel: "Excluir",
+    deleteLabel: "Desativar",
     primaryKey: "idPaymentType",
+    isSoftDelete: true,
   },
   {
     key: "audits",
@@ -163,6 +167,7 @@ const employeeInitialForm = {
 
 const simpleInitialForm = {
   desc: "",
+  active: true,
 };
 
 const supplierInitialForm = {
@@ -345,6 +350,15 @@ export default function AdminPage() {
     }));
   }, [currentRows, roles, selectedResource]);
 
+  const availableRoles = useMemo(() => {
+    if (selectedResource !== "employees") return roles;
+
+    const currentRoleId = Number(employeeForm.roleId || 0);
+    return roles.filter(
+      (role) => role.active !== false || Number(role.id) === currentRoleId,
+    );
+  }, [employeeForm.roleId, roles, selectedResource]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [pageSize]);
@@ -445,6 +459,7 @@ export default function AdminPage() {
 
     setSimpleForm({
       desc: String(row.desc ?? ""),
+      active: row.active === undefined ? true : Boolean(row.active),
     });
   }
 
@@ -645,7 +660,7 @@ export default function AdminPage() {
     );
   }
 
-  function renderPaymentTypesTable() {
+function renderPaymentTypesTable() {
     return (
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full border-separate border-spacing-y-2">
@@ -656,6 +671,9 @@ export default function AdminPage() {
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
                 Descrição
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
+                Status
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary text-right">
                 Acoes
@@ -670,6 +688,9 @@ export default function AdminPage() {
                 </td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
                   {String(row.desc ?? "")}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {row.active === false ? "Inativa" : "Ativa"}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
@@ -775,7 +796,9 @@ export default function AdminPage() {
     );
   }
 
-  function renderSimpleTable() {
+function renderSimpleTable() {
+    const showStatusColumn = selectedResource === "roles";
+
     return (
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full border-separate border-spacing-y-2">
@@ -787,6 +810,11 @@ export default function AdminPage() {
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
                 Descrição
               </th>
+              {showStatusColumn ? (
+                <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
+                  Status
+                </th>
+              ) : null}
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary text-right">
                 Acoes
               </th>
@@ -801,6 +829,11 @@ export default function AdminPage() {
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
                   {String(row.desc ?? "")}
                 </td>
+                {showStatusColumn ? (
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.active === false ? "Inativo" : "Ativo"}
+                  </td>
+                ) : null}
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
                     <Button
@@ -989,6 +1022,21 @@ export default function AdminPage() {
                 </p>
                 <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
                   ID {String(row.idPaymentType ?? "")}
+                </p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  {row.active === false ? "Inativa" : "Ativa"}
+                </p>
+              </>
+            ) : selectedResource === "roles" ? (
+              <>
+                <p className="text-base font-semibold text-primary">
+                  {String(row.desc ?? "")}
+                </p>
+                <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                  ID {String(row.id ?? "")}
+                </p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  {row.active === false ? "Inativo" : "Ativo"}
                 </p>
               </>
             ) : selectedResource === "audits" ? (
@@ -1270,7 +1318,7 @@ export default function AdminPage() {
                   required
                 >
                   <option value="">Selecione o cargo</option>
-                  {roles.map((role) => (
+                  {availableRoles.map((role) => (
                     <option key={role.id} value={role.id}>
                       {role.desc}
                     </option>
@@ -1686,17 +1734,55 @@ export default function AdminPage() {
                 </div>
               </>
             ) : selectedResource === "payment-types" ? (
-              <input
-                value={simpleForm.desc}
-                onChange={(e) => setSimpleForm({ desc: e.target.value })}
-                placeholder="Descrição"
-                className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
-                required
-              />
+              <>
+                <input
+                  value={simpleForm.desc}
+                  onChange={(e) =>
+                    setSimpleForm((prev) => ({ ...prev, desc: e.target.value }))
+                  }
+                  placeholder="Descrição"
+                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  required
+                />
+                <label className="flex items-center gap-2 text-sm text-primary">
+                  <input
+                    type="checkbox"
+                    checked={simpleForm.active}
+                    onChange={(e) =>
+                      setSimpleForm((prev) => ({ ...prev, active: e.target.checked }))
+                    }
+                  />
+                  Forma de pagamento ativa
+                </label>
+              </>
+            ) : selectedResource === "roles" ? (
+              <>
+                <input
+                  value={simpleForm.desc}
+                  onChange={(e) =>
+                    setSimpleForm((prev) => ({ ...prev, desc: e.target.value }))
+                  }
+                  placeholder="Descrição"
+                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  required
+                />
+                <label className="flex items-center gap-2 text-sm text-primary">
+                  <input
+                    type="checkbox"
+                    checked={simpleForm.active}
+                    onChange={(e) =>
+                      setSimpleForm((prev) => ({ ...prev, active: e.target.checked }))
+                    }
+                  />
+                  Cargo ativo
+                </label>
+              </>
             ) : (
               <input
                 value={simpleForm.desc}
-                onChange={(e) => setSimpleForm({ desc: e.target.value })}
+                onChange={(e) =>
+                  setSimpleForm((prev) => ({ ...prev, desc: e.target.value }))
+                }
                 placeholder="Descrição"
                 className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
                 required

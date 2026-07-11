@@ -131,7 +131,99 @@ async function deleteResource(resource, id) {
     return true;
   }
 
-  await record.destroy();
+  await db.sequelize.transaction(async (transaction) => {
+    switch (resource) {
+      case "professions":
+        await db.Customers.update(
+          { professionId: null },
+          { where: { professionId: id }, transaction },
+        );
+        break;
+      case "roles":
+        await db.Employees.update(
+          { roleId: null },
+          { where: { roleId: id }, transaction },
+        );
+        await db.Users.update(
+          { roleId: null },
+          { where: { roleId: id }, transaction },
+        );
+        break;
+      case "colors":
+        await db.Products.update(
+          { colorId: null },
+          { where: { colorId: id }, transaction },
+        );
+        break;
+      case "sizes":
+        await db.Products.update(
+          { sizeId: null },
+          { where: { sizeId: id }, transaction },
+        );
+        break;
+      case "clothings-types":
+        await db.Products.update(
+          { clothingTypeId: null },
+          { where: { clothingTypeId: id }, transaction },
+        );
+        break;
+      case "fabrics":
+        await db.Products.update(
+          { fabricId: null },
+          { where: { fabricId: id }, transaction },
+        );
+        break;
+      case "payment-types":
+        await Promise.all([
+          db.Sales.update(
+            { paymentTypeId: null },
+            { where: { paymentTypeId: id }, transaction },
+          ),
+          db.ReceivableInstallments.update(
+            { paymentTypeId: null },
+            { where: { paymentTypeId: id }, transaction },
+          ),
+          db.PaymentReceipts.update(
+            { paymentTypeId: null },
+            { where: { paymentTypeId: id }, transaction },
+          ),
+          db.Payables.update(
+            { plannedPaymentTypeId: null },
+            { where: { plannedPaymentTypeId: id }, transaction },
+          ),
+          db.PayablePayments.update(
+            { paymentTypeId: null },
+            { where: { paymentTypeId: id }, transaction },
+          ),
+          db.CashEntries.update(
+            { paymentTypeId: null },
+            { where: { paymentTypeId: id }, transaction },
+          ),
+          db.BankEntries.update(
+            { paymentTypeId: null },
+            { where: { paymentTypeId: id }, transaction },
+          ),
+        ]);
+        break;
+      case "suppliers":
+        await Promise.all([
+          db.Payables.update(
+            { supplierId: null },
+            { where: { supplierId: id }, transaction },
+          ),
+          db.Receivables.update(
+            { supplierId: null },
+            { where: { supplierId: id }, transaction },
+          ),
+        ]);
+        break;
+      default:
+        break;
+    }
+
+    await record.destroy({ transaction });
+  });
+
   return true;
 }
 

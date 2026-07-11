@@ -14,7 +14,7 @@ const PayablePaymentsSchema = (sequelize, DataTypes) => {
       },
       paymentTypeId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       amount: {
         type: DataTypes.DECIMAL(10, 2),

@@ -162,10 +162,15 @@ export default function PayablesPage() {
       try {
         const data = await getRequest("/admin/suppliers");
         setSuppliers(
-          data.map((item: Record<string, unknown>) => ({
-            id: Number(item.idSupplier),
-            name: String(item.tradeName || item.fullName || item.idSupplier),
-          })),
+          data
+            .filter(
+              (item: Record<string, unknown>) =>
+                item.active !== false && item.blocked !== true,
+            )
+            .map((item: Record<string, unknown>) => ({
+              id: Number(item.idSupplier),
+              name: String(item.tradeName || item.fullName || item.idSupplier),
+            })),
         );
       } catch (error) {
         console.error("Erro ao buscar fornecedores", error);

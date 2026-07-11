@@ -2,13 +2,13 @@ require("dotenv").config();
 const { PaymentTypes } = require("../models");
 
 const paymentTypes = [
-  { idPaymentType: 1, desc: "DINHEIRO" },
-  { idPaymentType: 2, desc: "CHEQUE DIA" },
-  { idPaymentType: 3, desc: "CHEQUE PRE" },
-  { idPaymentType: 4, desc: "CARNE" },
-  { idPaymentType: 5, desc: "DUPLICATA" },
-  { idPaymentType: 6, desc: "CARTAO CREDITO" },
-  { idPaymentType: 7, desc: "CARTAO VISA" },
+  { idPaymentType: 1, desc: "DINHEIRO", active: true },
+  { idPaymentType: 2, desc: "CHEQUE DIA", active: true },
+  { idPaymentType: 3, desc: "CHEQUE PRE", active: true },
+  { idPaymentType: 4, desc: "CARNE", active: true },
+  { idPaymentType: 5, desc: "DUPLICATA", active: true },
+  { idPaymentType: 6, desc: "CARTAO CREDITO", active: true },
+  { idPaymentType: 7, desc: "CARTAO VISA", active: true },
 ];
 
 async function importPaymentTypes() {
