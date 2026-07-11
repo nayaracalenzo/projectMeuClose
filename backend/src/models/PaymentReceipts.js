@@ -18,7 +18,7 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
       },
       paymentTypeId: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
       },
       receiptType: {
         type: DataTypes.ENUM("ENTRY", "SALE_FULL", "INSTALLMENT"),

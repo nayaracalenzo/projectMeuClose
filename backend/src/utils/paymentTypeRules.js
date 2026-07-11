@@ -211,7 +211,7 @@ function buildPaymentTypeResponse(item) {
     name: item.desc,
     desc: item.desc,
     kind: derivedRules.kind,
-    active: true,
+    active: item.active !== false,
     requiresDueDate: Boolean(derivedRules.requiresDueDate),
     allowsEntryAmount: Boolean(derivedRules.allowsEntryAmount),
     allowedEntryPaymentKinds: normalizeAllowedEntryPaymentKinds(

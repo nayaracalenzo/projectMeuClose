@@ -34,7 +34,7 @@ async function updateResourceController(req, res, next) {
 async function deleteResourceController(req, res, next) {
   try {
     await service.deleteResource(req.params.resource, Number(req.params.id));
-    return res.status(200).json({ message: "Registro removido com sucesso." });
+    return res.status(200).json({ message: "Operação concluída com sucesso." });
   } catch (error) {
     return next(error);
   }

@@ -12,6 +12,11 @@ const PaymentTypesSchema = (sequelize, DataTypes) => {
         type: DataTypes.STRING(50),
         allowNull: false,
       },
+      active: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+      },
     },
     {
       tableName: "payment_types",
