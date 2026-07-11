@@ -33,7 +33,9 @@
     "db:seed:roles": "node src/scripts/importRoles.js",
     "db:setup:roles": "npm run db:migrate && npm run db:seed:roles",
     "db:seed:employees": "node src/scripts/importEmployees.js",
-    "db:seed:suppliers": "node src/scripts/importSuppliers.js"
+    "db:seed:suppliers": "node src/scripts/importSuppliers.js",
+    "db:seed:audit-types": "node src/scripts/importAuditTypes.js",
+    "db:seed:audits": "node src/scripts/importAudits.js"
   },
   "keywords": [],
   "author": "",

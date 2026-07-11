@@ -325,7 +325,7 @@ export default function Orders() {
             onChange={(event) => setDateOrder(event.target.value)}
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           >
-            <option value="createdAtDesc">Mais recentes</option>
+            <option value="createdAtDesc">Pedidos mais recentes</option>
             <option value="testDateAsc">Data de prova mais antiga</option>
             <option value="testDateDesc">Data de prova mais recente</option>
           </select>

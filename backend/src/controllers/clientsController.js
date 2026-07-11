@@ -25,7 +25,7 @@ async function getClientById(req, res, next) {
     const client = await service.getClientById(id);
 
     if (!client) {
-      throw notFoundError("Cliente nao encontrado");
+      throw notFoundError("Cliente não encontrado");
     }
 
     return res.status(200).json(client);
@@ -40,7 +40,7 @@ async function updateClientById(req, res, next) {
     const client = await service.updateClientById(id, req.body);
 
     if (!client) {
-      throw notFoundError("Cliente nao encontrado");
+      throw notFoundError("Cliente não encontrado");
     }
 
     return res.status(200).json(client);

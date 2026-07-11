@@ -31,8 +31,19 @@ const formatCurrency = (value: number) =>
     currency: "BRL",
   }).format(value);
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T00:00:00`));
+const formatDate = (value: string) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "-";
+
+  const normalized = raw.includes("T") ? raw : `${raw}T00:00:00`;
+  const date = new Date(normalized);
+
+  if (Number.isNaN(date.getTime())) {
+    return raw;
+  }
+
+  return new Intl.DateTimeFormat("pt-BR").format(date);
+};
 
 const loadImageAsDataUrl = async (imageUrl: string) => {
   const response = await fetch(imageUrl);
@@ -53,15 +64,15 @@ const drawTableHeader = (doc: jsPDF, startY: number) => {
   doc.rect(12, startY, 273, 10);
   doc.line(38, startY, 38, startY + 10);
   doc.line(114, startY, 114, startY + 10);
-  doc.line(164, startY, 164, startY + 10);
-  doc.line(264, startY, 264, startY + 10);
+  doc.line(174, startY, 174, startY + 10);
+  doc.line(252, startY, 252, startY + 10);
   doc.setTextColor(43, 36, 37);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text("Pedido", 16, startY + 6.5);
+  doc.text("Data prova", 16, startY + 6.5);
   doc.text("Cliente", 42, startY + 6.5);
   doc.text("Roupa", 118, startY + 6.5);
-  doc.text("Detalhes", 168, startY + 6.5);
+  doc.text("Detalhes", 178, startY + 6.5);
   doc.text("Valor", 282, startY + 6.5, { align: "right" });
 };
 
@@ -131,20 +142,20 @@ export const downloadWeeklyOrdersPdf = async ({
         .filter(Boolean)
         .join(" | ");
 
-      const orderLabel = index === 0 ? `#${order.id}\n${formatDate(order.date)}` : "";
-      const customerLabel = index === 0 ? `${order.customer}\n${order.kind} | ${order.status}` : "";
-      const detailsLines = doc.splitTextToSize(details, 106);
-      const clothingLines = doc.splitTextToSize(item.name, 42);
+      const dateLabel = index === 0 ? formatDate(order.date) : "";
+      const customerLabel = index === 0 ? order.customer : "";
+      const detailsLines = doc.splitTextToSize(details, 72);
+      const clothingLines = doc.splitTextToSize(item.name, 52);
       const customerLines = doc.splitTextToSize(customerLabel, 68);
-      const orderLines = doc.splitTextToSize(orderLabel, 22);
+      const dateLines = doc.splitTextToSize(dateLabel, 18);
       const baseHeight = Math.max(
-        orderLines.length,
+        dateLines.length,
         customerLines.length,
         clothingLines.length,
         detailsLines.length,
         1,
       );
-      const rowHeight = Math.max(10, baseHeight * 4.8);
+      const rowHeight = Math.max(14, baseHeight * 5.2);
 
       if (currentY + rowHeight > 192) {
         doc.addPage();
@@ -157,22 +168,24 @@ export const downloadWeeklyOrdersPdf = async ({
       doc.rect(12, currentY - 4, 273, rowHeight);
       doc.line(38, currentY - 4, 38, currentY - 4 + rowHeight);
       doc.line(114, currentY - 4, 114, currentY - 4 + rowHeight);
-      doc.line(164, currentY - 4, 164, currentY - 4 + rowHeight);
-      doc.line(264, currentY - 4, 264, currentY - 4 + rowHeight);
+      doc.line(174, currentY - 4, 174, currentY - 4 + rowHeight);
+      doc.line(252, currentY - 4, 252, currentY - 4 + rowHeight);
+
+      const textStartY = currentY + 1.5;
 
       doc.setTextColor(43, 36, 37);
       doc.setFont("helvetica", index === 0 ? "bold" : "normal");
       doc.setFontSize(9.5);
-      doc.text(orderLines, 16, currentY);
+      doc.text(dateLines, 16, textStartY);
 
       doc.setFont("helvetica", "normal");
-      doc.text(customerLines, 42, currentY);
-      doc.text(clothingLines, 118, currentY);
-      doc.text(detailsLines, 168, currentY);
+      doc.text(customerLines, 42, textStartY);
+      doc.text(clothingLines, 118, textStartY);
+      doc.text(detailsLines, 178, textStartY);
 
       if (index === 0) {
         doc.setFont("helvetica", "bold");
-        doc.text(formatCurrency(order.total), 282, currentY, { align: "right" });
+        doc.text(formatCurrency(order.total), 282, textStartY, { align: "right" });
       }
 
       currentY += rowHeight + 2;

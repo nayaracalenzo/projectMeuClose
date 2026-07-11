@@ -53,6 +53,9 @@ Users.associate = (models) => {
   Users.belongsTo(models.Roles, {
     foreignKey: "roleId",
   });
+  Users.hasMany(models.Audits, {
+    foreignKey: "userId",
+  });
 }
 return Users
 }

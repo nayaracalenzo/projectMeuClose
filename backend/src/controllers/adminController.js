@@ -2,7 +2,7 @@ const service = require("../services/adminService");
 
 async function listResourceController(req, res, next) {
   try {
-    const data = await service.listResource(req.params.resource);
+    const data = await service.listResource(req.params.resource, req.query);
     return res.status(200).json(data);
   } catch (error) {
     return next(error);

@@ -41,8 +41,8 @@ function normalizeClientInput(body = {}) {
     blocked: typeof body.blocked === "boolean" ? body.blocked : body.blocked,
     professionId:
       body.professionId === undefined ||
-      body.professionId === null ||
-      body.professionId === ""
+        body.professionId === null ||
+        body.professionId === ""
         ? null
         : Number(body.professionId),
     comment: normalizeText(body.comment),
@@ -53,7 +53,7 @@ function getClientValidationIssues(payload) {
   const issues = [];
 
   if (!payload.typeCustomer) {
-    issues.push("Tipo do cliente e obrigatorio.");
+    issues.push("Tipo do cliente é obrigatório.");
     return issues;
   }
 
@@ -62,14 +62,14 @@ function getClientValidationIssues(payload) {
   }
 
   if (!payload.phone) {
-    issues.push("Telefone e obrigatorio.");
+    issues.push("Telefone é obrigatório.");
   }
 
   if (!payload.document) {
     issues.push(
       payload.typeCustomer === "COMPANY"
-        ? "CNPJ e obrigatorio."
-        : "CPF e obrigatorio.",
+        ? "CNPJ é obrigatório."
+        : "CPF é obrigatório.",
     );
   } else if (payload.typeCustomer === "INDIVIDUAL" && payload.document.length !== 11) {
     issues.push("CPF deve conter 11 digitos.");
@@ -78,11 +78,11 @@ function getClientValidationIssues(payload) {
   }
 
   if (payload.typeCustomer === "INDIVIDUAL" && !payload.fullName) {
-    issues.push("Nome completo e obrigatorio para pessoa fisica.");
+    issues.push("Nome completo é obrigatório para pessoa fisica.");
   }
 
   if (payload.typeCustomer === "COMPANY" && !payload.companyName) {
-    issues.push("Razao social e obrigatoria para pessoa juridica.");
+    issues.push("Razão social é obrigatória para pessoa jurídica.");
   }
 
   return issues;

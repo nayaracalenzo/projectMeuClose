@@ -30,6 +30,7 @@ interface SalesCountResponse {
 }
 
 type SalesViewMode = "orders" | "budgets";
+type SalesStatusFilter = "DEFAULT" | "COMPLETED" | "BUDGET" | "CANCELLED";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
@@ -57,7 +58,7 @@ const formatSaleStatusLabel = (value?: string | null) => {
     .toUpperCase();
 
   if (normalized === "BUDGET") return "Orçamento";
-  if (normalized === "COMPLETED") return "ConcluÃ­do";
+  if (normalized === "COMPLETED") return "Concluído";
   if (normalized === "CANCELLED") return "Cancelado";
 
   return value || "-";
@@ -69,6 +70,8 @@ export default function SalesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [viewMode, setViewMode] = useState<SalesViewMode>("orders");
+  const [statusFilter, setStatusFilter] =
+    useState<SalesStatusFilter>("DEFAULT");
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -97,7 +100,28 @@ export default function SalesPage() {
 
   useEffect(() => {
     setPage(1);
+    setStatusFilter("DEFAULT");
   }, [viewMode]);
+
+  const effectiveStatus =
+    statusFilter === "DEFAULT"
+      ? viewMode === "budgets"
+        ? "BUDGET"
+        : "COMPLETED"
+      : statusFilter;
+
+  const statusOptions =
+    viewMode === "budgets"
+      ? [
+          { value: "DEFAULT", label: "Todos os orçamentos" },
+          { value: "BUDGET", label: "Orçamento" },
+          { value: "CANCELLED", label: "Cancelado" },
+        ]
+      : [
+          { value: "DEFAULT", label: "Todos os pedidos" },
+          { value: "COMPLETED", label: "Concluído" },
+          { value: "CANCELLED", label: "Cancelado" },
+        ];
 
   useEffect(() => {
     if (hasExplicitTabParam) {
@@ -146,7 +170,7 @@ export default function SalesPage() {
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(pageSize),
-          status: viewMode === "budgets" ? "BUDGET" : "COMPLETED",
+          status: effectiveStatus,
         });
 
         const data = (await getRequest(
@@ -166,7 +190,7 @@ export default function SalesPage() {
     };
 
     void fetchSales();
-  }, [page, pageSize, viewMode]);
+  }, [effectiveStatus, page, pageSize]);
 
   const headingText = loading
     ? viewMode === "budgets"
@@ -231,6 +255,25 @@ export default function SalesPage() {
             Orçamentos
           </button>
         </div>
+      </div>
+
+      <div className="mb-5 flex w-full justify-end">
+        <label className="flex w-full max-w-[260px] flex-col gap-2 text-sm text-neutral-700">
+          <span>Status</span>
+          <select
+            value={statusFilter}
+            onChange={(event) =>
+              setStatusFilter(event.target.value as SalesStatusFilter)
+            }
+            className="h-11 rounded border border-outline-variant bg-white px-3 text-sm text-primary outline-none transition-colors focus:border-primary"
+          >
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {error ? (
@@ -366,7 +409,7 @@ export default function SalesPage() {
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
-          PÃ¡gina {page} de {totalPages}
+          Página {page} de {totalPages}
         </p>
         <div className="flex gap-2">
           <Button
@@ -385,7 +428,7 @@ export default function SalesPage() {
             }
             disabled={loading || page >= totalPages}
           >
-            PrÃ³xima
+            Próxima
           </Button>
         </div>
       </div>

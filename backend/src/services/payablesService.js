@@ -95,30 +95,30 @@ async function listPayables({
   });
 
   const items = result.rows.map((item) => {
-      const supplier = item.Supplier || item.Suppliers || null;
-      const paymentType = item.PaymentType || item.PaymentTypes || null;
-      const supplierName = supplier?.tradeName || supplier?.fullName || null;
+    const supplier = item.Supplier || item.Suppliers || null;
+    const paymentType = item.PaymentType || item.PaymentTypes || null;
+    const supplierName = supplier?.tradeName || supplier?.fullName || null;
 
-      return {
-        id: item.idPayable,
-        scope: item.scope,
-        description: item.description,
-        category: item.category,
-        beneficiary: supplierName || item.beneficiary,
-        supplierId: supplier?.idSupplier || item.supplierId || null,
-        supplierName,
-        amount: Number(item.amount),
-        openAmount: Number(item.openAmount),
-        dueDate: item.dueDate,
-        status: item.status,
-        settlementTarget: item.settlementTarget,
-        accountLabel: item.accountLabel,
-        plannedPaymentTypeId:
-          paymentType?.idPaymentType || item.plannedPaymentTypeId || null,
-        plannedPaymentTypeName: paymentType?.desc || null,
-        filter: deriveFilter(item.status, item.dueDate, item.openAmount),
-      };
-    });
+    return {
+      id: item.idPayable,
+      scope: item.scope,
+      description: item.description,
+      category: item.category,
+      beneficiary: supplierName || item.beneficiary,
+      supplierId: supplier?.idSupplier || item.supplierId || null,
+      supplierName,
+      amount: Number(item.amount),
+      openAmount: Number(item.openAmount),
+      dueDate: item.dueDate,
+      status: item.status,
+      settlementTarget: item.settlementTarget,
+      accountLabel: item.accountLabel,
+      plannedPaymentTypeId:
+        paymentType?.idPaymentType || item.plannedPaymentTypeId || null,
+      plannedPaymentTypeName: paymentType?.desc || null,
+      filter: deriveFilter(item.status, item.dueDate, item.openAmount),
+    };
+  });
 
   const total = Number(result.count || 0);
 
@@ -157,7 +157,7 @@ async function createPayable(body = {}) {
   const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
 
   if (!description || !category || !beneficiary) {
-    throw createPayablesValidationError("Descricao, categoria e favorecido sao obrigatorios.");
+    throw createPayablesValidationError("Descrição, categoria e favorecido sao obrigatórios.");
   }
 
   const amount = normalizeAmount(body.amount, "Valor");

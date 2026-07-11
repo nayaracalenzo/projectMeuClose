@@ -155,7 +155,7 @@ function normalizeSaleItem(item = {}) {
   const description = String(item.description || "").trim();
 
   if (!description) {
-    throw createSalesValidationError("Descricao do item e obrigatoria.");
+    throw createSalesValidationError("Descrição do item e obrigatoria.");
   }
 
   const quantity = normalizeInteger(item.quantity ?? 1, "Quantidade do item");
@@ -163,7 +163,7 @@ function normalizeSaleItem(item = {}) {
   const subtotal = normalizeDecimal(item.subtotal, "Subtotal do item");
 
   if (unitPrice === null || subtotal === null) {
-    throw createSalesValidationError("Valores do item sao obrigatorios.");
+    throw createSalesValidationError("Valores do item sao obrigatórios.");
   }
 
   return {
@@ -249,17 +249,17 @@ function buildReceivablePayload({
     cardTransaction:
       debtorType === "CARD_OPERATOR"
         ? {
-            operatorLabel: cardData.operatorLabel,
-            cardBrand: cardData.cardBrand,
-            authorizationCode: cardData.authorizationCode,
-            clientInstallmentCount: cardData.clientInstallmentCount,
-            grossAmount: cardData.grossAmount,
-            entryAmount: cardData.entryAmount,
-            netReceivableAmount: remainingAmount,
-            feeAmount: cardData.feeAmount,
-            expectedSettlementDate: cardData.expectedSettlementDate,
-            settlementStatus: "PENDING",
-          }
+          operatorLabel: cardData.operatorLabel,
+          cardBrand: cardData.cardBrand,
+          authorizationCode: cardData.authorizationCode,
+          clientInstallmentCount: cardData.clientInstallmentCount,
+          grossAmount: cardData.grossAmount,
+          entryAmount: cardData.entryAmount,
+          netReceivableAmount: remainingAmount,
+          feeAmount: cardData.feeAmount,
+          expectedSettlementDate: cardData.expectedSettlementDate,
+          settlementStatus: "PENDING",
+        }
         : null,
   };
 }
@@ -346,9 +346,9 @@ function mapPaymentReceipt(receipt) {
     referenceCode: receipt.referenceCode || null,
     paymentType: paymentType
       ? {
-          id: paymentType.idPaymentType,
-          name: paymentType.desc,
-        }
+        id: paymentType.idPaymentType,
+        name: paymentType.desc,
+      }
       : null,
   };
 }
@@ -367,11 +367,33 @@ function mapReceivableInstallment(installment) {
     status: installment.status,
     paymentType: paymentType
       ? {
-          id: paymentType.idPaymentType,
-          name: paymentType.desc,
-        }
+        id: paymentType.idPaymentType,
+        name: paymentType.desc,
+      }
       : null,
   };
+}
+
+function buildSalePaymentSummary(sale) {
+  const paymentNames = [];
+  const pushName = (value) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) return;
+    if (paymentNames.includes(normalized)) return;
+    paymentNames.push(normalized);
+  };
+
+  const paymentType = sale.PaymentType || sale.PaymentTypes;
+  pushName(paymentType?.desc);
+
+  if (Array.isArray(sale.PaymentReceipts)) {
+    sale.PaymentReceipts.forEach((receipt) => {
+      const receiptPaymentType = receipt.PaymentType || receipt.PaymentTypes;
+      pushName(receiptPaymentType?.desc);
+    });
+  }
+
+  return paymentNames.join(" + ") || null;
 }
 
 function resolveReceivableOrigin(receivable, customer) {
@@ -428,21 +450,21 @@ function mapSaleDetails(sale) {
     status: resolveSaleStatus(sale),
     customer: customer
       ? {
-          id: customer.idCustomer,
-          name: customer.fullName || customer.companyName || "Sem cliente",
-        }
+        id: customer.idCustomer,
+        name: customer.fullName || customer.companyName || "Sem cliente",
+      }
       : null,
     user: user
       ? {
-          id: Number(user.idUser),
-          name: user.name || user.username,
-        }
+        id: Number(user.idUser),
+        name: user.name || user.username,
+      }
       : null,
     paymentType: paymentType
       ? {
-          id: paymentType.idPaymentType,
-          name: paymentType.desc,
-        }
+        id: paymentType.idPaymentType,
+        name: paymentType.desc,
+      }
       : null,
     discountType: sale.discountType || null,
     discountValue:
@@ -459,51 +481,50 @@ function mapSaleDetails(sale) {
     receipts,
     measurementsCount,
     receivable: receivable
-        ? {
-          id: receivable.idReceivable,
-          debtorType: receivable.debtorType,
-          operatorLabel: receivable.operatorLabel || null,
-          supplierId: receivableOrigin?.supplierId || null,
-          supplierName: receivableOrigin?.supplierName || null,
-          originType: receivableOrigin?.originType || "CUSTOMER",
-          originLabel: receivableOrigin?.originLabel || "Cliente",
-          originName: receivableOrigin?.originName || customer?.fullName || customer?.companyName || "Cliente",
-          originalAmount: Number(receivable.originalAmount || 0),
-          openAmount: Number(receivable.openAmount || 0),
-          status: receivable.status,
-          installments: Array.isArray(receivable.ReceivableInstallments)
-            ? receivable.ReceivableInstallments.map(mapReceivableInstallment)
-            : [],
-        }
+      ? {
+        id: receivable.idReceivable,
+        debtorType: receivable.debtorType,
+        operatorLabel: receivable.operatorLabel || null,
+        supplierId: receivableOrigin?.supplierId || null,
+        supplierName: receivableOrigin?.supplierName || null,
+        originType: receivableOrigin?.originType || "CUSTOMER",
+        originLabel: receivableOrigin?.originLabel || "Cliente",
+        originName: receivableOrigin?.originName || customer?.fullName || customer?.companyName || "Cliente",
+        originalAmount: Number(receivable.originalAmount || 0),
+        openAmount: Number(receivable.openAmount || 0),
+        status: receivable.status,
+        installments: Array.isArray(receivable.ReceivableInstallments)
+          ? receivable.ReceivableInstallments.map(mapReceivableInstallment)
+          : [],
+      }
       : null,
     cardTransaction: cardTransaction
       ? {
-          id: cardTransaction.idCardTransaction,
-          operatorLabel: cardTransaction.operatorLabel || null,
-          cardBrand: cardTransaction.cardBrand || null,
-          authorizationCode: cardTransaction.authorizationCode || null,
-          clientInstallmentCount: Number(cardTransaction.clientInstallmentCount || 1),
-          grossAmount: Number(cardTransaction.grossAmount || 0),
-          entryAmount: Number(cardTransaction.entryAmount || 0),
-          netReceivableAmount: Number(cardTransaction.netReceivableAmount || 0),
-          feeAmount: Number(cardTransaction.feeAmount || 0),
-          expectedSettlementDate: cardTransaction.expectedSettlementDate || null,
-          settlementStatus: cardTransaction.settlementStatus,
-        }
+        id: cardTransaction.idCardTransaction,
+        operatorLabel: cardTransaction.operatorLabel || null,
+        cardBrand: cardTransaction.cardBrand || null,
+        authorizationCode: cardTransaction.authorizationCode || null,
+        clientInstallmentCount: Number(cardTransaction.clientInstallmentCount || 1),
+        grossAmount: Number(cardTransaction.grossAmount || 0),
+        entryAmount: Number(cardTransaction.entryAmount || 0),
+        netReceivableAmount: Number(cardTransaction.netReceivableAmount || 0),
+        feeAmount: Number(cardTransaction.feeAmount || 0),
+        expectedSettlementDate: cardTransaction.expectedSettlementDate || null,
+        settlementStatus: cardTransaction.settlementStatus,
+      }
       : null,
   };
 }
 
 function mapSaleListItem(sale) {
   const customer = sale.Customer || sale.Customers;
-  const paymentType = sale.PaymentType || sale.PaymentTypes;
   const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
 
   return {
     id: sale.idSale,
     status: resolveSaleStatus(sale),
     customerName: customer?.fullName || customer?.companyName || "Sem cliente",
-    paymentTypeName: paymentType?.desc || null,
+    paymentTypeName: buildSalePaymentSummary(sale),
     itemsCount: items.length,
     firstItemDescription: items[0]?.description || null,
     finalAmount: Number(sale.finalAmount || 0),
@@ -528,7 +549,7 @@ function normalizeQuoteBase(body = {}) {
   const finalAmount = normalizeDecimal(body.finalAmount, "Valor final");
 
   if (totalAmount === null || finalAmount === null) {
-    throw createSalesValidationError("Valores totais sao obrigatorios.");
+    throw createSalesValidationError("Valores totais sao obrigatórios.");
   }
 
   const customerMeasurements = Array.isArray(body.customerMeasurements)
@@ -616,7 +637,7 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
       : null;
 
     if (isImmediateCheckPaymentType(mainPaymentType) && !paymentReferenceCode) {
-      throw createSalesValidationError("Numero do cheque e obrigatorio.");
+      throw createSalesValidationError("Numero do cheque é obrigatório.");
     }
 
     entryReceipt = {
@@ -638,8 +659,8 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
   const remainingAmount = roundCurrency(finalAmount - (entryReceipt?.amount || 0));
   const cardClientInstallmentCount =
     body.cardClientInstallmentCount === null ||
-    body.cardClientInstallmentCount === undefined ||
-    body.cardClientInstallmentCount === ""
+      body.cardClientInstallmentCount === undefined ||
+      body.cardClientInstallmentCount === ""
       ? installmentCount
       : normalizeInteger(body.cardClientInstallmentCount, "Parcelas no cartao");
 
@@ -863,16 +884,21 @@ async function getSaleById(id) {
   return mapSaleDetails(sale);
 }
 
-async function listSales({ page, pageSize, status, search } = {}) {
+async function listSales({ page, pageSize, status, search, customerId } = {}) {
   const normalizedPage = Math.max(1, Number(page) || 1);
   const normalizedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 10));
   const normalizedSearch = search ? String(search).trim() : undefined;
   const normalizedStatus = status ? String(status).trim().toUpperCase() : undefined;
+  const normalizedCustomerId =
+    Number.isInteger(Number(customerId)) && Number(customerId) > 0
+      ? Number(customerId)
+      : undefined;
   const result = await repository.listSales({
     page: normalizedPage,
     pageSize: normalizedPageSize,
     status: normalizedStatus,
     search: normalizedSearch,
+    customerId: normalizedCustomerId,
   });
   const total = Number(result.count || 0);
 

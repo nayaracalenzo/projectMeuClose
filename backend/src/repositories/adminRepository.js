@@ -1,3 +1,4 @@
+const { Op } = require("sequelize");
 const { getAdminResourceConfig } = require("../utils/adminResourceConfig");
 const db = require("../models");
 
@@ -14,7 +15,7 @@ function getModelAndConfig(resource) {
   };
 }
 
-async function listResource(resource) {
+async function listResource(resource, filters = {}) {
   const resourceData = getModelAndConfig(resource);
   if (!resourceData) return null;
 
@@ -25,6 +26,63 @@ async function listResource(resource) {
 
   if (resource === "employees") {
     query.where = { dsbl: false };
+  }
+
+  if (resource === "audits") {
+    const where = {};
+
+    if (filters.auditTypeId) {
+      where.auditTypeId = Number(filters.auditTypeId);
+    }
+
+    if (filters.history) {
+      where.history = {
+        [Op.iLike]: `%${String(filters.history).trim()}%`,
+      };
+    }
+
+    if (filters.startDate || filters.endDate) {
+      where.occurredAt = {};
+
+      if (filters.startDate) {
+        where.occurredAt[Op.gte] = new Date(filters.startDate);
+      }
+
+      if (filters.endDate) {
+        const endDate = new Date(filters.endDate);
+        endDate.setHours(23, 59, 59, 999);
+        where.occurredAt[Op.lte] = endDate;
+      }
+    }
+
+    query.where = where;
+    query.include = [
+      {
+        model: db.AuditTypes,
+        attributes: ["idAuditType", "description"],
+      },
+      {
+        model: db.Users,
+        attributes: ["idUser", "name", "username"],
+        required: false,
+      },
+    ];
+
+    const records = await model.findAll(query);
+    return records.map((record) => {
+      const data = record.get({ plain: true });
+
+      return {
+        idAudit: data.idAudit,
+        occurredAt: data.occurredAt,
+        auditTypeId: data.auditTypeId,
+        auditTypeDescription: data.AuditType?.description || "-",
+        userId: data.userId,
+        userName: data.User?.name || data.User?.username || "-",
+        history: data.history,
+        reason: data.reason,
+      };
+    });
   }
 
   return model.findAll(query);

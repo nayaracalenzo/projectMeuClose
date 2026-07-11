@@ -99,43 +99,57 @@ function sanitizePayload(resource, body = {}) {
 function validatePayload(resource, payload, isCreate) {
   if (resource === "payment-types") {
     if (isCreate && !payload.desc) {
-      throw createAdminResourceError("Descricao e obrigatoria.");
+      throw createAdminResourceError("Descrição e obrigatoria.");
     }
     if (!isCreate && "desc" in payload && !payload.desc) {
-      throw createAdminResourceError("Descricao e obrigatoria.");
+      throw createAdminResourceError("Descrição e obrigatoria.");
     }
     return;
   }
 
   if (resource === "suppliers") {
     if (isCreate && !payload.fullName) {
-      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
+      throw createAdminResourceError("Nome do fornecedor é obrigatório.");
     }
     if (!isCreate && "fullName" in payload && !payload.fullName) {
-      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
+      throw createAdminResourceError("Nome do fornecedor é obrigatório.");
     }
     return;
   }
 
   if (resource === "employees") {
     if (isCreate && !payload.fullName) {
-      throw createAdminResourceError("Nome da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Nome da funcionaria é obrigatório.");
     }
 
     if (isCreate && !payload.shortName) {
-      throw createAdminResourceError("Nome curto da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Nome curto da funcionaria é obrigatório.");
     }
 
     if (isCreate && !payload.roleId) {
-      throw createAdminResourceError("Cargo da funcionaria e obrigatorio.");
+      throw createAdminResourceError("Cargo da funcionaria é obrigatório.");
     }
   } else if (isCreate && !payload.desc) {
-    throw createAdminResourceError("Descricao e obrigatoria.");
+    throw createAdminResourceError("Descrição e obrigatoria.");
   }
 }
 
-async function listResource(resource) {
-  const records = await repository.listResource(resource);
+async function listResource(resource, query = {}) {
+  let filters = undefined;
+
+  if (resource === "audits") {
+    filters = {
+      startDate: normalizeDate(query.startDate),
+      endDate: normalizeDate(query.endDate),
+      history: normalizeText(query.history),
+      auditTypeId:
+        query.auditTypeId === undefined || query.auditTypeId === null || query.auditTypeId === ""
+          ? null
+          : Number(query.auditTypeId),
+    };
+  }
+
+  const records = await repository.listResource(resource, filters);
 
   if (records === null) {
     throw notFoundError("Recurso administrativo invalido.");
@@ -145,6 +159,11 @@ async function listResource(resource) {
 }
 
 async function createResource(resource, body) {
+  const config = getAdminResourceConfig(resource);
+  if (config?.readOnly) {
+    throw createAdminResourceError("Recurso administrativo somente leitura.");
+  }
+
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, true);
 
@@ -157,6 +176,11 @@ async function createResource(resource, body) {
 }
 
 async function updateResource(resource, id, body) {
+  const config = getAdminResourceConfig(resource);
+  if (config?.readOnly) {
+    throw createAdminResourceError("Recurso administrativo somente leitura.");
+  }
+
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, false);
 
@@ -167,13 +191,18 @@ async function updateResource(resource, id, body) {
   }
 
   if (updated === undefined) {
-    throw notFoundError("Registro nao encontrado.");
+    throw notFoundError("Registro não encontrado.");
   }
 
   return updated;
 }
 
 async function deleteResource(resource, id) {
+  const config = getAdminResourceConfig(resource);
+  if (config?.readOnly) {
+    throw createAdminResourceError("Recurso administrativo somente leitura.");
+  }
+
   const removed = await repository.deleteResource(resource, id);
 
   if (removed === null) {
@@ -181,7 +210,7 @@ async function deleteResource(resource, id) {
   }
 
   if (removed === undefined) {
-    throw notFoundError("Registro nao encontrado.");
+    throw notFoundError("Registro não encontrado.");
   }
 
   return true;

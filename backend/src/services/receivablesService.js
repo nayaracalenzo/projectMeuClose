@@ -60,6 +60,116 @@ function getStandaloneReceiptFilter() {
   return "RECEBIDAS";
 }
 
+function formatInstallmentLabel(installmentNumber, totalInstallments) {
+  const current = Number(installmentNumber) || 0;
+  const total = Number(totalInstallments) || 0;
+
+  if (current <= 0 || total <= 0) {
+    return "-";
+  }
+
+  return `${current}/${total}`;
+}
+
+function isSameCalendarDay(leftValue, rightValue) {
+  if (!leftValue || !rightValue) return false;
+
+  const left = new Date(leftValue);
+  const right = new Date(rightValue);
+
+  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) {
+    return false;
+  }
+
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function getDateOnlyKey(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function resolveInstallmentLabel(item) {
+  const installmentNumber = Number(item.installmentNumber) || 0;
+  const totalInstallments = Number(item.totalInstallments) || 0;
+  const paymentType = item.PaymentType || item.PaymentTypes || null;
+  const normalizedPaymentType = paymentType ? buildPaymentTypeResponse(paymentType) : null;
+  const receivableCreatedAt = item.Receivable?.createdAt || null;
+  const installmentDueDate = item.dueDate || null;
+
+  if (
+    installmentNumber === 1 &&
+    totalInstallments === 1 &&
+    normalizedPaymentType &&
+    isImmediateCashPaymentType(normalizedPaymentType) &&
+    isSameCalendarDay(receivableCreatedAt, installmentDueDate)
+  ) {
+    return "A VISTA";
+  }
+
+  return formatInstallmentLabel(installmentNumber, totalInstallments);
+}
+
+function annotateLegacyMixedPaymentLabels(items) {
+  const groups = new Map();
+
+  items.forEach((item) => {
+    const createdDateKey = getDateOnlyKey(item.receivableCreatedAt);
+    const customerKey = Number(item.customerId) || 0;
+
+    if (!customerKey || !createdDateKey) {
+      return;
+    }
+
+    const groupKey = `${customerKey}|${createdDateKey}`;
+    const current = groups.get(groupKey) || [];
+    current.push(item);
+    groups.set(groupKey, current);
+  });
+
+  groups.forEach((groupItems) => {
+    const immediateItems = groupItems.filter((item) => {
+      if (Number(item.installmentNumber) !== 1 || Number(item.totalInstallments) !== 1) {
+        return false;
+      }
+
+      if (!item.paymentFlow || item.paymentFlow !== "IMMEDIATE_CASH") {
+        return false;
+      }
+
+      return isSameCalendarDay(item.receivableCreatedAt, item.dueDate);
+    });
+
+    const futureItems = groupItems.filter((item) => {
+      if (!item.paymentFlow || item.paymentFlow !== "FUTURE_CUSTOMER") {
+        return false;
+      }
+
+      return !isSameCalendarDay(item.receivableCreatedAt, item.dueDate);
+    });
+
+    if (!immediateItems.length || !futureItems.length) {
+      return;
+    }
+
+    immediateItems.forEach((item) => {
+      item.parcela = "ENTRADA";
+    });
+  });
+
+  return items;
+}
+
 function resolveReceivableOrigin({ debtorType, operatorLabel, supplier, customer }) {
   const supplierName = supplier?.tradeName || supplier?.fullName || null;
   const customerName = customer?.fullName || customer?.companyName || null;
@@ -167,11 +277,13 @@ async function listInstallments({
         item.amount,
       );
       const openBalance = Math.max(0, Number(item.amount) - Number(item.paidAmount));
+      const normalizedPaymentType = paymentType ? buildPaymentTypeResponse(paymentType) : null;
 
       return {
         id: item.idReceivableInstallment,
         receivableId: item.receivableId,
         saleId: item.Receivable?.Sale?.idSale || null,
+        receivableCreatedAt: item.Receivable?.createdAt || null,
         customerId: customer?.idCustomer || null,
         supplierId: supplier?.idSupplier || item.Receivable?.supplierId || null,
         debtorType,
@@ -180,9 +292,7 @@ async function listInstallments({
         supplierName: origin.supplierName,
         originType: origin.originType,
         originName: origin.originName,
-        parcela: `${String(item.installmentNumber).padStart(3, "0")}/${String(
-          item.totalInstallments,
-        ).padStart(3, "0")}`,
+        parcela: resolveInstallmentLabel(item),
         installmentNumber: item.installmentNumber,
         totalInstallments: item.totalInstallments,
         dueDate: item.dueDate,
@@ -190,11 +300,13 @@ async function listInstallments({
         filter,
         paymentTypeId: paymentType?.idPaymentType || item.paymentTypeId || null,
         paymentTypeName: paymentType?.desc || null,
+        paymentFlow: normalizedPaymentType?.financialFlow || null,
         amount: Number(item.amount),
         paidAmount: Number(item.paidAmount),
         openAmount: openBalance,
       };
     });
+  annotateLegacyMixedPaymentLabels(installmentItems);
   const standaloneReceipts = includeStandaloneReceipts
     ? await repository.listStandaloneReceipts({
         startDate,

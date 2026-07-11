@@ -384,14 +384,18 @@ async function getSaleById(idSale) {
       [SaleItems, "idSaleItem", "ASC"],
       [PaymentReceipts, "paidAt", "ASC"],
       [Receivables, ReceivableInstallments, "installmentNumber", "ASC"],
-      [CustomerMeasurements, "idCustomerMeasurements", "ASC"],
+      [CustomerMeasurements, "idMeasurement", "ASC"],
     ],
   });
 }
 
-async function listSales({ page = 1, pageSize = 10, status, search } = {}) {
+async function listSales({ page = 1, pageSize = 10, status, search, customerId } = {}) {
   const where = buildStatusWhere(status);
   const legacyCompletedSignal = buildLegacyCompletedSignal();
+
+  if (customerId && Number(customerId) > 0) {
+    where.customerId = Number(customerId);
+  }
 
   return Sales.findAndCountAll({
     where,
@@ -416,6 +420,18 @@ async function listSales({ page = 1, pageSize = 10, status, search } = {}) {
         model: PaymentTypes,
         attributes: ["idPaymentType", "desc"],
         required: false,
+      },
+      {
+        model: PaymentReceipts,
+        attributes: ["idPaymentReceipt", "paymentTypeId", "receiptType"],
+        required: false,
+        include: [
+          {
+            model: PaymentTypes,
+            attributes: ["idPaymentType", "desc"],
+            required: false,
+          },
+        ],
       },
       {
         model: SaleItems,

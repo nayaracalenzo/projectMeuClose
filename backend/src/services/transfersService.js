@@ -42,7 +42,7 @@ function normalizeDescription(value) {
   const normalized = String(value || "").trim();
 
   if (!normalized) {
-    throw validationError("Descricao da transferencia e obrigatoria.");
+    throw validationError("Descrição da transferencia e obrigatoria.");
   }
 
   return normalized;
