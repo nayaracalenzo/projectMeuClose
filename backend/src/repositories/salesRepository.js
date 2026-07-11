@@ -384,7 +384,7 @@ async function getSaleById(idSale) {
       [SaleItems, "idSaleItem", "ASC"],
       [PaymentReceipts, "paidAt", "ASC"],
       [Receivables, ReceivableInstallments, "installmentNumber", "ASC"],
-      [CustomerMeasurements, "idCustomerMeasurements", "ASC"],
+      [CustomerMeasurements, "idMeasurement", "ASC"],
     ],
   });
 }

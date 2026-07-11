@@ -20,7 +20,8 @@ type AdminResourceKey =
   | "sizes"
   | "clothings-types"
   | "fabrics"
-  | "payment-types";
+  | "payment-types"
+  | "audits";
 
 type Primitive = string | number | boolean | null;
 type GenericRecord = Record<string, Primitive>;
@@ -36,6 +37,11 @@ type RoleOption = {
   desc: string;
 };
 
+type AuditTypeOption = {
+  idAuditType: number;
+  description: string;
+};
+
 type ResourceConfig = {
   key: AdminResourceKey;
   title: string;
@@ -44,6 +50,7 @@ type ResourceConfig = {
   deleteLabel: string;
   primaryKey: string;
   isSoftDelete?: boolean;
+  readOnly?: boolean;
 };
 
 const resourceConfigList: ResourceConfig[] = [
@@ -119,6 +126,15 @@ const resourceConfigList: ResourceConfig[] = [
     emptyLabel: "Nenhuma forma de pagamento cadastrada.",
     deleteLabel: "Excluir",
     primaryKey: "idPaymentType",
+  },
+  {
+    key: "audits",
+    title: "Auditoria",
+    endpoint: "/admin/audits",
+    emptyLabel: "Nenhum registro de auditoria encontrado.",
+    deleteLabel: "",
+    primaryKey: "idAudit",
+    readOnly: true,
   },
 ];
 
@@ -213,9 +229,12 @@ export default function AdminPage() {
     "clothings-types": [],
     fabrics: [],
     "payment-types": [],
+    audits: [],
   });
   const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [auditTypes, setAuditTypes] = useState<AuditTypeOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -230,6 +249,12 @@ export default function AdminPage() {
   const [employeeForm, setEmployeeForm] = useState(employeeInitialForm);
   const [supplierForm, setSupplierForm] = useState(supplierInitialForm);
   const [simpleForm, setSimpleForm] = useState(simpleInitialForm);
+  const [auditFilters, setAuditFilters] = useState({
+    startDate: "",
+    endDate: "",
+    history: "",
+    auditTypeId: "",
+  });
 
   const currentConfig = useMemo(
     () => resourceConfigList.find((item) => item.key === selectedResource)!,
@@ -243,7 +268,25 @@ export default function AdminPage() {
 
   async function fetchResource(resource: AdminResourceKey) {
     const config = resourceConfigList.find((item) => item.key === resource)!;
-    const data = await getRequest(config.endpoint);
+    const params = new URLSearchParams();
+
+    if (resource === "audits") {
+      if (auditFilters.startDate) {
+        params.set("startDate", auditFilters.startDate);
+      }
+      if (auditFilters.endDate) {
+        params.set("endDate", auditFilters.endDate);
+      }
+      if (auditFilters.history.trim()) {
+        params.set("history", auditFilters.history.trim());
+      }
+      if (auditFilters.auditTypeId) {
+        params.set("auditTypeId", auditFilters.auditTypeId);
+      }
+    }
+
+    const endpoint = params.size > 0 ? `${config.endpoint}?${params.toString()}` : config.endpoint;
+    const data = await getRequest(endpoint);
     setResourceRows((prev) => ({
       ...prev,
       [resource]: data,
@@ -255,6 +298,11 @@ export default function AdminPage() {
     setRoles(data);
   }
 
+  async function fetchAuditTypes() {
+    const data = await getRequest("/admin/audit-types");
+    setAuditTypes(Array.isArray(data) ? data : []);
+  }
+
   useEffect(() => {
     const fetchAdminData = async () => {
       try {
@@ -263,6 +311,7 @@ export default function AdminPage() {
         await Promise.all([
           ...resourceConfigList.map((resource) => fetchResource(resource.key)),
           fetchRoles(),
+          fetchAuditTypes(),
         ]);
       } catch (err) {
         console.error(err);
@@ -299,6 +348,32 @@ export default function AdminPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [pageSize]);
+
+  useEffect(() => {
+    if (selectedResource === "audits") {
+      setCurrentPage(1);
+    }
+  }, [auditFilters, selectedResource]);
+
+  useEffect(() => {
+    if (selectedResource !== "audits") {
+      return;
+    }
+
+    const fetchAudits = async () => {
+      try {
+        setAuditLoading(true);
+        await fetchResource("audits");
+      } catch (err) {
+        console.error(err);
+        setError("Não foi possível carregar os dados da auditoria.");
+      } finally {
+        setAuditLoading(false);
+      }
+    };
+
+    void fetchAudits();
+  }, [auditFilters, selectedResource]);
 
   const visibleRows =
     selectedResource === "employees" ? employeeRows : currentRows;
@@ -752,6 +827,127 @@ export default function AdminPage() {
     );
   }
 
+  function renderAuditsTable() {
+    return (
+      <div className="hidden overflow-x-auto lg:block">
+        <table className="w-full border-separate border-spacing-y-2">
+          <thead>
+            <tr className="text-left">
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
+                Data
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
+                Tipo
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
+                Usuário
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
+                Histórico
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
+                Motivo
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {(paginatedRows as GenericRecord[]).map((row) => (
+              <tr key={String(row.idAudit)} className="bg-surface-lowest align-top">
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {formatDate(row.occurredAt)}
+                </td>
+                <td className="px-4 py-3 text-[14px] font-semibold text-primary">
+                  {String(row.auditTypeDescription ?? "-")}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {String(row.userName ?? "-")}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {String(row.history ?? "-")}
+                </td>
+                <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  {String(row.reason ?? "-")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function renderAuditFilters() {
+    return (
+      <div className="mb-4 grid gap-4 rounded-xl bg-surface-lowest p-4 md:grid-cols-[160px_160px_minmax(0,1fr)_220px]">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-primary" htmlFor="audit-start-date">
+            Data inicial
+          </label>
+          <input
+            id="audit-start-date"
+            type="date"
+            value={auditFilters.startDate}
+            onChange={(event) =>
+              setAuditFilters((prev) => ({ ...prev, startDate: event.target.value }))
+            }
+            className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-primary" htmlFor="audit-end-date">
+            Data final
+          </label>
+          <input
+            id="audit-end-date"
+            type="date"
+            value={auditFilters.endDate}
+            onChange={(event) =>
+              setAuditFilters((prev) => ({ ...prev, endDate: event.target.value }))
+            }
+            className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-primary" htmlFor="audit-history">
+            Histórico
+          </label>
+          <input
+            id="audit-history"
+            type="text"
+            value={auditFilters.history}
+            onChange={(event) =>
+              setAuditFilters((prev) => ({ ...prev, history: event.target.value }))
+            }
+            className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-primary" htmlFor="audit-type">
+            Tipo
+          </label>
+          <select
+            id="audit-type"
+            value={auditFilters.auditTypeId}
+            onChange={(event) =>
+              setAuditFilters((prev) => ({ ...prev, auditTypeId: event.target.value }))
+            }
+            className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+          >
+            <option value="">Todos</option>
+            {auditTypes.map((auditType) => (
+              <option key={auditType.idAuditType} value={auditType.idAuditType}>
+                {auditType.description}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  }
+
   function renderMobileCards() {
     return (
       <div className="divide-y divide-outline-variant/35 bg-white lg:hidden">
@@ -795,6 +991,21 @@ export default function AdminPage() {
                   ID {String(row.idPaymentType ?? "")}
                 </p>
               </>
+            ) : selectedResource === "audits" ? (
+              <>
+                <p className="text-base font-semibold text-primary">
+                  {String(row.auditTypeDescription ?? "-")}
+                </p>
+                <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                  {formatDate(row.occurredAt)} • {String(row.userName ?? "-")}
+                </p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  {String(row.history ?? "-")}
+                </p>
+                <p className="mt-1 text-xs text-neutral-700">
+                  Motivo: {String(row.reason ?? "-")}
+                </p>
+              </>
             ) : (
               <>
                 <p className="text-base font-semibold text-primary">
@@ -805,22 +1016,24 @@ export default function AdminPage() {
                 </p>
               </>
             )}
-            <div className="mt-3 flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => startEdit(row)}
-              >
-                Editar
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => handleDelete(row)}
-              >
-                {currentConfig.deleteLabel}
-              </Button>
-            </div>
+            {currentConfig.readOnly ? null : (
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => startEdit(row)}
+                >
+                  Editar
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => handleDelete(row)}
+                >
+                  {currentConfig.deleteLabel}
+                </Button>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -891,10 +1104,20 @@ export default function AdminPage() {
                   <h2 className="text-3xl font-semibold text-primary">
                     {currentConfig.title}
                   </h2>
-                  <Button variant="primary" size="md" onClick={openCreateModal}>
-                    + Novo
-                  </Button>
+                  {currentConfig.readOnly ? null : (
+                    <Button variant="primary" size="md" onClick={openCreateModal}>
+                      + Novo
+                    </Button>
+                  )}
                 </div>
+
+                {selectedResource === "audits" ? renderAuditFilters() : null}
+
+                {selectedResource === "audits" && auditLoading ? (
+                  <div className="mb-4 rounded-xl bg-surface-lowest px-4 py-3 text-sm text-neutral-700">
+                    Atualizando auditoria...
+                  </div>
+                ) : null}
 
                 {visibleRows.length === 0 ? (
                   <div className="bg-surface-lowest p-6 text-sm text-neutral-700">
@@ -908,6 +1131,8 @@ export default function AdminPage() {
                         ? renderSuppliersTable()
                         : selectedResource === "payment-types"
                           ? renderPaymentTypesTable()
+                          : selectedResource === "audits"
+                            ? renderAuditsTable()
                           : renderSimpleTable()}
                     {renderMobileCards()}
                     <div className="mt-4 hidden items-center justify-between md:flex">
@@ -974,7 +1199,7 @@ export default function AdminPage() {
       )}
 
       <CustomerModal
-        open={isFormOpen}
+        open={isFormOpen && !currentConfig.readOnly}
         onClose={closeForm}
         title={
           editingId

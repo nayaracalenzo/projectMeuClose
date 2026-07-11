@@ -100,6 +100,20 @@ const resourceConfig = {
     defaultOrder: [["idPaymentType", "ASC"]],
     editableFields: ["desc"],
   },
+  audits: {
+    modelName: "Audits",
+    primaryKey: "idAudit",
+    defaultOrder: [["occurredAt", "DESC"], ["idAudit", "DESC"]],
+    editableFields: [],
+    readOnly: true,
+  },
+  "audit-types": {
+    modelName: "AuditTypes",
+    primaryKey: "idAuditType",
+    defaultOrder: [["description", "ASC"]],
+    editableFields: ["description"],
+    readOnly: true,
+  },
 };
 
 function getAdminResourceConfig(resource) {

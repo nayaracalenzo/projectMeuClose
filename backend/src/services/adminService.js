@@ -134,8 +134,22 @@ function validatePayload(resource, payload, isCreate) {
   }
 }
 
-async function listResource(resource) {
-  const records = await repository.listResource(resource);
+async function listResource(resource, query = {}) {
+  let filters = undefined;
+
+  if (resource === "audits") {
+    filters = {
+      startDate: normalizeDate(query.startDate),
+      endDate: normalizeDate(query.endDate),
+      history: normalizeText(query.history),
+      auditTypeId:
+        query.auditTypeId === undefined || query.auditTypeId === null || query.auditTypeId === ""
+          ? null
+          : Number(query.auditTypeId),
+    };
+  }
+
+  const records = await repository.listResource(resource, filters);
 
   if (records === null) {
     throw notFoundError("Recurso administrativo invalido.");
@@ -145,6 +159,11 @@ async function listResource(resource) {
 }
 
 async function createResource(resource, body) {
+  const config = getAdminResourceConfig(resource);
+  if (config?.readOnly) {
+    throw createAdminResourceError("Recurso administrativo somente leitura.");
+  }
+
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, true);
 
@@ -157,6 +176,11 @@ async function createResource(resource, body) {
 }
 
 async function updateResource(resource, id, body) {
+  const config = getAdminResourceConfig(resource);
+  if (config?.readOnly) {
+    throw createAdminResourceError("Recurso administrativo somente leitura.");
+  }
+
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, false);
 
@@ -174,6 +198,11 @@ async function updateResource(resource, id, body) {
 }
 
 async function deleteResource(resource, id) {
+  const config = getAdminResourceConfig(resource);
+  if (config?.readOnly) {
+    throw createAdminResourceError("Recurso administrativo somente leitura.");
+  }
+
   const removed = await repository.deleteResource(resource, id);
 
   if (removed === null) {
