@@ -21,6 +21,30 @@ function normalizeDate(value, fieldName, options = {}) {
   );
 }
 
+function formatInstallmentLabel(installmentNumber, totalInstallments) {
+  const current = Number(installmentNumber) || 0;
+  const total = Number(totalInstallments) || 0;
+
+  if (current <= 0 || total <= 0) {
+    return null;
+  }
+
+  return `${current}/${total}`;
+}
+
+function resolveEntryInstallmentLabel(item) {
+  const installmentLabel = formatInstallmentLabel(
+    item.get?.("installmentNumber") || item.installmentNumber || null,
+    item.get?.("totalInstallments") || item.totalInstallments || null,
+  );
+
+  if (installmentLabel) {
+    return installmentLabel;
+  }
+
+  return item.referenceCode ? String(item.referenceCode) : "-";
+}
+
 async function listEntries(query = {}) {
   const scope = query.scope ? String(query.scope).trim() : undefined;
   const search = query.search ? String(query.search).trim() : undefined;
@@ -50,6 +74,7 @@ async function listEntries(query = {}) {
       id: item.idCashEntry,
       date: item.occurredAt,
       scope: item.scope,
+      parcela: resolveEntryInstallmentLabel(item),
       description: item.description,
       category: item.category,
       movementType: item.movementType,

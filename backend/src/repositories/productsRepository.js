@@ -176,7 +176,9 @@ async function buildProductPayload(customerId, item, transaction) {
     isReadyMade ? findOrCreateByDesc(Sizes, metadata.size, transaction) : null,
   ]);
 
-  const dressmakerValue = isCustomMade ? roundCurrency(metadata.seamstressCost) : null;
+  const dressmakerValue = isCustomMade
+    ? roundCurrency(metadata.seamstressCost)
+    : roundCurrency(metadata.materialCost);
   const finalValue = roundCurrency(item.subtotal) || 0;
   const remainingValue =
     dressmakerValue === null ? null : roundCurrency(finalValue - dressmakerValue);

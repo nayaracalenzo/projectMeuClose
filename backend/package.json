@@ -35,7 +35,10 @@
     "db:seed:employees": "node src/scripts/importEmployees.js",
     "db:seed:suppliers": "node src/scripts/importSuppliers.js",
     "db:seed:audit-types": "node src/scripts/importAuditTypes.js",
-    "db:seed:audits": "node src/scripts/importAudits.js"
+    "db:seed:audits": "node src/scripts/importAudits.js",
+    "db:fix:cancel-sales-from-audits": "node src/scripts/cancelSalesFromAuditHistory.js",
+    "db:fix:receivable-installments": "node src/scripts/normalizeLegacyReceivableInstallments.js",
+    "db:fix:normalize-legacy-partials": "node src/scripts/normalizeLegacyFinancialSettlements.js"
   },
   "keywords": [],
   "author": "",

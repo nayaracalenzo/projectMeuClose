@@ -42,8 +42,8 @@ function deriveStatus({ amount, paidAmount, dueDate }) {
 
   if (paidAmount > 0 && paidAmount < amount) {
     return {
-      status: "PARTIAL",
-      openAmount: Number((amount - paidAmount).toFixed(2)),
+      status: "PAID",
+      openAmount: 0,
     };
   }
 
@@ -161,7 +161,7 @@ async function importPayables() {
         (categoryId ? `CONTA ${categoryId}` : "DIVERSOS");
       const beneficiary =
         supplierMap.get(safeSupplierId || supplierId) ||
-        (supplierId ? `FORNECEDOR ${supplierId}` : "Fornecedor nao informado");
+        (supplierId ? `FORNECEDOR ${supplierId}` : "Fornecedor não informado");
       const description = normalizeText(row.his) || category;
       const referenceCode = normalizeText(row.numDoc);
 

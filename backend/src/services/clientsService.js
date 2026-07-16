@@ -10,6 +10,40 @@ const {
   sortBirthdays,
 } = require("./birthdayService.js");
 
+function toClientDetails(client) {
+  if (!client) return null;
+
+  return {
+    id: client.idCustomer,
+    typeCustomer: client.typeCustomer,
+    document: client.document,
+    rg: client.rg,
+    fullName: client.fullName,
+    birthDate: client.birthDate,
+    companyName: client.companyName,
+    tradeName: client.tradeName,
+    phone: client.phone,
+    email: client.email,
+    zipCode: client.zipCode,
+    street: client.street,
+    number: client.number,
+    complement: client.complement,
+    neighborhood: client.neighborhood,
+    city: client.city,
+    state: client.state,
+    active: client.active,
+    blocked: client.blocked,
+    professionId: client.professionId,
+    professionName:
+      client.Profession?.nameProfession ||
+      client.Professions?.nameProfession ||
+      null,
+    comment: client.comment,
+    createdAt: client.createdAt,
+    updatedAt: client.updatedAt,
+  };
+}
+
 async function getBirthdaysOfMonth(query) {
   const filters = parseBirthdayFilters(query);
 
@@ -64,37 +98,7 @@ async function getAllClients(query = {}) {
 
 async function getClientById(id) {
   const client = await repository.getClientById(id);
-  if (!client) return null;
-
-  return {
-    id: client.idCustomer,
-    typeCustomer: client.typeCustomer,
-    document: client.document,
-    rg: client.rg,
-    fullName: client.fullName,
-    birthDate: client.birthDate,
-    companyName: client.companyName,
-    tradeName: client.tradeName,
-    phone: client.phone,
-    email: client.email,
-    zipCode: client.zipCode,
-    street: client.street,
-    number: client.number,
-    complement: client.complement,
-    neighborhood: client.neighborhood,
-    city: client.city,
-    state: client.state,
-    active: client.active,
-    blocked: client.blocked,
-    professionId: client.professionId,
-    professionName:
-      client.Profession?.nameProfession ||
-      client.Professions?.nameProfession ||
-      null,
-    comment: client.comment,
-    createdAt: client.createdAt,
-    updatedAt: client.updatedAt,
-  };
+  return toClientDetails(client);
 }
 
 function buildClientPayload(body, { isCreate }) {
@@ -130,7 +134,8 @@ async function updateClientById(id, body) {
   const updated = await repository.updateClientById(id, payload);
   if (!updated) return null;
 
-  return getClientById(id);
+  const client = await repository.getClientById(id, { includeBlocked: true });
+  return toClientDetails(client);
 }
 
 async function createClient(body) {

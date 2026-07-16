@@ -222,6 +222,53 @@ function normalizeOptionalDate(value, fieldName, options = {}) {
   );
 }
 
+function normalizePositiveInteger(value, fieldName) {
+  const normalized = Number(value);
+
+  if (!Number.isInteger(normalized) || normalized <= 0) {
+    throw createReceivablesValidationError(`${fieldName} invalido.`);
+  }
+
+  return normalized;
+}
+
+function normalizeBoolean(value) {
+  if (value === true || value === "true" || value === 1 || value === "1") {
+    return true;
+  }
+
+  return false;
+}
+
+function getReceivableUserId(user) {
+  const normalized = Number(user?.id ?? user?.idUser);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
+}
+
+function ensureReceivableCanBeManaged(installment) {
+  if (!installment || !installment.Receivable) {
+    throw notFoundError("Parcela nao encontrada.");
+  }
+
+  if (installment.idReceivableInstallment <= 0) {
+    throw createReceivablesValidationError("Somente contas manuais podem ser alteradas ou excluidas.");
+  }
+
+  if (installment.Receivable.saleId) {
+    throw createReceivablesValidationError("Contas vinculadas a venda nao podem ser alteradas ou excluidas.");
+  }
+
+  const receiptsCount = Array.isArray(installment.PaymentReceipts)
+    ? installment.PaymentReceipts.length
+    : 0;
+
+  if (receiptsCount > 0 || Number(installment.paidAmount || 0) > 0) {
+    throw createReceivablesValidationError(
+      "A conta a receber so pode ser alterada ou excluida antes da quitacao.",
+    );
+  }
+}
+
 async function listInstallments({
   status,
   customerId,
@@ -276,7 +323,10 @@ async function listInstallments({
         item.paidAmount,
         item.amount,
       );
-      const openBalance = Math.max(0, Number(item.amount) - Number(item.paidAmount));
+      const openBalance =
+        item.status === "PAID"
+          ? 0
+          : Math.max(0, Number(item.amount) - Number(item.paidAmount));
       const normalizedPaymentType = paymentType ? buildPaymentTypeResponse(paymentType) : null;
 
       return {
@@ -295,6 +345,7 @@ async function listInstallments({
         parcela: resolveInstallmentLabel(item),
         installmentNumber: item.installmentNumber,
         totalInstallments: item.totalInstallments,
+        interestBaseDate: item.interestBaseDate || item.dueDate,
         dueDate: item.dueDate,
         status: item.status,
         filter,
@@ -401,12 +452,14 @@ async function registerReceipt(installmentId, body = {}) {
   const amount = normalizeAmount(body.amount, "Valor recebido");
   const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
+  const discardInterest = normalizeBoolean(body.discardInterest);
 
   const created = await repository.registerReceipt(normalizedInstallmentId, {
     paymentTypeId,
     amount,
     paidAt,
     referenceCode,
+    discardInterest,
     financialMovement: {
       target: isImmediateCashPaymentType(normalizedPaymentType) ? "CASH" : "BANK",
       scope: "LOJA",
@@ -432,8 +485,107 @@ async function registerReceipt(installmentId, body = {}) {
   };
 }
 
+async function createReceivable(body = {}) {
+  const customerId = normalizePositiveInteger(body.customerId, "Cliente");
+  const paymentTypeId = normalizePositiveInteger(body.paymentTypeId, "Forma de pagamento");
+  const amount = normalizeAmount(body.amount, "Valor");
+  const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
+
+  const [customer, paymentType] = await Promise.all([
+    repository.getCustomerById(customerId),
+    paymentTypesRepository.getPaymentTypeById(paymentTypeId),
+  ]);
+
+  if (!customer) {
+    throw createReceivablesValidationError("Cliente invalido.");
+  }
+
+  if (!paymentType) {
+    throw createReceivablesValidationError("Forma de pagamento invalida.");
+  }
+
+  const created = await repository.createManualReceivable({
+    customerId,
+    paymentTypeId,
+    amount,
+    dueDate,
+  });
+
+  return {
+    id: created.installment.idReceivableInstallment,
+    message: "Conta a receber criada com sucesso.",
+  };
+}
+
+async function updateReceivable(installmentId, body = {}) {
+  const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
+  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+
+  ensureReceivableCanBeManaged(installment);
+
+  const customerId = normalizePositiveInteger(body.customerId, "Cliente");
+  const paymentTypeId = normalizePositiveInteger(body.paymentTypeId, "Forma de pagamento");
+  const amount = normalizeAmount(body.amount, "Valor");
+  const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
+
+  const [customer, paymentType] = await Promise.all([
+    repository.getCustomerById(customerId),
+    paymentTypesRepository.getPaymentTypeById(paymentTypeId),
+  ]);
+
+  if (!customer) {
+    throw createReceivablesValidationError("Cliente invalido.");
+  }
+
+  if (!paymentType) {
+    throw createReceivablesValidationError("Forma de pagamento invalida.");
+  }
+
+  await repository.updateManualReceivable(normalizedInstallmentId, {
+    customerId,
+    paymentTypeId,
+    amount,
+    dueDate,
+  });
+
+  return {
+    message: "Conta a receber alterada com sucesso.",
+  };
+}
+
+async function deleteReceivable(installmentId, user) {
+  const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
+  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+
+  ensureReceivableCanBeManaged(installment);
+
+  const customerName =
+    installment.Receivable?.Customer?.fullName ||
+    installment.Receivable?.Customer?.companyName ||
+    "Cliente";
+  const amount = Number(installment.amount || 0).toFixed(2);
+  const dueDate = installment.dueDate
+    ? new Date(installment.dueDate).toISOString().slice(0, 10)
+    : "-";
+
+  await repository.deleteManualReceivable(normalizedInstallmentId, {
+    auditTypeId: 1,
+    userId: getReceivableUserId(user),
+    occurredAt: new Date(),
+    history: `Exclusao de conta a receber ${normalizedInstallmentId} do cliente ${customerName} no valor de ${amount} com vencimento em ${dueDate}.`,
+    reason: null,
+  });
+
+  return {
+    message: "Conta a receber excluida com sucesso.",
+  };
+}
+
 module.exports = {
   createReceivablesValidationError,
   listInstallments,
+  createReceivable,
+  updateReceivable,
+  deleteReceivable,
   registerReceipt,
 };

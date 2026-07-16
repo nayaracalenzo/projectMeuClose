@@ -649,7 +649,7 @@ export default function OrderDetails() {
 
               <div>
                 <label className={labelClassName} htmlFor="order-dressmaker-value">
-                  Valor da Costureira
+                  Valor de material
                 </label>
                 <input
                   id="order-dressmaker-value"

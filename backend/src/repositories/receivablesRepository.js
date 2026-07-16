@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const {
+  Audits,
   CardTransactions,
   Customers,
   PaymentReceipts,
@@ -73,6 +75,17 @@ function buildInstallmentsWhere({ startDate, endDate, search } = {}) {
       Sequelize.where(Sequelize.cast(Sequelize.col("ReceivableInstallments.totalInstallments"), "TEXT"), {
         [Op.iLike]: term,
       }),
+      Sequelize.where(
+        Sequelize.fn(
+          "CONCAT",
+          Sequelize.cast(Sequelize.col("ReceivableInstallments.installmentNumber"), "TEXT"),
+          "/",
+          Sequelize.cast(Sequelize.col("ReceivableInstallments.totalInstallments"), "TEXT"),
+        ),
+        {
+          [Op.iLike]: term,
+        },
+      ),
       {
         "$PaymentType.desc$": {
           [Op.iLike]: term,
@@ -270,6 +283,7 @@ async function listInstallments({
     include: buildReceivablesInclude({ customerId }),
     order: [["dueDate", "ASC"], ["installmentNumber", "ASC"]],
     distinct: true,
+    subQuery: false,
   };
 
   if (Number.isInteger(pageSize) && pageSize > 0) {
@@ -301,7 +315,12 @@ async function summarizeInstallments({ startDate, endDate, search, status, custo
           "COALESCE",
           sequelize.fn(
             "SUM",
-            sequelize.literal('"ReceivableInstallments"."amount" - "ReceivableInstallments"."paidAmount"'),
+            sequelize.literal(`
+              CASE
+                WHEN "ReceivableInstallments"."status" = 'PAID' THEN 0
+                ELSE "ReceivableInstallments"."amount" - "ReceivableInstallments"."paidAmount"
+              END
+            `),
           ),
           0,
         ),
@@ -428,6 +447,10 @@ async function registerReceipt(installmentId, payload) {
         paidAmount: nextPaidAmount,
         paymentTypeId: payload.paymentTypeId,
         status: installmentStatus,
+        interestBaseDate:
+          payload.discardInterest && installmentStatus !== "PAID"
+            ? payload.paidAt
+            : installment.interestBaseDate || installment.dueDate,
       },
       { transaction }
     );
@@ -467,12 +490,195 @@ async function registerReceipt(installmentId, payload) {
   });
 }
 
+async function getCustomerById(customerId) {
+  return Customers.findByPk(customerId);
+}
+
+async function getInstallmentById(installmentId) {
+  return ReceivableInstallments.findByPk(installmentId, {
+    include: [
+      {
+        model: Receivables,
+        include: [
+          {
+            model: Customers,
+            attributes: ["idCustomer", "fullName", "companyName"],
+            required: false,
+          },
+        ],
+      },
+      {
+        model: PaymentReceipts,
+        attributes: ["idPaymentReceipt"],
+        required: false,
+      },
+      {
+        model: PaymentTypes,
+        attributes: ["idPaymentType", "desc"],
+        required: false,
+      },
+    ],
+  });
+}
+
+async function createManualReceivable(payload) {
+  return sequelize.transaction(async (transaction) => {
+    const receivable = await Receivables.create(
+      {
+        saleId: null,
+        customerId: payload.customerId,
+        supplierId: null,
+        debtorType: "CUSTOMER",
+        operatorLabel: null,
+        originalAmount: payload.amount,
+        openAmount: payload.amount,
+        status: "OPEN",
+      },
+      { transaction },
+    );
+
+    const installment = await ReceivableInstallments.create(
+      {
+        receivableId: receivable.idReceivable,
+        paymentTypeId: payload.paymentTypeId,
+        installmentNumber: 1,
+        totalInstallments: 1,
+        dueDate: payload.dueDate,
+        interestBaseDate: payload.dueDate,
+        amount: payload.amount,
+        paidAmount: 0,
+        status: "OPEN",
+      },
+      { transaction },
+    );
+
+    return {
+      receivable,
+      installment,
+    };
+  });
+}
+
+async function updateManualReceivable(installmentId, payload) {
+  return sequelize.transaction(async (transaction) => {
+    const installment = await ReceivableInstallments.findByPk(installmentId, {
+      include: [
+        {
+          model: Receivables,
+        },
+      ],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!installment || !installment.Receivable) {
+      return undefined;
+    }
+
+    await installment.update(
+      {
+        paymentTypeId: payload.paymentTypeId,
+        dueDate: payload.dueDate,
+        interestBaseDate: payload.dueDate,
+        amount: payload.amount,
+        status: "OPEN",
+      },
+      { transaction },
+    );
+
+    await installment.update(
+      {
+        paidAmount: 0,
+      },
+      { transaction },
+    );
+
+    await installment.Receivable.update(
+      {
+        customerId: payload.customerId,
+        originalAmount: payload.amount,
+        openAmount: payload.amount,
+        status: "OPEN",
+      },
+      { transaction },
+    );
+
+    return {
+      receivable: installment.Receivable,
+      installment,
+    };
+  });
+}
+
+async function deleteManualReceivable(installmentId, auditPayload) {
+  return sequelize.transaction(async (transaction) => {
+    const installment = await ReceivableInstallments.findByPk(installmentId, {
+      include: [
+        {
+          model: Receivables,
+          include: [
+            {
+              model: Customers,
+              attributes: ["idCustomer", "fullName", "companyName"],
+              required: false,
+            },
+          ],
+        },
+        {
+          model: PaymentReceipts,
+          attributes: ["idPaymentReceipt"],
+          required: false,
+        },
+      ],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!installment || !installment.Receivable) {
+      return undefined;
+    }
+
+    await Audits.create(
+      {
+        auditTypeId: auditPayload.auditTypeId,
+        userId: auditPayload.userId,
+        occurredAt: auditPayload.occurredAt,
+        history: auditPayload.history,
+        reason: auditPayload.reason || null,
+        legacyFingerprint: crypto
+          .createHash("sha256")
+          .update(
+            JSON.stringify({
+              installmentId,
+              occurredAt: auditPayload.occurredAt.toISOString(),
+              history: auditPayload.history,
+              userId: auditPayload.userId || null,
+            }),
+          )
+          .digest("hex"),
+      },
+      { transaction },
+    );
+
+    await installment.Receivable.destroy({ transaction });
+
+    return {
+      installmentId,
+    };
+  });
+}
+
 module.exports = {
   createReceivableWithInstallments,
   createStandaloneReceipt,
+  getCustomerById,
+  getInstallmentById,
   listInstallments,
   summarizeInstallments,
   listStandaloneReceipts,
   summarizeStandaloneReceipts,
+  createManualReceivable,
+  updateManualReceivable,
+  deleteManualReceivable,
   registerReceipt,
 };

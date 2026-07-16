@@ -623,6 +623,7 @@ export default function NewSalePage() {
     products.map((product) => {
       const quantity = Number(product.quantity) > 0 ? Number(product.quantity) : 1;
       const unitPrice = parseCurrencyToNumber(product.price);
+      const materialCost = parseCurrencyToNumber(product.materialCost);
       const discountPercent = Math.min(
         100,
         Math.max(0, Number(product.discountPercent.replace(",", ".")) || 0),
@@ -636,7 +637,9 @@ export default function NewSalePage() {
         discountType: discountPercent > 0 ? "PERCENTAGE" : null,
         discountValue: discountPercent > 0 ? discountPercent : null,
         subtotal: Number((unitPrice * quantity * (1 - discountPercent / 100)).toFixed(2)),
-        metadata: null,
+        metadata: {
+          materialCost: materialCost || null,
+        },
       };
     });
 
@@ -652,6 +655,7 @@ export default function NewSalePage() {
       const readyMadeItems = readyMadeProducts.map((product) => {
         const quantity = Number(product.quantity) > 0 ? Number(product.quantity) : 1;
         const unitPrice = parseCurrencyToNumber(product.price);
+        const materialCost = parseCurrencyToNumber(product.materialCost);
         const discountPercent = Math.min(
           100,
           Math.max(0, Number(product.discountPercent.replace(",", ".")) || 0),
@@ -667,6 +671,7 @@ export default function NewSalePage() {
           subtotal: Number((unitPrice * quantity * (1 - discountPercent / 100)).toFixed(2)),
           metadata: {
             size: product.size || null,
+            materialCost: materialCost || null,
           },
         };
       });
@@ -875,6 +880,7 @@ export default function NewSalePage() {
     const readyMadeItems = readyMadeProducts.map((product) => {
       const quantity = Number(product.quantity) > 0 ? Number(product.quantity) : 1;
       const unitPrice = parseCurrencyToNumber(product.price);
+      const materialCost = parseCurrencyToNumber(product.materialCost);
       const discountPercent = Math.min(
         100,
         Math.max(0, Number(product.discountPercent.replace(",", ".")) || 0),
@@ -890,6 +896,7 @@ export default function NewSalePage() {
         subtotal: Number((unitPrice * quantity * (1 - discountPercent / 100)).toFixed(2)),
         metadata: {
           size: product.size || null,
+          materialCost: materialCost || null,
         },
       };
     });

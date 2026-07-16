@@ -2,6 +2,7 @@ import {
   DataGrid,
   type GridAlignment,
   type GridColDef,
+  type GridRowId,
   type GridRowSelectionModel,
   gridClasses,
 } from "@mui/x-data-grid";
@@ -144,6 +145,10 @@ const resolveColType = (value: unknown): GridColDef["type"] => {
 
 export default function Table(props: TableProps) {
   const isMobile = useMediaQuery("(max-width: 600px)");
+  const rowSelectionModel =
+    props.checkboxSelection && props.selectedId !== undefined && props.selectedId !== null
+      ? { type: "include" as const, ids: new Set<GridRowId>([props.selectedId]) }
+      : undefined;
 
   if (!props.values || props.values.length === 0) {
     return (
@@ -273,9 +278,19 @@ export default function Table(props: TableProps) {
             params.indexRelativeToCurrentPage % 2 === 0 ? "even" : "odd"
           }
           checkboxSelection={props.checkboxSelection}
-          onRowSelectionModelChange={(item) =>
-            props.handleSelectionChange && props.handleSelectionChange(item)
-          }
+          rowSelectionModel={rowSelectionModel}
+          onRowSelectionModelChange={(item) => {
+            if (props.handleSelectionChange) {
+              props.handleSelectionChange(item);
+            }
+
+            const selectedIds = Array.from(item.ids);
+
+            if (props.catchIdFromTable && selectedIds.length > 0) {
+              const selectedId = selectedIds[selectedIds.length - 1] as GridRowId;
+              props.catchIdFromTable(Number(selectedId));
+            }
+          }}
           disableMultipleRowSelection={props.multipleRows ? false : true}
           disableRowSelectionOnClick={props.disableRowSelectionOnClick}
           columnHeaderHeight={props.headerExpanded ? 70 : 56}

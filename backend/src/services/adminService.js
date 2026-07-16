@@ -167,6 +167,24 @@ async function createResource(resource, body) {
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, true);
 
+  if (resource === "suppliers" && payload.document) {
+    const existingSupplier = await repository.findSupplierByDocument(payload.document);
+
+    if (existingSupplier?.active !== false) {
+      throw createAdminResourceError("Ja existe um fornecedor ativo com este documento.");
+    }
+
+    if (existingSupplier) {
+      const reactivated = await repository.updateResource(resource, existingSupplier.idSupplier, {
+        ...payload,
+        active: true,
+        blocked: false,
+      });
+
+      return reactivated;
+    }
+  }
+
   const created = await repository.createResource(resource, payload);
   if (created === null) {
     throw notFoundError("Recurso administrativo invalido.");
@@ -183,6 +201,16 @@ async function updateResource(resource, id, body) {
 
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, false);
+
+  if (resource === "suppliers" && payload.document) {
+    const existingSupplier = await repository.findSupplierByDocument(payload.document, {
+      excludeId: id,
+    });
+
+    if (existingSupplier?.active !== false) {
+      throw createAdminResourceError("Ja existe um fornecedor ativo com este documento.");
+    }
+  }
 
   const updated = await repository.updateResource(resource, id, payload);
 

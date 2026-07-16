@@ -113,15 +113,20 @@ function buildInstallments(amount, installmentCount, paymentTypeId, dueDate) {
     amounts.push(installmentAmount);
   }
 
-  return amounts.map((installmentAmount, index) => ({
-    paymentTypeId,
-    installmentNumber: index + 1,
-    totalInstallments: installmentCount,
-    dueDate: addMonths(dueDate || new Date(), index),
-    amount: installmentAmount,
-    paidAmount: 0,
-    status: "OPEN",
-  }));
+  return amounts.map((installmentAmount, index) => {
+    const dueDateValue = addMonths(dueDate || new Date(), index);
+
+    return {
+      paymentTypeId,
+      installmentNumber: index + 1,
+      totalInstallments: installmentCount,
+      dueDate: dueDateValue,
+      interestBaseDate: dueDateValue,
+      amount: installmentAmount,
+      paidAmount: 0,
+      status: "OPEN",
+    };
+  });
 }
 
 function normalizeMeasurementRecord(record = {}) {

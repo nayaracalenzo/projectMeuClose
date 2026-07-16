@@ -1,5 +1,11 @@
 const { Op, Sequelize } = require("sequelize");
-const { BankEntries, sequelize } = require("../models");
+const {
+  BankEntries,
+  PaymentReceipts,
+  PayablePayments,
+  ReceivableInstallments,
+  sequelize,
+} = require("../models");
 
 function buildWhere({ scope, search, startDate, endDate } = {}) {
   const where = {};
@@ -50,6 +56,74 @@ async function createEntry(payload, transaction) {
 async function listEntries(filters = {}) {
   return BankEntries.findAndCountAll({
     where: buildWhere(filters),
+    attributes: {
+      include: [
+        [
+          sequelize.literal(`
+            SUM(
+              CASE
+                WHEN "BankEntries"."movementType" = 'IN' THEN "BankEntries"."amount"
+                ELSE -"BankEntries"."amount"
+              END
+            ) OVER (ORDER BY "BankEntries"."occurredAt" ASC, "BankEntries"."idBankEntry" ASC)
+          `),
+          "runningBalance",
+        ],
+        [
+          sequelize.literal(`
+            (
+              SELECT pr."receiptType"
+              FROM "payment_receipts" pr
+              WHERE pr."idPaymentReceipt" = "BankEntries"."paymentReceiptId"
+            )
+          `),
+          "receiptType",
+        ],
+        [
+          sequelize.literal(`
+            (
+              SELECT ri."installmentNumber"
+              FROM "payment_receipts" pr
+              LEFT JOIN "receivable_installments" ri
+                ON ri."idReceivableInstallment" = pr."receivableInstallmentId"
+              WHERE pr."idPaymentReceipt" = "BankEntries"."paymentReceiptId"
+            )
+          `),
+          "installmentNumber",
+        ],
+        [
+          sequelize.literal(`
+            (
+              SELECT ri."totalInstallments"
+              FROM "payment_receipts" pr
+              LEFT JOIN "receivable_installments" ri
+                ON ri."idReceivableInstallment" = pr."receivableInstallmentId"
+              WHERE pr."idPaymentReceipt" = "BankEntries"."paymentReceiptId"
+            )
+          `),
+          "totalInstallments",
+        ],
+      ],
+    },
+    include: [
+      {
+        model: PaymentReceipts,
+        required: false,
+        attributes: ["idPaymentReceipt", "receiptType", "receivableInstallmentId"],
+        include: [
+          {
+            model: ReceivableInstallments,
+            required: false,
+            attributes: ["installmentNumber", "totalInstallments"],
+          },
+        ],
+      },
+      {
+        model: PayablePayments,
+        required: false,
+        attributes: ["idPayablePayment"],
+      },
+    ],
     order: [["occurredAt", "DESC"], ["idBankEntry", "DESC"]],
     limit: filters.pageSize,
     offset: (filters.page - 1) * filters.pageSize,
