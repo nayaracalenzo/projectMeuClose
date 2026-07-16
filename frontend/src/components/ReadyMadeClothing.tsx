@@ -15,6 +15,7 @@ interface ReadyMadeProduct {
   size: string;
   quantity: string;
   price: string;
+  materialCost: string;
   discountPercent: string;
 }
 
@@ -24,6 +25,7 @@ export interface ReadyMadeProductDraft {
   size: string;
   quantity: string;
   price: string;
+  materialCost: string;
   discountPercent: string;
 }
 
@@ -64,6 +66,7 @@ export default function ReadyMadeClothing({
       size: "",
       quantity: "1",
       price: "",
+      materialCost: "",
       discountPercent: "",
     },
   ]);
@@ -311,7 +314,7 @@ export default function ReadyMadeClothing({
                   min={1}
                   value={product.quantity}
                   onChange={(e) => updateProduct(product.id, "quantity", e.target.value)}
-                  className={fieldClassName}
+                  className={`${fieldClassName} max-w-28`}
                 />
               </div>
 
@@ -326,6 +329,28 @@ export default function ReadyMadeClothing({
                   id={`ready-price-${product.id}`}
                   value={product.price}
                   onChange={(e) => handlePriceChange(product.id, e.target.value)}
+                  placeholder="R$ 0,00"
+                  className={fieldClassName}
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor={`ready-material-cost-${product.id}`}
+                  className="mb-1 block text-sm text-primary"
+                >
+                  Custo/Material
+                </label>
+                <input
+                  id={`ready-material-cost-${product.id}`}
+                  value={product.materialCost}
+                  onChange={(e) =>
+                    updateProduct(
+                      product.id,
+                      "materialCost",
+                      formatCurrencyInput(e.target.value),
+                    )
+                  }
                   placeholder="R$ 0,00"
                   className={fieldClassName}
                 />

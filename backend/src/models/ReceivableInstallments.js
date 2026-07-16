@@ -28,6 +28,10 @@ const ReceivableInstallmentsSchema = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         allowNull: false,
       },
+      interestBaseDate: {
+        type: DataTypes.DATE,
+        allowNull: true,
+      },
       amount: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,

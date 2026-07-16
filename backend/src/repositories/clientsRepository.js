@@ -63,12 +63,17 @@ async function findBirthdays({ month, year }) {
   });
 }
 
-async function getClientById(id) {
+async function getClientById(id, { includeBlocked = false } = {}) {
+  const where = {
+    idCustomer: id,
+  };
+
+  if (!includeBlocked) {
+    where.blocked = false;
+  }
+
   return Customers.findOne({
-    where: {
-      idCustomer: id,
-      blocked: false,
-    },
+    where,
     include: [
       {
         model: Professions,

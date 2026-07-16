@@ -1,5 +1,11 @@
 const { Op } = require("sequelize");
-const { CashEntries, sequelize } = require("../models");
+const {
+  CashEntries,
+  PaymentReceipts,
+  PayablePayments,
+  ReceivableInstallments,
+  sequelize,
+} = require("../models");
 
 function buildWhere({ scope, search, startDate, endDate } = {}) {
   const where = {};
@@ -49,8 +55,61 @@ async function listEntries(filters = {}) {
           `),
           "runningBalance",
         ],
+        [
+          sequelize.literal(`
+            (
+              SELECT pr."receiptType"
+              FROM "payment_receipts" pr
+              WHERE pr."idPaymentReceipt" = "CashEntries"."paymentReceiptId"
+            )
+          `),
+          "receiptType",
+        ],
+        [
+          sequelize.literal(`
+            (
+              SELECT ri."installmentNumber"
+              FROM "payment_receipts" pr
+              LEFT JOIN "receivable_installments" ri
+                ON ri."idReceivableInstallment" = pr."receivableInstallmentId"
+              WHERE pr."idPaymentReceipt" = "CashEntries"."paymentReceiptId"
+            )
+          `),
+          "installmentNumber",
+        ],
+        [
+          sequelize.literal(`
+            (
+              SELECT ri."totalInstallments"
+              FROM "payment_receipts" pr
+              LEFT JOIN "receivable_installments" ri
+                ON ri."idReceivableInstallment" = pr."receivableInstallmentId"
+              WHERE pr."idPaymentReceipt" = "CashEntries"."paymentReceiptId"
+            )
+          `),
+          "totalInstallments",
+        ],
       ],
     },
+    include: [
+      {
+        model: PaymentReceipts,
+        required: false,
+        attributes: ["idPaymentReceipt", "receiptType", "receivableInstallmentId"],
+        include: [
+          {
+            model: ReceivableInstallments,
+            required: false,
+            attributes: ["installmentNumber", "totalInstallments"],
+          },
+        ],
+      },
+      {
+        model: PayablePayments,
+        required: false,
+        attributes: ["idPayablePayment"],
+      },
+    ],
     order: [["occurredAt", "DESC"], ["idCashEntry", "DESC"]],
     limit: filters.pageSize,
     offset: (filters.page - 1) * filters.pageSize,

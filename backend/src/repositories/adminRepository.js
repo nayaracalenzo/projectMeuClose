@@ -96,6 +96,25 @@ async function createResource(resource, payload) {
   return model.create(payload);
 }
 
+async function findSupplierByDocument(document, { excludeId } = {}) {
+  if (!document) return null;
+
+  const where = {
+    document,
+  };
+
+  if (excludeId) {
+    where.idSupplier = {
+      [Op.ne]: excludeId,
+    };
+  }
+
+  return db.Suppliers.findOne({
+    where,
+    order: [["idSupplier", "ASC"]],
+  });
+}
+
 async function updateResource(resource, id, payload) {
   const resourceData = getModelAndConfig(resource);
   if (!resourceData) return null;
@@ -125,6 +144,10 @@ async function deleteResource(resource, id) {
 
     if ("active" in record.dataValues) {
       payload.active = false;
+    }
+
+    if (resource === "suppliers" && "blocked" in record.dataValues) {
+      payload.blocked = true;
     }
 
     await record.update(payload);
@@ -205,18 +228,6 @@ async function deleteResource(resource, id) {
           ),
         ]);
         break;
-      case "suppliers":
-        await Promise.all([
-          db.Payables.update(
-            { supplierId: null },
-            { where: { supplierId: id }, transaction },
-          ),
-          db.Receivables.update(
-            { supplierId: null },
-            { where: { supplierId: id }, transaction },
-          ),
-        ]);
-        break;
       default:
         break;
     }
@@ -231,6 +242,7 @@ module.exports = {
   getModelAndConfig,
   listResource,
   createResource,
+  findSupplierByDocument,
   updateResource,
   deleteResource,
 };

@@ -715,7 +715,7 @@ export default function CustomMadeClothing({
                     htmlFor={`seamstressCost-${product.id}`}
                     className="mb-1 block text-sm text-primary"
                   >
-                    R$ Costureira
+                    Custo do material
                   </label>
                   <input
                     id={`seamstressCost-${product.id}`}

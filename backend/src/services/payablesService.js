@@ -54,14 +54,14 @@ function normalizeOptionalDate(value, fieldName, options = {}) {
   );
 }
 
-function deriveFilter(status, dueDate, openAmount) {
+function deriveFilter(status, dueDate, openAmount, amount) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const normalizedDueDate = new Date(dueDate);
   normalizedDueDate.setHours(0, 0, 0, 0);
 
-  if (status === "PAID" || Number(openAmount) === 0) return "PAGAS";
+  if (status === "PAID" || Number(openAmount) <= 0) return "PAGAS";
   if (normalizedDueDate.getTime() < today.getTime()) return "ATRASADAS";
   if (normalizedDueDate.getTime() === today.getTime()) return "VENCE_HOJE";
   return "A_VENCER";
@@ -70,6 +70,7 @@ function deriveFilter(status, dueDate, openAmount) {
 async function listPayables({
   status,
   scope,
+  search: rawSearch,
   page: rawPage,
   pageSize: rawPageSize,
   startDate: rawStartDate,
@@ -79,9 +80,11 @@ async function listPayables({
   const pageSize = Math.min(100, Math.max(1, Number(rawPageSize) || 10));
   const startDate = normalizeOptionalDate(rawStartDate, "Data inicial");
   const endDate = normalizeOptionalDate(rawEndDate, "Data final", { endOfDay: true });
+  const search = rawSearch ? String(rawSearch).trim() : undefined;
   const result = await repository.listPayables({
     status,
     scope,
+    search,
     page,
     pageSize,
     startDate,
@@ -90,6 +93,7 @@ async function listPayables({
   const summary = await repository.summarizePayables({
     status,
     scope,
+    search,
     startDate,
     endDate,
   });
@@ -109,6 +113,7 @@ async function listPayables({
       supplierName,
       amount: Number(item.amount),
       openAmount: Number(item.openAmount),
+      paidAmount: Math.max(0, Number(item.amount) - Number(item.openAmount)),
       dueDate: item.dueDate,
       status: item.status,
       settlementTarget: item.settlementTarget,
@@ -116,7 +121,7 @@ async function listPayables({
       plannedPaymentTypeId:
         paymentType?.idPaymentType || item.plannedPaymentTypeId || null,
       plannedPaymentTypeName: paymentType?.desc || null,
-      filter: deriveFilter(item.status, item.dueDate, item.openAmount),
+      filter: deriveFilter(item.status, item.dueDate, item.openAmount, item.amount),
     };
   });
 
@@ -200,6 +205,10 @@ async function registerPayment(payableId, body = {}) {
   }
 
   const amount = normalizeAmount(body.amount, "Valor pago");
+  const currentOpenAmount = Number(payable.openAmount || 0);
+  if (amount > currentOpenAmount) {
+    throw createPayablesValidationError("Valor pago nao pode ser maior que o saldo em aberto.");
+  }
   const paidAt = normalizeDate(body.paidAt, "Data do pagamento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
 

@@ -452,7 +452,7 @@ export default function AdminPage() {
         email: String(row.email ?? ""),
         comment: String(row.comment ?? ""),
         active: Boolean(row.active),
-        blocked: Boolean(row.blocked),
+        blocked: Boolean(row.blocked) || false,
       });
       return;
     }
@@ -1717,19 +1717,6 @@ function renderSimpleTable() {
                       }
                     />
                     Fornecedor ativo
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-primary">
-                    <input
-                      type="checkbox"
-                      checked={supplierForm.blocked}
-                      onChange={(e) =>
-                        setSupplierForm((prev) => ({
-                          ...prev,
-                          blocked: e.target.checked,
-                        }))
-                      }
-                    />
-                    Fornecedor bloqueado
                   </label>
                 </div>
               </>

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
-import { getRequest, postRequest } from "../services/request";
+import { deleteRequest, getRequest, postRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
-import { formatCurrency } from "../utils/currency";
+import { formatCurrency, formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
 
 type ReceivableFilter =
   | "A_RECEBER"
@@ -15,6 +15,7 @@ type ReceivableFilter =
 
 interface ReceivableRow {
   id: number;
+  receivableCreatedAt: string | null;
   customerId: number | null;
   supplierId: number | null;
   debtorType: string;
@@ -25,6 +26,7 @@ interface ReceivableRow {
   originName: string;
   saleId: number | null;
   parcela: string;
+  interestBaseDate: string;
   dueDate: string;
   status: string;
   filter: ReceivableFilter;
@@ -36,6 +38,11 @@ interface ReceivableRow {
 }
 
 interface PaymentTypeOption {
+  id: number;
+  name: string;
+}
+
+interface CustomerOption {
   id: number;
   name: string;
 }
@@ -109,6 +116,7 @@ export default function ReceivablesPage() {
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<ReceivableRow[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -116,11 +124,19 @@ export default function ReceivablesPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
+  const [receivableFormOpen, setReceivableFormOpen] = useState(false);
+  const [receivableFormMode, setReceivableFormMode] = useState<"create" | "edit">("create");
   const [quitModalOpen, setQuitModalOpen] = useState(false);
+  const [formCustomerId, setFormCustomerId] = useState("");
+  const [formPaymentTypeId, setFormPaymentTypeId] = useState("");
+  const [formAmount, setFormAmount] = useState("");
+  const [formDueDate, setFormDueDate] = useState(() => toIsoDate(new Date()));
   const [receiptPaymentTypeId, setReceiptPaymentTypeId] = useState("");
   const [receiptAmount, setReceiptAmount] = useState("");
   const [receiptPaidAt, setReceiptPaidAt] = useState(() => toIsoDate(new Date()));
   const [receiptReferenceCode, setReceiptReferenceCode] = useState("");
+  const [discardInterest, setDiscardInterest] = useState(false);
+  const [receiptConfirmOpen, setReceiptConfirmOpen] = useState(false);
 
   useEffect(() => {
     setPage(1);
@@ -182,6 +198,33 @@ export default function ReceivablesPage() {
   }, []);
 
   useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const data = (await getRequest("/clients?page=1&pageSize=100&status=ativo")) as {
+          items?: Array<{
+            id: number;
+            fullName?: string | null;
+            companyName?: string | null;
+          }>;
+        };
+
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setCustomers(
+          items.map((item) => ({
+            id: Number(item.id),
+            name: item.fullName || item.companyName || `Cliente ${item.id}`,
+          })),
+        );
+      } catch (error) {
+        console.error("Erro ao buscar clientes", error);
+        setCustomers([]);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  useEffect(() => {
     if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
       setSelectedRowId(null);
       setQuitModalOpen(false);
@@ -189,34 +232,150 @@ export default function ReceivablesPage() {
   }, [rows, selectedRowId]);
 
   const selectedRow = rows.find((row) => row.id === selectedRowId) || null;
+  const canManageSelectedRow = Boolean(
+    selectedRow &&
+      selectedRow.id > 0 &&
+      !selectedRow.saleId &&
+      selectedRow.paidAmount <= 0 &&
+      selectedRow.openAmount === selectedRow.amount,
+  );
 
   const overdueDays = useMemo(() => {
     if (!selectedRow) return 0;
-    return calculateOverdueDays(selectedRow.dueDate, receiptPaidAt);
+    return calculateOverdueDays(selectedRow.interestBaseDate || selectedRow.dueDate, receiptPaidAt);
   }, [receiptPaidAt, selectedRow]);
 
   const currentInterest = useMemo(() => {
-    if (!selectedRow || overdueDays <= 0) return 0;
+    if (!selectedRow || discardInterest || overdueDays <= 0) return 0;
     const dailyRate = MONTHLY_INTEREST_RATE / 30;
     return Number((selectedRow.openAmount * dailyRate * overdueDays).toFixed(2));
-  }, [overdueDays, selectedRow]);
+  }, [discardInterest, overdueDays, selectedRow]);
 
-  const totalSettlementAmount = useMemo(() => {
-    const baseAmount = Number(receiptAmount || 0);
-    return Number((baseAmount + currentInterest).toFixed(2));
-  }, [currentInterest, receiptAmount]);
+  const amountDue = useMemo(() => {
+    if (!selectedRow) return 0;
+    return Number((selectedRow.openAmount + currentInterest).toFixed(2));
+  }, [currentInterest, selectedRow]);
+
+  const settledAmount = useMemo(() => {
+    const paidAmount = parseCurrencyToNumber(receiptAmount);
+    return Number(Math.min(Math.max(paidAmount, 0), amountDue).toFixed(2));
+  }, [amountDue, receiptAmount]);
+
+  const changeAmount = useMemo(() => {
+    const paidAmount = parseCurrencyToNumber(receiptAmount);
+    return Number(Math.max(paidAmount - amountDue, 0).toFixed(2));
+  }, [amountDue, receiptAmount]);
+
+  const principalRemainingAfterPayment = useMemo(() => {
+    if (!selectedRow) return 0;
+    return Number(Math.max(selectedRow.openAmount - settledAmount, 0).toFixed(2));
+  }, [selectedRow, settledAmount]);
 
   const handleSelectRow = (rowId: number) => {
     setSelectedRowId((current) => (current === rowId ? null : rowId));
   };
 
+  const handleToggleRowSelection = (rowId: number) => {
+    setSelectedRowId((current) => (current === rowId ? null : rowId));
+  };
+
+  const resetReceivableForm = () => {
+    setFormCustomerId("");
+    setFormPaymentTypeId("");
+    setFormAmount("");
+    setFormDueDate(toIsoDate(new Date()));
+    setReceivableFormMode("create");
+  };
+
+  const handleOpenCreateReceivable = () => {
+    resetReceivableForm();
+    setReceivableFormOpen(true);
+  };
+
+  const handleOpenEditReceivable = () => {
+    if (!selectedRow || !canManageSelectedRow) return;
+
+    setReceivableFormMode("edit");
+    setFormCustomerId(selectedRow.customerId ? String(selectedRow.customerId) : "");
+    setFormPaymentTypeId(selectedRow.paymentTypeId ? String(selectedRow.paymentTypeId) : "");
+    setFormAmount(String(selectedRow.amount.toFixed(2)));
+    setFormDueDate(selectedRow.dueDate.slice(0, 10));
+    setReceivableFormOpen(true);
+  };
+
+  const handleSubmitReceivable = async () => {
+    if (!formCustomerId || !formPaymentTypeId || !formAmount || !formDueDate) {
+      setMessage("Informe cliente, forma, valor e vencimento.");
+      return;
+    }
+
+    try {
+      if (receivableFormMode === "create") {
+        await postRequest("/receivables", {
+          customerId: Number(formCustomerId),
+          paymentTypeId: Number(formPaymentTypeId),
+          amount: Number(formAmount),
+          dueDate: formDueDate,
+        });
+        setMessage("Conta a receber criada com sucesso.");
+      } else {
+        if (!selectedRow) return;
+
+        await updateRequest(`/receivables/${selectedRow.id}`, {
+          customerId: Number(formCustomerId),
+          paymentTypeId: Number(formPaymentTypeId),
+          amount: Number(formAmount),
+          dueDate: formDueDate,
+        });
+        setMessage("Conta a receber alterada com sucesso.");
+      }
+
+      setReceivableFormOpen(false);
+      setSelectedRowId(null);
+      resetReceivableForm();
+      await fetchRows();
+    } catch (error: unknown) {
+      setMessage(
+        getUserFacingApiErrorMessage(
+          error,
+          receivableFormMode === "create"
+            ? "NÃ£o foi possÃ­vel criar a conta a receber."
+            : "NÃ£o foi possÃ­vel alterar a conta a receber.",
+        ),
+      );
+    }
+  };
+
+  const handleDeleteReceivable = async () => {
+    if (!selectedRow || !canManageSelectedRow) return;
+
+    const confirmed = window.confirm("Deseja realmente excluir esta conta a receber?");
+    if (!confirmed) return;
+
+    try {
+      await deleteRequest(`/receivables/${selectedRow.id}`, {});
+      setMessage("Conta a receber excluÃ­da com sucesso.");
+      setReceivableFormOpen(false);
+      setSelectedRowId(null);
+      resetReceivableForm();
+      await fetchRows();
+    } catch (error: unknown) {
+      setMessage(
+        getUserFacingApiErrorMessage(error, "NÃ£o foi possÃ­vel excluir a conta a receber."),
+      );
+    }
+  };
+
   const handleOpenQuitModal = () => {
     if (!selectedRow) return;
 
+    const today = toIsoDate(new Date());
     setReceiptPaymentTypeId(selectedRow.paymentTypeId ? String(selectedRow.paymentTypeId) : "");
-    setReceiptAmount(String(selectedRow.openAmount.toFixed(2)));
-    setReceiptPaidAt(toIsoDate(new Date()));
+    setReceiptPaidAt(today);
+    setDiscardInterest(false);
+    setReceiptAmount("");
     setReceiptReferenceCode("");
+    setReceiptConfirmOpen(false);
     setQuitModalOpen(true);
   };
 
@@ -233,20 +392,28 @@ export default function ReceivablesPage() {
       return;
     }
 
-    if (Number(receiptAmount) <= 0) {
-      setMessage("Informe um valor base maior que zero.");
+    if (parseCurrencyToNumber(receiptAmount) <= 0) {
+      setMessage("Informe um valor pago maior que zero.");
       return;
     }
+
+    setReceiptConfirmOpen(true);
+  };
+
+  const handleConfirmRegisterReceipt = async () => {
+    if (!selectedRow) return;
 
     try {
       await postRequest(`/receivables/${selectedRow.id}/receipts`, {
         paymentTypeId: Number(receiptPaymentTypeId),
-        amount: totalSettlementAmount,
+        amount: settledAmount,
         paidAt: receiptPaidAt,
         referenceCode: receiptReferenceCode || null,
+        discardInterest,
       });
 
       setMessage("Recebimento quitado com sucesso.");
+      setReceiptConfirmOpen(false);
       setQuitModalOpen(false);
       setSelectedRowId(null);
       await fetchRows();
@@ -262,6 +429,82 @@ export default function ReceivablesPage() {
       <h1 className="mb-5 pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">
         A Receber
       </h1>
+
+      {receivableFormOpen ? (
+        <div className="mb-5 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">Cliente</label>
+            <select
+              value={formCustomerId}
+              onChange={(e) => setFormCustomerId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
+              <option value="">Selecione...</option>
+              {customers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Forma prevista
+            </label>
+            <select
+              value={formPaymentTypeId}
+              onChange={(e) => setFormPaymentTypeId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
+              <option value="">Selecione...</option>
+              {paymentTypes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">Valor</label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={formAmount}
+              onChange={(e) => setFormAmount(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">Vencimento</label>
+            <input
+              type="date"
+              value={formDueDate}
+              onChange={(e) => setFormDueDate(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+          <div className="flex gap-2 md:col-span-4">
+            <button
+              type="button"
+              onClick={handleSubmitReceivable}
+              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+            >
+              {receivableFormMode === "create" ? "Gravar conta a receber" : "Salvar alteraÃ§Ã£o"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReceivableFormOpen(false);
+                resetReceivableForm();
+              }}
+              className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="flex flex-col gap-2">
@@ -333,14 +576,25 @@ export default function ReceivablesPage() {
         <p className="text-sm text-neutral-700">
           {loading ? "Carregando recebimentos..." : `${totalRows} recebimento(s) encontrado(s).`}
         </p>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleOpenQuitModal}
-          disabled={!selectedRow || selectedRow.openAmount <= 0}
-        >
-          Quitar
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={handleOpenCreateReceivable}>
+            Incluir
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleOpenEditReceivable} disabled={!canManageSelectedRow}>
+            Alterar
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleDeleteReceivable} disabled={!canManageSelectedRow}>
+            Excluir
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleOpenQuitModal}
+            disabled={!selectedRow || selectedRow.openAmount <= 0}
+          >
+            Quitar
+          </Button>
+        </div>
       </div>
 
       {message ? <p className="mb-4 text-sm text-neutral-700">{message}</p> : null}
@@ -349,6 +603,7 @@ export default function ReceivablesPage() {
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
+              <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Origem</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Parcela</th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
@@ -370,13 +625,13 @@ export default function ReceivablesPage() {
           <tbody>
             {loading ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={8} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
                   Carregando...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={8} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
                   Nenhum recebimento encontrado.
                 </td>
               </tr>
@@ -391,6 +646,16 @@ export default function ReceivablesPage() {
                       : "bg-surface-lowest hover:bg-surface"
                   }`}
                 >
+                  <td className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedRowId === row.id}
+                      onChange={() => handleToggleRowSelection(row.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={`Selecionar recebimento ${getReceivableOriginName(row)}`}
+                      className="h-4 w-4 cursor-pointer rounded border border-outline-variant/60 accent-primary"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {getReceivableOriginName(row)}
                   </td>
@@ -460,7 +725,7 @@ export default function ReceivablesPage() {
                     Data emissão
                   </label>
                   <input
-                    value={formatDate(selectedRow.dueDate)}
+                    value={formatDate(selectedRow.receivableCreatedAt)}
                     readOnly
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                   />
@@ -468,7 +733,7 @@ export default function ReceivablesPage() {
                 <div>
                   <label className="mb-1 block text-sm font-semibold text-primary">Conta</label>
                   <input
-                    value="RECEITAS DE VENDAS"
+                    value="VENDA"
                     readOnly
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                   />
@@ -566,16 +831,24 @@ export default function ReceivablesPage() {
                     Taxa mensal: <span className="font-semibold">6,00%</span>
                   </p>
                 </div>
+                <div className="md:col-span-2">
+                  <label className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
+                    <input
+                      type="checkbox"
+                      checked={discardInterest}
+                      onChange={(e) => setDiscardInterest(e.target.checked)}
+                      className="h-4 w-4 rounded border border-outline-variant/60 accent-primary"
+                    />
+                    Descartar juros
+                  </label>
+                </div>
                 <div>
                   <label className="mb-1 block text-sm font-semibold text-primary">
-                    Valor base
+                    Valor devido
                   </label>
                   <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={receiptAmount}
-                    onChange={(e) => setReceiptAmount(e.target.value)}
+                    value={formatCurrency(amountDue)}
+                    readOnly
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                   />
                 </div>
@@ -584,9 +857,18 @@ export default function ReceivablesPage() {
                     Valor pago
                   </label>
                   <input
-                    value={formatCurrency(totalSettlementAmount)}
-                    readOnly
+                    value={receiptAmount}
+                    onChange={(e) => setReceiptAmount(formatCurrencyInput(e.target.value))}
+                    placeholder="R$ 0,00"
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] font-semibold text-primary"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-primary">Troco</label>
+                  <input
+                    value={formatCurrency(changeAmount)}
+                    readOnly
+                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                   />
                 </div>
                 <div>
@@ -635,11 +917,52 @@ export default function ReceivablesPage() {
                 variant="primary"
                 size="sm"
                 onClick={handleRegisterReceipt}
-                disabled={!receiptPaymentTypeId || totalSettlementAmount <= 0}
+                disabled={!receiptPaymentTypeId || settledAmount <= 0}
               >
                 Gravar
               </Button>
               <Button variant="secondary" size="sm" onClick={() => setQuitModalOpen(false)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </CustomerModal>
+
+      <CustomerModal
+        open={receiptConfirmOpen && Boolean(selectedRow)}
+        onClose={() => setReceiptConfirmOpen(false)}
+        title="Confirmar quitação"
+        size="sm"
+        subtitle={
+          selectedRow && principalRemainingAfterPayment > 0
+            ? "O valor pago é menor que o saldo principal e vai gerar saldo restante."
+            : "Confirme a quitação da conta a receber."
+        }
+      >
+        {selectedRow ? (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4">
+              <p className="text-sm text-primary">
+                {principalRemainingAfterPayment > 0
+                  ? `O pagamento de ${formatCurrency(settledAmount)} deixará saldo restante de ${formatCurrency(principalRemainingAfterPayment)}. Deseja continuar?`
+                  : `O pagamento de ${formatCurrency(settledAmount)} quitará a conta selecionada. Deseja continuar?`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmRegisterReceipt}
+                disabled={!receiptPaymentTypeId || settledAmount <= 0}
+              >
+                Confirmar
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setReceiptConfirmOpen(false)}
+              >
                 Cancelar
               </Button>
             </div>

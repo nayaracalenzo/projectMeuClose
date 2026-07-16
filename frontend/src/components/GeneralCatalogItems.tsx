@@ -6,6 +6,7 @@ interface GeneralCatalogProduct {
   name: string;
   quantity: string;
   price: string;
+  materialCost: string;
   discountPercent: string;
 }
 
@@ -14,6 +15,7 @@ export interface GeneralCatalogProductDraft {
   name: string;
   quantity: string;
   price: string;
+  materialCost: string;
   discountPercent: string;
 }
 
@@ -46,6 +48,7 @@ export default function GeneralCatalogItems({
       name: "",
       quantity: "1",
       price: "",
+      materialCost: "",
       discountPercent: "",
     },
   ]);
@@ -135,7 +138,7 @@ export default function GeneralCatalogItems({
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_110px_1fr_1fr]">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_80px_1fr_1fr_1fr]">
               <div>
                 <label
                   htmlFor={`general-name-${product.id}`}
@@ -165,7 +168,7 @@ export default function GeneralCatalogItems({
                   min={1}
                   value={product.quantity}
                   onChange={(event) => updateProduct(product.id, "quantity", event.target.value)}
-                  className={fieldClassName}
+                  className={`${fieldClassName} max-w-20`}
                 />
               </div>
 
@@ -180,6 +183,28 @@ export default function GeneralCatalogItems({
                   id={`general-price-${product.id}`}
                   value={product.price}
                   onChange={(event) => handlePriceChange(product.id, event.target.value)}
+                  placeholder="R$ 0,00"
+                  className={fieldClassName}
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor={`general-material-cost-${product.id}`}
+                  className="mb-1 block text-sm text-primary"
+                >
+                  Custo/Material
+                </label>
+                <input
+                  id={`general-material-cost-${product.id}`}
+                  value={product.materialCost}
+                  onChange={(event) =>
+                    updateProduct(
+                      product.id,
+                      "materialCost",
+                      formatCurrencyInput(event.target.value),
+                    )
+                  }
                   placeholder="R$ 0,00"
                   className={fieldClassName}
                 />

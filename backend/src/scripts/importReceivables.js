@@ -13,6 +13,7 @@ const {
 } = require("../models");
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const { normalizeLegacyDateTime } = require("../utils/normalizeLegacyDateTime");
+const { parseLegacyInstallmentInfo } = require("../utils/parseLegacyInstallmentInfo");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -78,8 +79,6 @@ function inferDebtorProfile(accountDesc) {
 }
 
 function deriveStatus({ amount, paidAmount, dueDate }) {
-  const openAmount = Number(Math.max(0, amount - paidAmount).toFixed(2));
-
   if (paidAmount >= amount && amount > 0) {
     return {
       receivableStatus: "PAID",
@@ -90,9 +89,9 @@ function deriveStatus({ amount, paidAmount, dueDate }) {
 
   if (paidAmount > 0 && paidAmount < amount) {
     return {
-      receivableStatus: "PARTIAL",
-      installmentStatus: "PARTIAL",
-      openAmount,
+      receivableStatus: "PAID",
+      installmentStatus: "PAID",
+      openAmount: 0,
     };
   }
 
@@ -107,7 +106,7 @@ function deriveStatus({ amount, paidAmount, dueDate }) {
   return {
     receivableStatus: overdue ? "OVERDUE" : "OPEN",
     installmentStatus: overdue ? "OVERDUE" : "OPEN",
-    openAmount,
+    openAmount: Number(amount.toFixed(2)),
   };
 }
 
@@ -207,9 +206,9 @@ async function importReceivables() {
       const paymentTypeId = normalizeLegacyPaymentTypeId(baseRow.idTipDoc);
       const customerId = normalizeInteger(baseRow.idCli);
       const supplierId = normalizeInteger(baseRow.idPor);
-      const accountDesc =
-        accountMap.get(normalizeInteger(baseRow.idCon)) || "RECEITAS DE VENDAS";
+      const accountDesc = accountMap.get(normalizeInteger(baseRow.idCon)) || "VENDA";
       const debtorProfile = inferDebtorProfile(accountDesc);
+      const installmentInfo = parseLegacyInstallmentInfo(baseRow.numDoc, baseRow.his);
       const paidAmount = Number(
         group.rows
           .reduce((acc, row) => acc + Number(normalizeLegacyCurrency(row.vlrRec) || 0), 0)
@@ -244,8 +243,8 @@ async function importReceivables() {
         receivableId: representativeId,
         paymentTypeId:
           paymentTypeId && validPaymentTypeIds.has(paymentTypeId) ? paymentTypeId : null,
-        installmentNumber: 1,
-        totalInstallments: 1,
+        installmentNumber: installmentInfo.installmentNumber,
+        totalInstallments: installmentInfo.totalInstallments,
         dueDate,
         amount,
         paidAmount,

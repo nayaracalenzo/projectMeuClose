@@ -1,8 +1,8 @@
-const { Op } = require("sequelize");
+const { Op, Sequelize } = require("sequelize");
 const { PayablePayments, Payables, PaymentTypes, Suppliers, sequelize } = require("../models");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 
-function buildWhere({ scope, status, startDate, endDate } = {}) {
+function buildWhere({ scope, status, startDate, endDate, search } = {}) {
   const where = {};
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -23,6 +23,33 @@ function buildWhere({ scope, status, startDate, endDate } = {}) {
     if (endDate) {
       where.dueDate[Op.lte] = endDate;
     }
+  }
+
+  if (search) {
+    const term = `%${search}%`;
+    where[Op.or] = [
+      {
+        description: {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        category: {
+          [Op.iLike]: term,
+        },
+      },
+      {
+        beneficiary: {
+          [Op.iLike]: term,
+        },
+      },
+      Sequelize.where(Sequelize.col("Supplier.fullName"), {
+        [Op.iLike]: term,
+      }),
+      Sequelize.where(Sequelize.col("Supplier.tradeName"), {
+        [Op.iLike]: term,
+      }),
+    ];
   }
 
   switch (status) {
@@ -69,27 +96,28 @@ function buildWhere({ scope, status, startDate, endDate } = {}) {
   return where;
 }
 
-function buildInclude() {
+function buildInclude({ summary = false } = {}) {
   return [
     {
       model: Suppliers,
-      attributes: ["idSupplier", "fullName", "tradeName"],
+      attributes: summary ? [] : ["idSupplier", "fullName", "tradeName"],
       required: false,
     },
     {
       model: PaymentTypes,
-      attributes: ["idPaymentType", "desc"],
+      attributes: summary ? [] : ["idPaymentType", "desc"],
       required: false,
     },
   ];
 }
 
-async function listPayables({ scope, status, startDate, endDate, page, pageSize } = {}) {
+async function listPayables({ scope, status, startDate, endDate, search, page, pageSize } = {}) {
   return Payables.findAndCountAll({
-    where: buildWhere({ scope, status, startDate, endDate }),
+    where: buildWhere({ scope, status, startDate, endDate, search }),
     include: [
       ...buildInclude(),
     ],
+    subQuery: false,
     order: [["dueDate", "DESC"], ["createdAt", "DESC"]],
     limit: pageSize,
     offset: (page - 1) * pageSize,
@@ -97,9 +125,12 @@ async function listPayables({ scope, status, startDate, endDate, page, pageSize 
   });
 }
 
-async function summarizePayables({ scope, status, startDate, endDate } = {}) {
+async function summarizePayables({ scope, status, startDate, endDate, search } = {}) {
   const [summary] = await Payables.findAll({
-    where: buildWhere({ scope, status, startDate, endDate }),
+    where: buildWhere({ scope, status, startDate, endDate, search }),
+    include: [
+      ...buildInclude({ summary: true }),
+    ],
     attributes: [
       [sequelize.fn("COALESCE", sequelize.fn("SUM", sequelize.col("Payables.amount")), 0), "totalAmount"],
       [sequelize.fn("COALESCE", sequelize.fn("SUM", sequelize.col("Payables.openAmount")), 0), "totalOpen"],
@@ -118,7 +149,13 @@ async function createPayable(payload) {
 }
 
 async function getSupplierById(supplierId) {
-  return Suppliers.findByPk(supplierId);
+  return Suppliers.findOne({
+    where: {
+      idSupplier: supplierId,
+      active: true,
+      blocked: false,
+    },
+  });
 }
 
 async function getPayableById(payableId) {
@@ -147,7 +184,9 @@ async function registerPayment(payableId, payload) {
       { transaction }
     );
 
-    const nextOpenAmount = Math.max(0, Number(payable.openAmount) - Number(payload.amount));
+    const currentOpenAmount = Number(payable.openAmount);
+    const paidAmount = Number(payload.amount);
+    const nextOpenAmount = Math.max(0, currentOpenAmount - paidAmount);
     const nextStatus =
       nextOpenAmount === 0 ? "PAID" : nextOpenAmount < Number(payable.amount) ? "PARTIAL" : "OPEN";
 

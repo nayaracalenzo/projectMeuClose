@@ -16,6 +16,7 @@ interface CashRow {
   id: number;
   date: string;
   scope: Scope;
+  parcela?: string;
   description: string;
   category: string;
   movementType: "IN" | "OUT";
@@ -87,6 +88,7 @@ export default function Registers() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<CashRow[]>([]);
+  const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -167,6 +169,12 @@ export default function Registers() {
   useEffect(() => {
     setPage(1);
   }, [scope, search, startDate, endDate]);
+
+  useEffect(() => {
+    if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
+      setSelectedRowId(null);
+    }
+  }, [rows, selectedRowId]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -310,6 +318,10 @@ export default function Registers() {
       setSessionActionLoading(false);
     }
   }
+
+  const handleSelectRow = (rowId: number) => {
+    setSelectedRowId((current) => (current === rowId ? null : rowId));
+  };
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
@@ -506,11 +518,18 @@ export default function Registers() {
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
+              <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
                 Data
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
-                Historico
+                Parcela
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Histórico
+              </th>
+              <th className="w-[240px] px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Categoria
               </th>
               <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
                 Entrada
@@ -527,7 +546,7 @@ export default function Registers() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={8}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando lancamentos...
@@ -536,7 +555,7 @@ export default function Registers() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={8}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhum lancamento de caixa cadastrado.
@@ -544,24 +563,47 @@ export default function Registers() {
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.id} className="bg-surface-lowest">
+                <tr
+                  key={row.id}
+                  onClick={() => handleSelectRow(row.id)}
+                  className={`cursor-pointer transition-colors ${
+                    selectedRowId === row.id
+                      ? "bg-surface"
+                      : "bg-surface-lowest hover:bg-surface"
+                  }`}
+                >
+                  <td className="px-4 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedRowId === row.id}
+                      onChange={() => handleSelectRow(row.id)}
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={`Selecionar lançamento de caixa ${row.description}`}
+                      className="h-4 w-4 cursor-pointer rounded border border-outline-variant/60 accent-primary"
+                    />
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(row.date)}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
-                    <p>{row.description}</p>
-                    <p
+                    {row.parcela || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.description}
+                  </td>
+                  <td className="w-[240px] px-4 py-3 text-[14px] text-neutral-700">
+                    <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
                         row.category,
                       )}`}
                     >
                       {row.category}
-                    </p>
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] text-primary">
+                  <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
                     {row.amountIn ? formatCurrency(row.amountIn) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] text-primary">
+                  <td className="px-4 py-3 text-right text-[14px] text-[#b42318]">
                     {row.amountOut ? formatCurrency(row.amountOut) : "-"}
                   </td>
                   <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
@@ -589,6 +631,7 @@ export default function Registers() {
               <p className="text-sm font-semibold text-primary">
                 {formatDate(row.date)}
               </p>
+              <p className="text-xs text-neutral-700">Parcela: {row.parcela || "-"}</p>
               <p className="text-xs text-neutral-700">{row.description}</p>
               <p
                 className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
@@ -597,10 +640,10 @@ export default function Registers() {
               >
                 {row.category}
               </p>
-              <p className="text-xs text-neutral-700">
+              <p className="text-xs text-[#1f7a1f]">
                 Entrada: {row.amountIn ? formatCurrency(row.amountIn) : "-"}
               </p>
-              <p className="text-xs text-neutral-700">
+              <p className="text-xs text-[#b42318]">
                 Saida: {row.amountOut ? formatCurrency(row.amountOut) : "-"}
               </p>
               <p className="mt-1 text-sm font-semibold text-primary">
