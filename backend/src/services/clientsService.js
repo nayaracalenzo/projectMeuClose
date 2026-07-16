@@ -1,5 +1,6 @@
 const repository = require("../repositories/clientsRepository.js");
 const employeesRepository = require("../repositories/employeesRepository.js");
+const { validationError } = require("../errors/AppError");
 const { normalizeDateToLocalMidnight } = require("../utils/normalizeDate.js");
 const {
   normalizeClientInput,
@@ -42,6 +43,39 @@ function toClientDetails(client) {
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
   };
+}
+
+function buildClientDetailsFromPayload(id, payload, existingClient = null) {
+  return {
+    id,
+    typeCustomer: payload.typeCustomer,
+    document: payload.document,
+    rg: payload.rg,
+    fullName: payload.fullName,
+    birthDate: payload.birthDate,
+    companyName: payload.companyName,
+    tradeName: payload.tradeName,
+    phone: payload.phone,
+    email: payload.email,
+    zipCode: payload.zipCode,
+    street: payload.street,
+    number: payload.number,
+    complement: payload.complement,
+    neighborhood: payload.neighborhood,
+    city: payload.city,
+    state: payload.state,
+    active: payload.active,
+    blocked: payload.blocked,
+    professionId: payload.professionId,
+    professionName: existingClient?.Profession?.nameProfession || null,
+    comment: payload.comment,
+    createdAt: existingClient?.createdAt || null,
+    updatedAt: existingClient?.updatedAt || null,
+  };
+}
+
+function isUniqueConstraintError(error) {
+  return error?.name === "SequelizeUniqueConstraintError";
 }
 
 async function getBirthdaysOfMonth(query) {
@@ -130,7 +164,28 @@ function buildClientPayload(body, { isCreate }) {
 }
 
 async function updateClientById(id, body) {
+  const currentClient = await repository.getClientById(id, { includeBlocked: true });
+  if (!currentClient) return null;
+
   const payload = buildClientPayload(body, { isCreate: false });
+  const isSoftDeleting = currentClient.blocked !== true && payload.blocked === true;
+
+  if (isSoftDeleting) {
+    const hasOpenReceivables = await repository.hasOpenReceivablesByCustomerId(
+      currentClient.idCustomer,
+    );
+
+    if (hasOpenReceivables) {
+      throw validationError(
+        "Não é possível excluir o cliente porque existem valores em aberto.",
+        {
+          name: "ClientValidationError",
+          code: "CLIENT_VALIDATION_ERROR",
+        },
+      );
+    }
+  }
+
   const updated = await repository.updateClientById(id, payload);
   if (!updated) return null;
 
@@ -140,8 +195,42 @@ async function updateClientById(id, body) {
 
 async function createClient(body) {
   const payload = buildClientPayload(body, { isCreate: true });
-  const created = await repository.createClient(payload);
-  return getClientById(created.idCustomer);
+  const existingClient = await repository.findClientByDocument(payload.document);
+
+  if (existingClient && existingClient.blocked !== true) {
+    throw validationError("Ja existe um cliente ativo com este CPF/CNPJ.", {
+      name: "ClientValidationError",
+      code: "CLIENT_VALIDATION_ERROR",
+    });
+  }
+
+  if (existingClient) {
+    const reactivatedPayload = {
+      ...payload,
+      active: true,
+      blocked: false,
+    };
+
+    await repository.updateClientById(existingClient.idCustomer, reactivatedPayload);
+
+    const reactivatedClient = await repository.getClientById(existingClient.idCustomer);
+    return toClientDetails(reactivatedClient) ||
+      buildClientDetailsFromPayload(existingClient.idCustomer, reactivatedPayload, existingClient);
+  }
+
+  try {
+    const created = await repository.createClient(payload);
+    return getClientById(created.idCustomer);
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw validationError("Ja existe um cliente cadastrado com este CPF/CNPJ.", {
+        name: "ClientValidationError",
+        code: "CLIENT_VALIDATION_ERROR",
+      });
+    }
+
+    throw error;
+  }
 }
 
 module.exports = {
