@@ -6,7 +6,9 @@ export interface PrintableOrderItem {
   fabric: string;
   color: string;
   size: string;
+  seamstress?: string;
   notes?: string;
+  measurements?: string;
 }
 
 export interface PrintableOrder {
@@ -23,6 +25,7 @@ interface WeeklyPdfParams {
   orders: PrintableOrder[];
   logoUrl?: string;
   weekLabel: string;
+  includeValues?: boolean;
 }
 
 const formatCurrency = (value: number) =>
@@ -57,23 +60,29 @@ const loadImageAsDataUrl = async (imageUrl: string) => {
   });
 };
 
-const drawTableHeader = (doc: jsPDF, startY: number) => {
+const drawTableHeader = (doc: jsPDF, startY: number, includeValues: boolean) => {
   doc.setFillColor(246, 243, 241);
   doc.rect(12, startY, 273, 10, "F");
   doc.setDrawColor(210, 205, 203);
   doc.rect(12, startY, 273, 10);
   doc.line(38, startY, 38, startY + 10);
-  doc.line(114, startY, 114, startY + 10);
-  doc.line(174, startY, 174, startY + 10);
-  doc.line(252, startY, 252, startY + 10);
+  doc.line(96, startY, 96, startY + 10);
+  doc.line(138, startY, 138, startY + 10);
+  doc.line(includeValues ? 188 : 252, startY, includeValues ? 188 : 252, startY + 10);
+  if (includeValues) {
+    doc.line(252, startY, 252, startY + 10);
+  }
   doc.setTextColor(43, 36, 37);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.text("Data prova", 16, startY + 6.5);
   doc.text("Cliente", 42, startY + 6.5);
-  doc.text("Roupa", 118, startY + 6.5);
-  doc.text("Detalhes", 178, startY + 6.5);
-  doc.text("Valor", 282, startY + 6.5, { align: "right" });
+  doc.text("Costureira", 100, startY + 6.5);
+  doc.text("Roupa", 142, startY + 6.5);
+  doc.text("Detalhes", 192, startY + 6.5);
+  if (includeValues) {
+    doc.text("Valor", 282, startY + 6.5, { align: "right" });
+  }
 };
 
 const drawPageHeader = (
@@ -117,6 +126,7 @@ export const downloadWeeklyOrdersPdf = async ({
   orders,
   logoUrl,
   weekLabel,
+  includeValues = true,
 }: WeeklyPdfParams) => {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const logoDataUrl = logoUrl ? await loadImageAsDataUrl(logoUrl) : null;
@@ -126,7 +136,7 @@ export const downloadWeeklyOrdersPdf = async ({
   );
 
   drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
-  drawTableHeader(doc, 66);
+  drawTableHeader(doc, 66, includeValues);
 
   let currentY = 79;
 
@@ -138,19 +148,23 @@ export const downloadWeeklyOrdersPdf = async ({
         `Cor: ${item.color}`,
         `Tamanho: ${item.size}`,
         item.notes ? `Detalhes: ${item.notes}` : null,
+        item.measurements ? `Medidas: ${item.measurements}` : null,
       ]
         .filter(Boolean)
         .join(" | ");
 
       const dateLabel = index === 0 ? formatDate(order.date) : "";
       const customerLabel = index === 0 ? order.customer : "";
-      const detailsLines = doc.splitTextToSize(details, 72);
-      const clothingLines = doc.splitTextToSize(item.name, 52);
-      const customerLines = doc.splitTextToSize(customerLabel, 68);
+      const seamstressLabel = item.seamstress || "-";
+      const detailsLines = doc.splitTextToSize(details, includeValues ? 60 : 124);
+      const clothingLines = doc.splitTextToSize(item.name, 44);
+      const seamstressLines = doc.splitTextToSize(seamstressLabel, 38);
+      const customerLines = doc.splitTextToSize(customerLabel, 50);
       const dateLines = doc.splitTextToSize(dateLabel, 18);
       const baseHeight = Math.max(
         dateLines.length,
         customerLines.length,
+        seamstressLines.length,
         clothingLines.length,
         detailsLines.length,
         1,
@@ -160,16 +174,19 @@ export const downloadWeeklyOrdersPdf = async ({
       if (currentY + rowHeight > 192) {
         doc.addPage();
         drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
-        drawTableHeader(doc, 66);
+        drawTableHeader(doc, 66, includeValues);
         currentY = 79;
       }
 
       doc.setDrawColor(227, 218, 214);
       doc.rect(12, currentY - 4, 273, rowHeight);
       doc.line(38, currentY - 4, 38, currentY - 4 + rowHeight);
-      doc.line(114, currentY - 4, 114, currentY - 4 + rowHeight);
-      doc.line(174, currentY - 4, 174, currentY - 4 + rowHeight);
-      doc.line(252, currentY - 4, 252, currentY - 4 + rowHeight);
+      doc.line(96, currentY - 4, 96, currentY - 4 + rowHeight);
+      doc.line(138, currentY - 4, 138, currentY - 4 + rowHeight);
+      doc.line(includeValues ? 188 : 252, currentY - 4, includeValues ? 188 : 252, currentY - 4 + rowHeight);
+      if (includeValues) {
+        doc.line(252, currentY - 4, 252, currentY - 4 + rowHeight);
+      }
 
       const textStartY = currentY + 1.5;
 
@@ -180,10 +197,11 @@ export const downloadWeeklyOrdersPdf = async ({
 
       doc.setFont("helvetica", "normal");
       doc.text(customerLines, 42, textStartY);
-      doc.text(clothingLines, 118, textStartY);
-      doc.text(detailsLines, 178, textStartY);
+      doc.text(seamstressLines, 100, textStartY);
+      doc.text(clothingLines, 142, textStartY);
+      doc.text(detailsLines, 192, textStartY);
 
-      if (index === 0) {
+      if (includeValues && index === 0) {
         doc.setFont("helvetica", "bold");
         doc.text(formatCurrency(order.total), 282, textStartY, { align: "right" });
       }
