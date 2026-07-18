@@ -1,6 +1,7 @@
 const { Op, Sequelize } = require("sequelize");
 const {
   BankEntries,
+  FinancialCategories,
   PaymentReceipts,
   PayablePayments,
   ReceivableInstallments,
@@ -34,7 +35,7 @@ function buildWhere({ scope, search, startDate, endDate } = {}) {
         },
       },
       {
-        category: {
+        "$FinancialCategory.description$": {
           [Op.iLike]: `%${search}%`,
         },
       },
@@ -51,6 +52,67 @@ function buildWhere({ scope, search, startDate, endDate } = {}) {
 
 async function createEntry(payload, transaction) {
   return BankEntries.create(payload, { transaction });
+}
+
+async function getEntryById(idBankEntry, transaction) {
+  return BankEntries.findByPk(idBankEntry, {
+    include: [
+      {
+        model: FinancialCategories,
+        attributes: ["idFinancialCategory", "description"],
+      },
+    ],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: BankEntries,
+        }
+      : undefined,
+  });
+}
+
+async function findReversalByOriginId(reversalOfBankEntryId, transaction) {
+  return BankEntries.findOne({
+    where: {
+      reversalOfBankEntryId,
+    },
+    transaction,
+  });
+}
+
+async function findByTransferKey(transferKey, transaction) {
+  if (!transferKey) return null;
+
+  return BankEntries.findOne({
+    where: {
+      transferKey,
+    },
+    transaction,
+  });
+}
+
+async function listAccountOptions(scope) {
+  const where = {
+    accountLabel: {
+      [Op.not]: null,
+    },
+  };
+
+  if (scope) {
+    where.scope = scope;
+  }
+
+  const rows = await BankEntries.findAll({
+    where,
+    attributes: [[Sequelize.fn("DISTINCT", Sequelize.col("accountLabel")), "accountLabel"]],
+    order: [["accountLabel", "ASC"]],
+    raw: true,
+  });
+
+  return rows
+    .map((item) => String(item.accountLabel || "").trim())
+    .filter(Boolean);
 }
 
 async function listEntries(filters = {}) {
@@ -106,6 +168,11 @@ async function listEntries(filters = {}) {
       ],
     },
     include: [
+      {
+        model: FinancialCategories,
+        required: false,
+        attributes: ["idFinancialCategory", "description"],
+      },
       {
         model: PaymentReceipts,
         required: false,
@@ -168,6 +235,10 @@ async function summarizeEntries(filters = {}) {
 
 module.exports = {
   createEntry,
+  getEntryById,
+  findReversalByOriginId,
+  findByTransferKey,
+  listAccountOptions,
   listEntries,
   summarizeEntries,
 };

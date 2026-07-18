@@ -1,5 +1,5 @@
 const { Op } = require("sequelize");
-const { Customers, Professions, Sequelize } = require("../models");
+const { Customers, Professions, Receivables, Sequelize } = require("../models");
 
 function buildBirthdayWhere({ month, year }) {
   const filters = [`EXTRACT(MONTH FROM "birthDate") = ${month}`];
@@ -84,12 +84,56 @@ async function getClientById(id, { includeBlocked = false } = {}) {
   });
 }
 
+async function findClientByDocument(document, { excludeId } = {}) {
+  if (!document) return null;
+
+  const where = {
+    document,
+  };
+
+  if (excludeId) {
+    where.idCustomer = {
+      [Op.ne]: excludeId,
+    };
+  }
+
+  return Customers.findOne({
+    where,
+    include: [
+      {
+        model: Professions,
+        attributes: ["idProfession", "nameProfession"],
+        required: false,
+      },
+    ],
+    order: [["idCustomer", "ASC"]],
+  });
+}
+
 async function updateClientById(id, payload) {
   const client = await Customers.findByPk(id);
   if (!client) return null;
 
   await client.update(payload);
   return client;
+}
+
+async function hasOpenReceivablesByCustomerId(customerId) {
+  if (!customerId) return false;
+
+  const count = await Receivables.count({
+    where: {
+      customerId,
+      status: {
+        [Op.in]: ["OPEN", "PARTIAL", "OVERDUE"],
+      },
+      openAmount: {
+        [Op.gt]: 0,
+      },
+    },
+  });
+
+  return count > 0;
 }
 
 async function createClient(payload) {
@@ -100,6 +144,8 @@ module.exports = {
   getAllClients,
   findBirthdays,
   getClientById,
+  findClientByDocument,
   updateClientById,
+  hasOpenReceivablesByCustomerId,
   createClient,
 };

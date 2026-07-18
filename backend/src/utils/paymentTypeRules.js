@@ -65,20 +65,20 @@ const PAYMENT_TYPE_RULES_BY_ID = {
     requiresDueDate: false,
     allowsEntryAmount: true,
     allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
-    allowsInstallments: false,
-    maxInstallments: 1,
+    allowsInstallments: true,
+    maxInstallments: 12,
     defaultInstallments: 1,
-    financialFlow: FUTURE_OPERATOR_FLOW,
+    financialFlow: FUTURE_CUSTOMER_FLOW,
   },
   7: {
     kind: CARD_KIND,
     requiresDueDate: false,
     allowsEntryAmount: true,
     allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
-    allowsInstallments: false,
-    maxInstallments: 1,
+    allowsInstallments: true,
+    maxInstallments: 12,
     defaultInstallments: 1,
-    financialFlow: FUTURE_OPERATOR_FLOW,
+    financialFlow: FUTURE_CUSTOMER_FLOW,
   },
   8: {
     kind: TRANSFER_KIND,
@@ -173,10 +173,10 @@ function getLegacyPaymentTypePreset(paymentType = {}) {
       requiresDueDate: false,
       allowsEntryAmount: true,
       allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
-      allowsInstallments: false,
-      maxInstallments: 1,
+      allowsInstallments: true,
+      maxInstallments: 12,
       defaultInstallments: 1,
-      financialFlow: FUTURE_OPERATOR_FLOW,
+      financialFlow: FUTURE_CUSTOMER_FLOW,
     };
   }
 
@@ -230,7 +230,7 @@ function buildPaymentTypeResponse(item) {
 function inferFinancialFlowFromKind(kind) {
   switch (kind) {
     case CARD_KIND:
-      return FUTURE_OPERATOR_FLOW;
+      return FUTURE_CUSTOMER_FLOW;
     case BOOKLET_KIND:
     case INVOICE_KIND:
       return FUTURE_CUSTOMER_FLOW;

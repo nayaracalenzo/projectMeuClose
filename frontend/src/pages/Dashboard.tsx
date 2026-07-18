@@ -334,7 +334,7 @@ export default function Dashboard() {
                       key={`${item.customer}-${item.testDate}-${index}`}
                       className="grid grid-cols-[minmax(0,1.3fr)_6rem_6rem] gap-3 px-4 py-3 text-sm text-neutral-800"
                     >
-                      <span className="truncate">{item.customer}</span>
+                      <span className="truncate uppercase">{item.customer}</span>
                       <span>{item.piecesCount}</span>
                       <span>{formatDay(item.testDate)}</span>
                     </div>
@@ -370,7 +370,7 @@ export default function Dashboard() {
                         className="flex items-center justify-between rounded-lg bg-background/90 px-4 py-3"
                       >
                         <div className="flex flex-col gap-1">
-                          <span className="text-sm font-medium text-neutral-800">
+                          <span className="text-sm font-medium uppercase text-neutral-800">
                             {client.fullName}
                           </span>
                           <span className="text-[10px] uppercase tracking-[0.12em] text-neutral-500">
@@ -450,7 +450,7 @@ export default function Dashboard() {
                           />
                         ) : (
                           <p
-                            className={`flex-1 text-sm ${
+                            className={`flex-1 text-sm uppercase ${
                               item.done ? "text-neutral-500 line-through" : "text-neutral-800"
                             }`}
                           >

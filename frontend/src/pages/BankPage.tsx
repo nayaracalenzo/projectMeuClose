@@ -253,7 +253,7 @@ export default function BankPage() {
                     />
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(row.date)}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.parcela || "-"}</td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{row.parcela || "-"}</td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
@@ -263,7 +263,7 @@ export default function BankPage() {
                       {row.category}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.description}</td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{row.description}</td>
                   <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
                     {getEntryAmount(row) ? formatCurrency(getEntryAmount(row)) : "-"}
                   </td>
@@ -293,7 +293,7 @@ export default function BankPage() {
           rows.map((row) => (
             <div key={row.id} className="px-4 py-4">
               <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
-              <p className="text-xs text-neutral-700">Parcela: {row.parcela || "-"}</p>
+              <p className="text-xs uppercase text-neutral-700">Parcela: {row.parcela || "-"}</p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span
                   className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
@@ -303,7 +303,7 @@ export default function BankPage() {
                   {row.category}
                 </span>
               </div>
-              <p className="text-xs text-neutral-700">{row.description}</p>
+              <p className="text-xs uppercase text-neutral-700">{row.description}</p>
               <p className="text-xs text-[#1f7a1f]">
                 Entrada: {getEntryAmount(row) ? formatCurrency(getEntryAmount(row)) : "-"}
               </p>

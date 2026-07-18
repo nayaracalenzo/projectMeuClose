@@ -105,6 +105,8 @@ export interface CustomMadeProductDraft {
 
 export interface CustomMadeSummaryItem {
   type: string;
+  description: string;
+  fittingDate?: string | null;
   quantity: number;
   value: number;
   discountAmount: number;
@@ -144,6 +146,18 @@ function normalizeAdminOptions(data: unknown) {
     .map((item) => String((item as AdminOption)?.desc || "").trim())
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right, "pt-BR"));
+}
+
+function buildCustomMadeDescription(product: {
+  type: string;
+  fabric: string;
+  color: string;
+}) {
+  const parts = [product.type, product.fabric, product.color]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return parts.length ? parts.join(" - ") : "Sob medida";
 }
 
 export default function CustomMadeClothing({
@@ -464,6 +478,8 @@ export default function CustomMadeClothing({
 
         return {
           type: product.type || "Sob-medida",
+          description: buildCustomMadeDescription(product),
+          fittingDate: product.fittingDate || null,
           quantity: 1,
           value,
           discountAmount,

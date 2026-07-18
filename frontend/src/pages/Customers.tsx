@@ -215,10 +215,10 @@ export default function CustomersPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div>
-                          <p className="text-[17px] font-semibold text-primary">
+                          <p className="text-[17px] font-semibold uppercase tracking-[0.04em] text-primary">
                             {customer["Nome do Cliente"]}
                           </p>
-                          <p className="text-[13px] tracking-[0.04em] text-neutral-700">
+                          <p className="text-[13px] normal-case tracking-[0.04em] text-neutral-700">
                             {customer.email
                               ? customer.email.toLowerCase()
                               : "Sem email cadastrado"}
@@ -226,10 +226,10 @@ export default function CustomersPage() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-[14px] tracking-[0.04em] text-neutral-700">
+                    <td className="px-4 py-4 text-[14px] uppercase tracking-[0.04em] text-neutral-700">
                       {customer["Contato"]}
                     </td>
-                    <td className="px-4 py-4 text-[14px] tracking-[0.04em] text-neutral-700">
+                    <td className="px-4 py-4 text-[14px] uppercase tracking-[0.04em] text-neutral-700">
                       {customer["CPF/CNPJ"]}
                     </td>
                     <td className="px-4 py-4">
@@ -258,7 +258,7 @@ export default function CustomersPage() {
                 className="flex w-full items-center justify-between px-4 py-10 text-left transition-colors hover:bg-surface"
               >
                 <div className="flex min-w-0 gap-2 pr-3">
-                  <p className="truncate text-lg font-semibold text-primary">
+                  <p className="truncate text-lg font-semibold uppercase tracking-[0.04em] text-primary">
                     {customer["Nome do Cliente"]}
                   </p>
                   <span

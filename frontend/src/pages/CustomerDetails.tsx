@@ -638,6 +638,14 @@ export default function CustomerDetails() {
           >
             {saving ? "Salvando..." : "Salvar"}
           </Button>
+          <Button
+            variant="danger"
+            size="md"
+            onClick={handleDeleteRequest}
+            disabled={saving}
+          >
+            Excluir cliente
+          </Button>
         </div>
       </div>
       <div className="bg-surface-lowest p-6 shadow-sm">
@@ -667,17 +675,6 @@ export default function CustomerDetails() {
               {formatDate(client.updatedAt)}
             </p>
           </div>
-        </div>
-
-        <div className="mt-6 flex justify-end">
-          <Button
-            variant="danger"
-            size="md"
-            onClick={handleDeleteRequest}
-            disabled={saving}
-          >
-            Excluir cliente
-          </Button>
         </div>
       </div>
 

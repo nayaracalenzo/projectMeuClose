@@ -12,6 +12,7 @@ const {
   Sizes,
   Status,
 } = require("../models");
+const { Op } = require("sequelize");
 
 async function syncProductsSequence(transaction) {
   await Products.sequelize.query(
@@ -41,7 +42,11 @@ async function findOrCreateByDesc(model, desc, transaction) {
   if (!normalizedDesc) return null;
 
   const existing = await model.findOne({
-    where: { desc: normalizedDesc },
+    where: {
+      desc: {
+        [Op.iLike]: normalizedDesc,
+      },
+    },
     transaction,
   });
 
@@ -151,6 +156,7 @@ async function buildProductPayload(customerId, item, transaction) {
   const isReadyMade = item.itemType === "READY_MADE";
   const categoryId = mapCategoryId(item.itemType);
   const productTypeDesc = mapProductType(item.itemType);
+  const clothingTypeSource = isCustomMade ? metadata.clothingType || item.description : null;
 
   const [
     employee,
@@ -170,7 +176,7 @@ async function buildProductPayload(customerId, item, transaction) {
     ),
     categoryId ? Categories.findByPk(categoryId, { transaction }) : null,
     productTypeDesc ? findOrCreateByDesc(ProductsTypes, productTypeDesc, transaction) : null,
-    isCustomMade ? findOrCreateByDesc(ClothingsType, item.description, transaction) : null,
+    isCustomMade ? findOrCreateByDesc(ClothingsType, clothingTypeSource, transaction) : null,
     isCustomMade ? findOrCreateByDesc(Colors, metadata.color, transaction) : null,
     isCustomMade ? findOrCreateByDesc(Fabrics, metadata.fabric, transaction) : null,
     isReadyMade ? findOrCreateByDesc(Sizes, metadata.size, transaction) : null,
@@ -241,6 +247,18 @@ async function listProducts(filters = {}) {
       { productTypeId: 4 },
       { productTypeId: 5 },
       { categoryId: 3 },
+    ];
+    where[Sequelize.Op.and] = [
+      Sequelize.literal(`
+        NOT EXISTS (
+          SELECT 1
+          FROM "sale_items" AS si
+          INNER JOIN "sales" AS s
+            ON s."idSale" = si."saleId"
+          WHERE si."productId" = "Products"."id"
+            AND s."status" = 'BUDGET'
+        )
+      `),
     ];
   }
 

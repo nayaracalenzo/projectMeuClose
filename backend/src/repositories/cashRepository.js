@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const {
   CashEntries,
+  FinancialCategories,
   PaymentReceipts,
   PayablePayments,
   ReceivableInstallments,
@@ -27,9 +28,18 @@ function buildWhere({ scope, search, startDate, endDate } = {}) {
   }
 
   if (search) {
-    where.description = {
-      [Op.iLike]: `%${search}%`,
-    };
+    where[Op.or] = [
+      {
+        description: {
+          [Op.iLike]: `%${search}%`,
+        },
+      },
+      {
+        "$FinancialCategory.description$": {
+          [Op.iLike]: `%${search}%`,
+        },
+      },
+    ];
   }
 
   return where;
@@ -37,6 +47,44 @@ function buildWhere({ scope, search, startDate, endDate } = {}) {
 
 async function createEntry(payload, transaction) {
   return CashEntries.create(payload, { transaction });
+}
+
+async function getEntryById(idCashEntry, transaction) {
+  return CashEntries.findByPk(idCashEntry, {
+    include: [
+      {
+        model: FinancialCategories,
+        attributes: ["idFinancialCategory", "description"],
+      },
+    ],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: CashEntries,
+        }
+      : undefined,
+  });
+}
+
+async function findReversalByOriginId(reversalOfCashEntryId, transaction) {
+  return CashEntries.findOne({
+    where: {
+      reversalOfCashEntryId,
+    },
+    transaction,
+  });
+}
+
+async function findByTransferKey(transferKey, transaction) {
+  if (!transferKey) return null;
+
+  return CashEntries.findOne({
+    where: {
+      transferKey,
+    },
+    transaction,
+  });
 }
 
 async function listEntries(filters = {}) {
@@ -92,6 +140,11 @@ async function listEntries(filters = {}) {
       ],
     },
     include: [
+      {
+        model: FinancialCategories,
+        required: false,
+        attributes: ["idFinancialCategory", "description"],
+      },
       {
         model: PaymentReceipts,
         required: false,
@@ -154,6 +207,9 @@ async function summarizeEntries(filters = {}) {
 
 module.exports = {
   createEntry,
+  getEntryById,
+  findReversalByOriginId,
+  findByTransferKey,
   listEntries,
   summarizeEntries,
 };

@@ -6,6 +6,7 @@ function normalizeDate(value, fieldName, options = {}) {
 
   const base = String(value).trim().split("T")[0];
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+
   if (!match) {
     throw validationError(`${fieldName} invalida.`);
   }
@@ -76,13 +77,19 @@ async function listEntries(query = {}) {
       scope: item.scope,
       bank: item.accountLabel || "Banco da Loja",
       parcela: resolveEntryInstallmentLabel(item),
-      category: item.category,
+      financialCategoryId:
+        item.financialCategoryId || item.FinancialCategory?.idFinancialCategory || null,
+      financialCategoryDescription:
+        item.FinancialCategory?.description || item.category || "DIVERSOS",
+      category: item.FinancialCategory?.description || item.category || "DIVERSOS",
       description: item.description,
       amount: Number(item.amount),
       amountIn: item.movementType === "IN" ? Number(item.amount) : 0,
       amountOut: item.movementType === "OUT" ? Number(item.amount) : 0,
       balance: Number(item.get("runningBalance") || 0),
       referenceCode: item.referenceCode,
+      transferKey: item.transferKey || null,
+      reversalOfBankEntryId: item.reversalOfBankEntryId || null,
     })),
     total: Number(result.count || 0),
     page,
@@ -96,6 +103,17 @@ async function listEntries(query = {}) {
   };
 }
 
+async function listAccountOptions(query = {}) {
+  const scope = query.scope ? String(query.scope).trim() : undefined;
+  const labels = await repository.listAccountOptions(scope);
+
+  return labels.map((label) => ({
+    label,
+    value: label,
+  }));
+}
+
 module.exports = {
   listEntries,
+  listAccountOptions,
 };
