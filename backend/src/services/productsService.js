@@ -1,6 +1,57 @@
 const repository = require("../repositories/productsRepository");
 const { notFoundError, validationError } = require("../errors/AppError");
 
+const MEASUREMENT_LABELS = [
+  ["busto", "Busto"],
+  ["alturaBusto", "Altura do busto"],
+  ["cintura", "Cintura"],
+  ["cinturaBaixa", "Abaixo da cintura"],
+  ["quadril", "Quadril"],
+  ["costas", "Costas"],
+  ["colete", "Colete"],
+  ["cos", "Cos"],
+  ["coice", "Coice"],
+  ["gancho", "Gancho"],
+  ["braco", "Braco"],
+  ["perna", "Perna"],
+  ["comprimentoManga", "Comp. manga"],
+  ["comprimentoBlusa", "Comp. blusa"],
+  ["comprimentoSaia", "Comp. saia"],
+  ["comprimentoCalca", "Comp. calca"],
+  ["comprimentoVestido", "Comp. vestido"],
+  ["comprimentoBermuda", "Comp. bermuda"],
+];
+
+function extractSaleMeasurement(product) {
+  const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
+  const sale = saleItem?.Sale || saleItem?.Sales || null;
+  const measurements = Array.isArray(sale?.CustomerMeasurements) ? sale.CustomerMeasurements : [];
+
+  if (!measurements.length) {
+    return null;
+  }
+
+  return [...measurements].sort((left, right) => Number(right.idMeasurement || 0) - Number(left.idMeasurement || 0))[0];
+}
+
+function formatMeasurementsSummary(measurement) {
+  if (!measurement) {
+    return "";
+  }
+
+  return MEASUREMENT_LABELS.map(([field, label]) => {
+    const value = measurement[field];
+
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    return `${label}: ${Number(value)}`;
+  })
+    .filter(Boolean)
+    .join(" | ");
+}
+
 function mapProductRow(product) {
   const customer = product.Customer || product.Customers;
   const employee = product.Employee || product.Employees;
@@ -12,6 +63,7 @@ function mapProductRow(product) {
   const fabric = product.Fabric || product.Fabrics;
   const size = product.Size || product.Sizes;
   const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
+  const measurement = extractSaleMeasurement(product);
 
   return {
     id: product.id,
@@ -31,6 +83,7 @@ function mapProductRow(product) {
     color: color?.desc || null,
     size: size?.desc || null,
     details: product.details || "",
+    measurementsSummary: formatMeasurementsSummary(measurement),
   };
 }
 

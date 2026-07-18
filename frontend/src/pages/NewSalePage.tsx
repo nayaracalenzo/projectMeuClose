@@ -20,12 +20,10 @@ import {
   formatCurrencyInput,
   parseCurrencyToNumber,
 } from "../utils/currency";
-import { formatDocument } from "../utils/formatDocument";
 
 interface CustomerOption {
   id: number;
   name: string;
-  document: string;
 }
 
 type SaleCategoryCode = "CLOTHING" | "ACCESSORY" | "SERVICE" | "MISC";
@@ -302,7 +300,6 @@ export default function NewSalePage() {
         const parsedCustomers = items.map((customer: ICustomer) => ({
           id: Number(customer.id),
           name: customer.fullName || customer.companyName || "Sem nome",
-          document: formatDocument(customer.document),
         }));
 
         setCustomers(parsedCustomers);
@@ -419,7 +416,6 @@ export default function NewSalePage() {
             ? {
                 id: data.customer.id,
                 name: data.customer.name,
-                document: "",
               }
             : null,
         );
@@ -1326,9 +1322,6 @@ export default function NewSalePage() {
                             <p className="font-medium text-primary">
                               {customer.name}
                             </p>
-                            <p className="text-sm text-neutral-600">
-                              {customer.document}
-                            </p>
                           </button>
                         ))
                       ) : search.trim() ? (
@@ -1351,9 +1344,6 @@ export default function NewSalePage() {
                     </p>
                     <p className="font-semibold text-primary">
                       {selectedCustomer.name}
-                    </p>
-                    <p className="text-sm text-neutral-700">
-                      {selectedCustomer.document}
                     </p>
                   </div>
                 )}

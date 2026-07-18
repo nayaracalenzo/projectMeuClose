@@ -26,6 +26,7 @@ interface ProductOrderRow {
   color: string | null;
   size: string | null;
   details: string;
+  measurementsSummary?: string;
 }
 
 interface StatusOption {
@@ -102,6 +103,7 @@ export default function Orders() {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfStartDate, setPdfStartDate] = useState("");
   const [pdfEndDate, setPdfEndDate] = useState("");
+  const [pdfValueMode, setPdfValueMode] = useState<"withoutValue" | "withValue">("withoutValue");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -167,6 +169,7 @@ export default function Orders() {
 
     setPdfStartDate(toInputDate(startOfWeek));
     setPdfEndDate(toInputDate(endOfWeek));
+    setPdfValueMode("withoutValue");
     setPdfModalOpen(true);
   };
 
@@ -228,7 +231,9 @@ export default function Orders() {
             fabric: item.fabric || "-",
             color: item.color || "-",
             size: item.size || "-",
+            seamstress: item.seamstress || "-",
             notes: item.details || undefined,
+            measurements: item.measurementsSummary || undefined,
           },
         ],
       }));
@@ -244,6 +249,8 @@ export default function Orders() {
       await downloadWeeklyOrdersPdf({
         orders: printableOrders,
         weekLabel,
+        logoUrl: "/manequim.png",
+        includeValues: pdfValueMode === "withValue",
       });
       setPdfModalOpen(false);
     } catch (err: unknown) {
@@ -373,6 +380,34 @@ export default function Orders() {
               onChange={(event) => setPdfEndDate(event.target.value)}
               className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
             />
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2">
+          <span className="text-sm font-medium text-primary">Exibir valores no PDF</span>
+          <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+            <label className="flex items-center gap-2 text-sm text-neutral-800">
+              <input
+                type="radio"
+                name="pdf-value-mode"
+                value="withoutValue"
+                checked={pdfValueMode === "withoutValue"}
+                onChange={() => setPdfValueMode("withoutValue")}
+                className="h-4 w-4 border-outline-variant/45 text-primary focus:ring-primary"
+              />
+              Sem valor
+            </label>
+            <label className="flex items-center gap-2 text-sm text-neutral-800">
+              <input
+                type="radio"
+                name="pdf-value-mode"
+                value="withValue"
+                checked={pdfValueMode === "withValue"}
+                onChange={() => setPdfValueMode("withValue")}
+                className="h-4 w-4 border-outline-variant/45 text-primary focus:ring-primary"
+              />
+              Com valor
+            </label>
           </div>
         </div>
 
