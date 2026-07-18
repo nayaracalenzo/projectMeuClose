@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
+router.get("/account-options", controller.listBankAccountOptionsController);
 router.get("/", controller.listBankEntriesController);
 
 module.exports = router;

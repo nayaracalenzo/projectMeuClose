@@ -1,7 +1,7 @@
 export const getCategoryBadgeClassName = (category?: string) => {
   const normalized = String(category || "").trim().toUpperCase();
 
-  if (normalized === "VENDA") {
+  if (normalized === "VENDA" || normalized === "REC. VENDA") {
     return "bg-[#E8F6EC] text-[#1F6A3A]";
   }
 
@@ -13,7 +13,10 @@ export const getCategoryBadgeClassName = (category?: string) => {
     return "bg-[#FDECEC] text-[#9F1D1D]";
   }
 
-  if (normalized === "TRANSFERENCIA") {
+  if (
+    normalized === "TRANSFERENCIA" ||
+    normalized === "TRANSFERENCIAS ENTRE CAIXA E BANCO"
+  ) {
     return "bg-[#E8F1FF] text-[#1E4FA3]";
   }
 

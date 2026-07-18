@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
@@ -47,6 +47,7 @@ interface SaleTableItem {
   id: number;
   type: ModalType;
   description: string;
+  fittingDate?: string | null;
   value: number;
   discountAmount: number;
   finalValue: number;
@@ -68,6 +69,8 @@ interface PaymentTypeOption {
 
 type ModalSummaryItem = {
   type: string;
+  description?: string;
+  fittingDate?: string | null;
   quantity: number;
   value: number;
   discountAmount: number;
@@ -87,6 +90,37 @@ interface CashSessionStatusResponse {
   hasOpenSession: boolean;
   pendingPreviousDay: boolean;
 }
+
+interface ExistingQuoteItem {
+  id: number;
+  itemType: "READY_MADE" | "CUSTOM_MADE" | "ACCESSORY" | "SERVICE" | "MISC";
+  description: string;
+  quantity: number;
+  grossAmount: number;
+  discountAmount: number;
+  subtotal: number;
+  fittingDate: string | null;
+}
+
+interface ExistingQuoteResponse {
+  id: number;
+  status: string;
+  customer: {
+    id: number;
+    name: string;
+  } | null;
+  finalAmount: number;
+  dueDate: string | null;
+  installmentCount: number;
+  items: ExistingQuoteItem[];
+}
+
+type InstallmentPreviewRow = {
+  installmentNumber: number;
+  totalInstallments: number;
+  amount: number;
+  dueDate: string;
+};
 
 type ToastState = {
   open: boolean;
@@ -125,9 +159,54 @@ const paymentFieldClassName =
 const paymentReadonlyFieldClassName =
   "h-11 w-full rounded-lg border border-outline-variant/60 bg-surface-lowest px-3 text-[15px] text-neutral-700 disabled:cursor-not-allowed disabled:opacity-100";
 
+function buildCustomMadeDescription(product: {
+  type: string;
+  fabric: string;
+  color: string;
+}) {
+  const parts = [product.type, product.fabric, product.color]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return parts.length ? parts.join(" - ") : "Sob medida";
+}
+
+function getCurrentDateInputValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDateFromInputValue(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1, 0, 0, 0, 0);
+}
+
+function addDays(baseDate: Date, daysToAdd: number) {
+  return new Date(
+    baseDate.getFullYear(),
+    baseDate.getMonth(),
+    baseDate.getDate() + daysToAdd,
+    0,
+    0,
+    0,
+    0,
+  );
+}
+
+function mapSaleItemTypeToModalType(
+  itemType: ExistingQuoteItem["itemType"],
+): ModalType {
+  if (itemType === "READY_MADE") return "Roupa pronta";
+  if (itemType === "CUSTOM_MADE") return "Sob medida";
+  if (itemType === "ACCESSORY") return "Acessório";
+  if (itemType === "SERVICE") return "Serviço";
+  return "Diversos";
+}
+
 export default function NewSalePage() {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const quoteIdParam = searchParams.get("quoteId");
 
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [search, setSearch] = useState("");
@@ -168,19 +247,16 @@ export default function NewSalePage() {
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [installmentIntervalDays, setInstallmentIntervalDays] = useState("30");
+  const [dueDate, setDueDate] = useState(() => getCurrentDateInputValue());
   const [entryAmount, setEntryAmount] = useState("");
   const [entryPaymentTypeId, setEntryPaymentTypeId] = useState("");
-  const [entryPaidAt, setEntryPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [entryReferenceCode, setEntryReferenceCode] = useState("");
   const [paymentReferenceCode, setPaymentReferenceCode] = useState("");
   const [cashReceivedAmount, setCashReceivedAmount] = useState("");
   const [cardOperatorLabel, setCardOperatorLabel] = useState("");
   const [cardBrand, setCardBrand] = useState("");
   const [cardAuthorizationCode, setCardAuthorizationCode] = useState("");
-  const [cardExpectedSettlementDate, setCardExpectedSettlementDate] = useState(
-    () => new Date().toISOString().slice(0, 10),
-  );
   const [cardClientInstallmentCount, setCardClientInstallmentCount] = useState("1");
   const [cardFeeAmount, setCardFeeAmount] = useState("");
   const [cashSessionStatus, setCashSessionStatus] = useState<CashSessionStatusResponse | null>(
@@ -194,6 +270,7 @@ export default function NewSalePage() {
   const [cashSessionLoading, setCashSessionLoading] = useState(false);
   const [cancelSaleModalOpen, setCancelSaleModalOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
+  const [loadingExistingQuote, setLoadingExistingQuote] = useState(false);
 
   const formatDate = (dateString: string) =>
     new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
@@ -318,6 +395,67 @@ export default function NewSalePage() {
     fetchCashSessionStatus();
   }, []);
 
+  useEffect(() => {
+    const quoteId = Number(quoteIdParam);
+    if (!Number.isInteger(quoteId) || quoteId <= 0) {
+      return;
+    }
+
+    const loadExistingQuote = async () => {
+      try {
+        setLoadingExistingQuote(true);
+        setSaveMessage("");
+
+        const data = (await getRequest(`/sales/${quoteId}`)) as ExistingQuoteResponse;
+
+        if (data.status !== "BUDGET") {
+          setSaveMessage("Somente orçamentos em aberto podem ser finalizados por este fluxo.");
+          return;
+        }
+
+        setDraftSaleId(data.id);
+        setSelectedCustomer(
+          data.customer
+            ? {
+                id: data.customer.id,
+                name: data.customer.name,
+                document: "",
+              }
+            : null,
+        );
+        setSearch(data.customer?.name || "");
+        setTableItems(
+          (data.items || []).map((item) => ({
+            id: item.id,
+            type: mapSaleItemTypeToModalType(item.itemType),
+            description: item.description,
+            fittingDate: item.fittingDate,
+            value: Number(item.grossAmount || 0),
+            discountAmount: Number(item.discountAmount || 0),
+            finalValue: Number(item.subtotal || 0),
+          })),
+        );
+        setDueDate(data.dueDate ? String(data.dueDate).slice(0, 10) : getCurrentDateInputValue());
+        setInstallmentCount(String(data.installmentCount || 1));
+        setStep(4);
+        setSaveMessage(
+          "Orçamento carregado. Informe a forma de pagamento para concluir a venda.",
+        );
+      } catch (error: unknown) {
+        setSaveMessage(
+          getUserFacingApiErrorMessage(
+            error,
+            "Não foi possível carregar o orçamento para finalização.",
+          ),
+        );
+      } finally {
+        setLoadingExistingQuote(false);
+      }
+    };
+
+    void loadExistingQuote();
+  }, [quoteIdParam]);
+
   const filteredCustomers = useMemo(() => customers, [customers]);
 
   const selectedTypesLabel = useMemo(() => {
@@ -348,6 +486,10 @@ export default function NewSalePage() {
     () => paymentTypes.find((item) => String(item.id) === paymentTypeId) || null,
     [paymentTypeId, paymentTypes],
   );
+  const isCreditPayment = useMemo(
+    () => selectedPaymentType?.kind === "CARD",
+    [selectedPaymentType],
+  );
   const isImmediateCashPayment = useMemo(
     () =>
       selectedPaymentType?.kind === "CASH" &&
@@ -369,6 +511,14 @@ export default function NewSalePage() {
     const parsed = Number(entryAmount.replace(",", "."));
     return Number.isFinite(parsed) ? parsed : 0;
   }, [entryAmount]);
+  const parsedInstallmentIntervalDays = useMemo(() => {
+    const parsed = Number(installmentIntervalDays);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return 30;
+    }
+
+    return parsed;
+  }, [installmentIntervalDays]);
   const remainingAmount = useMemo(
     () => Math.max(0, Number((discountedTotalValue - parsedEntryAmount).toFixed(2))),
     [discountedTotalValue, parsedEntryAmount],
@@ -408,6 +558,22 @@ export default function NewSalePage() {
 
     return installments;
   }, [previewInstallmentCount, remainingAmount]);
+  const creditInstallmentPreview = useMemo<InstallmentPreviewRow[]>(() => {
+    if (!isCreditPayment || remainingAmount <= 0) {
+      return [];
+    }
+
+    const baseDate = getDateFromInputValue(getCurrentDateInputValue());
+
+    return installmentPreview.map((amount, index) => ({
+      installmentNumber: index + 1,
+      totalInstallments: installmentPreview.length,
+      amount,
+      dueDate: addDays(baseDate, parsedInstallmentIntervalDays * (index + 1))
+        .toISOString()
+        .slice(0, 10),
+    }));
+  }, [installmentPreview, isCreditPayment, parsedInstallmentIntervalDays, remainingAmount]);
   const canSaveSale =
     draftSaleId !== null &&
     !isSaving &&
@@ -417,11 +583,10 @@ export default function NewSalePage() {
     (!selectedPaymentType?.requiresDueDate || !!dueDate) &&
     (!selectedPaymentType?.allowsEntryAmount ||
       parsedEntryAmount <= 0 ||
-      (!!entryPaymentTypeId && !!entryPaidAt)) &&
+      !!entryPaymentTypeId) &&
     (!isImmediateCashPayment || parsedCashReceivedAmount >= discountedTotalValue) &&
     (!isImmediateCheckPayment || !!paymentReferenceCode.trim()) &&
-    parsedEntryAmount < discountedTotalValue &&
-    (selectedPaymentType?.financialFlow !== "FUTURE_OPERATOR" || !!cardExpectedSettlementDate);
+    parsedEntryAmount < discountedTotalValue;
   const canCreateQuote = !isSaving && !!selectedCustomer && tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
 
@@ -540,6 +705,7 @@ export default function NewSalePage() {
   useEffect(() => {
     if (!selectedPaymentType) {
       setInstallmentCount("1");
+      setInstallmentIntervalDays("30");
       setEntryAmount("");
       setEntryPaymentTypeId("");
       setEntryReferenceCode("");
@@ -549,9 +715,10 @@ export default function NewSalePage() {
     }
 
     setInstallmentCount(String(selectedPaymentType.defaultInstallments || 1));
+    setInstallmentIntervalDays("30");
 
     if (!selectedPaymentType.requiresDueDate) {
-      setDueDate(new Date().toISOString().slice(0, 10));
+      setDueDate(getCurrentDateInputValue());
     }
 
     if (!selectedPaymentType.allowsEntryAmount) {
@@ -566,14 +733,6 @@ export default function NewSalePage() {
 
     if (!isImmediateCashPayment) {
       setCashReceivedAmount("");
-    }
-
-    if (selectedPaymentType.financialFlow !== "FUTURE_OPERATOR") {
-      setCardOperatorLabel("");
-      setCardBrand("");
-      setCardAuthorizationCode("");
-      setCardFeeAmount("");
-      setCardClientInstallmentCount(String(selectedPaymentType.defaultInstallments || 1));
     }
   }, [isImmediateCashPayment, isImmediateCheckPayment, selectedPaymentType]);
 
@@ -601,7 +760,8 @@ export default function NewSalePage() {
         next.push({
           id: Date.now() + next.length,
           type: modalType,
-          description: item.type || modalType,
+          description: item.description || item.type || modalType,
+          fittingDate: item.fittingDate || null,
           value: Number((item.value * Math.max(1, item.quantity)).toFixed(2)),
           discountAmount: Number(item.discountAmount.toFixed(2)),
           finalValue: Number(item.finalValue.toFixed(2)),
@@ -686,13 +846,14 @@ export default function NewSalePage() {
 
         return {
           itemType: "CUSTOM_MADE",
-          description: product.type.trim() || "Sob medida",
+          description: buildCustomMadeDescription(product),
           quantity: 1,
           unitPrice,
           discountType: discountPercent > 0 ? "PERCENTAGE" : null,
           discountValue: discountPercent > 0 ? discountPercent : null,
           subtotal: Number((unitPrice * (1 - discountPercent / 100)).toFixed(2)),
           metadata: {
+            clothingType: product.type || null,
             fabric: product.fabric || null,
             color: product.color || null,
             details: product.details || null,
@@ -725,39 +886,16 @@ export default function NewSalePage() {
         discountValue: saleDiscountPayload.discountValue,
         paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
         installmentCount: previewInstallmentCount,
+        installmentIntervalDays: isCreditPayment ? parsedInstallmentIntervalDays : null,
         dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
         entryAmount:
           selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
             ? parsedEntryAmount
             : null,
         entryPaymentTypeId: entryPaymentTypeId ? Number(entryPaymentTypeId) : null,
-        entryPaidAt: parsedEntryAmount > 0 ? entryPaidAt : null,
+        entryPaidAt: parsedEntryAmount > 0 ? getCurrentDateInputValue() : null,
         entryReferenceCode: entryReferenceCode || null,
         paymentReferenceCode: paymentReferenceCode || null,
-        cardOperatorLabel:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardOperatorLabel || null
-            : null,
-        cardBrand:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardBrand || null
-            : null,
-        cardAuthorizationCode:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardAuthorizationCode || null
-            : null,
-        cardExpectedSettlementDate:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardExpectedSettlementDate || null
-            : null,
-        cardClientInstallmentCount:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? Number(cardClientInstallmentCount) || 1
-            : null,
-        cardFeeAmount:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" && cardFeeAmount
-            ? Number(cardFeeAmount.replace(",", "."))
-            : null,
         items: [
           ...readyMadeItems,
           ...customItems,
@@ -780,19 +918,13 @@ export default function NewSalePage() {
       setSelectedClothingSubtype("");
       setPaymentTypeId("");
       setInstallmentCount("1");
-      setDueDate(new Date().toISOString().slice(0, 10));
+      setInstallmentIntervalDays("30");
+      setDueDate(getCurrentDateInputValue());
       setEntryAmount("");
       setEntryPaymentTypeId("");
-      setEntryPaidAt(new Date().toISOString().slice(0, 10));
       setEntryReferenceCode("");
       setPaymentReferenceCode("");
       setCashReceivedAmount("");
-      setCardOperatorLabel("");
-      setCardBrand("");
-      setCardAuthorizationCode("");
-      setCardExpectedSettlementDate(new Date().toISOString().slice(0, 10));
-      setCardClientInstallmentCount("1");
-      setCardFeeAmount("");
       setStep(1);
       const updatedCashSessionStatus = await getRequest("/cash/session-status");
       setCashSessionStatus((updatedCashSessionStatus as CashSessionStatusResponse) || null);
@@ -911,13 +1043,14 @@ export default function NewSalePage() {
 
       return {
         itemType: "CUSTOM_MADE",
-        description: product.type.trim() || "Sob medida",
+        description: buildCustomMadeDescription(product),
         quantity: 1,
         unitPrice,
         discountType: discountPercent > 0 ? "PERCENTAGE" : null,
         discountValue: discountPercent > 0 ? discountPercent : null,
         subtotal: Number((unitPrice * (1 - discountPercent / 100)).toFixed(2)),
         metadata: {
+          clothingType: product.type || null,
           fabric: product.fabric || null,
           color: product.color || null,
           details: product.details || null,
@@ -964,19 +1097,13 @@ export default function NewSalePage() {
     setSelectedClothingSubtype("");
     setPaymentTypeId("");
     setInstallmentCount("1");
-    setDueDate(new Date().toISOString().slice(0, 10));
+    setInstallmentIntervalDays("30");
+    setDueDate(getCurrentDateInputValue());
     setEntryAmount("");
     setEntryPaymentTypeId("");
-    setEntryPaidAt(new Date().toISOString().slice(0, 10));
     setEntryReferenceCode("");
     setPaymentReferenceCode("");
     setCashReceivedAmount("");
-    setCardOperatorLabel("");
-    setCardBrand("");
-    setCardAuthorizationCode("");
-    setCardExpectedSettlementDate(new Date().toISOString().slice(0, 10));
-    setCardClientInstallmentCount("1");
-    setCardFeeAmount("");
     setStep(1);
     const updatedCashSessionStatus = await getRequest("/cash/session-status");
     setCashSessionStatus((updatedCashSessionStatus as CashSessionStatusResponse) || null);
@@ -1073,43 +1200,20 @@ export default function NewSalePage() {
       await updateRequest(`/sales/${draftSaleId}/finalize`, {
         paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
         installmentCount: previewInstallmentCount,
+        installmentIntervalDays: isCreditPayment ? parsedInstallmentIntervalDays : null,
         dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
         entryAmount:
           selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
             ? parsedEntryAmount
             : null,
         entryPaymentTypeId: entryPaymentTypeId ? Number(entryPaymentTypeId) : null,
-        entryPaidAt: parsedEntryAmount > 0 ? entryPaidAt : null,
+        entryPaidAt: parsedEntryAmount > 0 ? getCurrentDateInputValue() : null,
         entryReferenceCode: entryReferenceCode || null,
         paymentReferenceCode: paymentReferenceCode || null,
-        cardOperatorLabel:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardOperatorLabel || null
-            : null,
-        cardBrand:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardBrand || null
-            : null,
-        cardAuthorizationCode:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardAuthorizationCode || null
-            : null,
-        cardExpectedSettlementDate:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? cardExpectedSettlementDate || null
-            : null,
-        cardClientInstallmentCount:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-            ? Number(cardClientInstallmentCount) || 1
-            : null,
-        cardFeeAmount:
-          selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" && cardFeeAmount
-            ? Number(cardFeeAmount.replace(",", "."))
-            : null,
       });
 
-      await resetSaleForm();
-      setSaveMessage("Pedido concluído com sucesso.");
+            await resetSaleForm();
+      navigate("/vendas");
     } catch (error: unknown) {
       const message = getUserFacingApiErrorMessage(
         error,
@@ -1141,6 +1245,12 @@ export default function NewSalePage() {
           Nova Venda/Orçamento
         </h1>
         <SaleStepper step={step} />
+
+        {loadingExistingQuote ? (
+          <div className="mb-4 rounded-lg border border-outline-variant/35 bg-white px-4 py-3 text-sm text-neutral-700">
+            Carregando orçamento para finalização...
+          </div>
+        ) : null}
 
         <div className="mt-5 grid grid-cols-3 gap-6">
           <div className="col-span-2 bg-surface-low p-6 shadow-sm">
@@ -1433,7 +1543,12 @@ export default function NewSalePage() {
                                 {item.type}
                               </td>
                               <td className="px-3 py-2 text-neutral-800">
-                                {item.description}
+                                <div>{item.description}</div>
+                                {item.fittingDate ? (
+                                  <div className="text-xs text-neutral-600">
+                                    Prova: {formatDate(item.fittingDate)}
+                                  </div>
+                                ) : null}
                               </td>
                               <td className="px-3 py-2 text-right text-neutral-800">
                                 {formatCurrency(item.value)}
@@ -1494,7 +1609,7 @@ export default function NewSalePage() {
                   Passo 4: Pagamento e conclusão
                 </p>
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-3">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-primary">
                       Forma de pagamento
@@ -1514,73 +1629,6 @@ export default function NewSalePage() {
                       ))}
                     </select>
                   </div>
-
-                  {selectedPaymentType?.allowsInstallments ? (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Parcelas
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={selectedPaymentType.maxInstallments || undefined}
-                        value={installmentCount}
-                        onChange={(e) => setInstallmentCount(e.target.value)}
-                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Parcelas previstas
-                      </label>
-                      <input
-                        value={String(previewInstallmentCount)}
-                        disabled
-                        className={paymentReadonlyFieldClassName}
-                      />
-                    </div>
-                  )}
-
-                  {selectedPaymentType?.requiresDueDate ? (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Primeiro vencimento
-                      </label>
-                      <input
-                        type="date"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                  ) : selectedPaymentType?.financialFlow ===
-                    "FUTURE_OPERATOR" ? (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Data prevista de repasse
-                      </label>
-                      <input
-                        type="date"
-                        value={cardExpectedSettlementDate}
-                        onChange={(e) =>
-                          setCardExpectedSettlementDate(e.target.value)
-                        }
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Destino do recebimento
-                      </label>
-                      <input
-                        value="Recebimento imediato no caixa."
-                        disabled
-                        className={paymentReadonlyFieldClassName}
-                      />
-                    </div>
-                  )}
                 </div>
 
                 {isImmediateCheckPayment && (
@@ -1652,7 +1700,7 @@ export default function NewSalePage() {
                 )}
 
                 {selectedPaymentType?.allowsEntryAmount && (
-                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
                         Valor de entrada
@@ -1687,17 +1735,6 @@ export default function NewSalePage() {
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
-                        Data da entrada
-                      </label>
-                      <input
-                        type="date"
-                        value={entryPaidAt}
-                        onChange={(e) => setEntryPaidAt(e.target.value)}
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
                         Referência
                       </label>
                       <input
@@ -1705,6 +1742,145 @@ export default function NewSalePage() {
                         onChange={(e) => setEntryReferenceCode(e.target.value)}
                         className={paymentFieldClassName}
                       />
+                    </div>
+                  </div>
+                )}
+
+                {selectedPaymentType ? (
+                  <div
+                    className={`grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 ${
+                      selectedPaymentType.requiresDueDate || isCreditPayment
+                        ? "md:grid-cols-2"
+                        : "md:grid-cols-1"
+                    }`}
+                  >
+                    {selectedPaymentType.allowsInstallments ? (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Parcelas
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={selectedPaymentType.maxInstallments || undefined}
+                          value={installmentCount}
+                          onChange={(e) => setInstallmentCount(e.target.value)}
+                          className={paymentFieldClassName}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Parcelas previstas
+                        </label>
+                        <input
+                          value={String(previewInstallmentCount)}
+                          disabled
+                          className={paymentReadonlyFieldClassName}
+                        />
+                      </div>
+                    )}
+
+                    {selectedPaymentType.requiresDueDate ? (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Primeiro vencimento
+                        </label>
+                        <input
+                          type="date"
+                          value={dueDate}
+                          onChange={(e) => setDueDate(e.target.value)}
+                          className={paymentFieldClassName}
+                        />
+                      </div>
+                    ) : isCreditPayment ? (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Intervalo entre parcelas (dias)
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          value={installmentIntervalDays}
+                          onChange={(e) => setInstallmentIntervalDays(e.target.value)}
+                          className={paymentFieldClassName}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Destino do recebimento
+                        </label>
+                        <input
+                          value="Recebimento imediato no caixa."
+                          disabled
+                          className={paymentReadonlyFieldClassName}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {isCreditPayment && remainingAmount > 0 && (
+                  <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Saldo a pagar
+                        </label>
+                        <input
+                          value={formatCurrency(remainingAmount)}
+                          disabled
+                          className={paymentReadonlyFieldClassName}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Saldo em parcelas
+                        </label>
+                        <input
+                          value={String(previewInstallmentCount)}
+                          disabled
+                          className={paymentReadonlyFieldClassName}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Intervalo (dias)
+                        </label>
+                        <input
+                          value={String(parsedInstallmentIntervalDays)}
+                          disabled
+                          className={paymentReadonlyFieldClassName}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                        <thead>
+                          <tr className="text-left">
+                            <th className="px-3 py-2 font-semibold text-primary">Doc.</th>
+                            <th className="px-3 py-2 font-semibold text-primary text-right">Valor</th>
+                            <th className="px-3 py-2 font-semibold text-primary">Data venc.</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {creditInstallmentPreview.map((installment) => (
+                            <tr key={installment.installmentNumber} className="bg-surface-lowest">
+                              <td className="px-3 py-2 text-neutral-800">
+                                {installment.installmentNumber}/{installment.totalInstallments}
+                              </td>
+                              <td className="px-3 py-2 text-right text-neutral-800">
+                                {formatCurrency(installment.amount)}
+                              </td>
+                              <td className="px-3 py-2 text-neutral-800">
+                                {formatDate(installment.dueDate)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 )}
@@ -1826,13 +2002,14 @@ export default function NewSalePage() {
                   <p>Saldo: {formatCurrency(remainingAmount)}</p>
                   <p>
                     Destino do saldo:{" "}
-                    {selectedPaymentType?.financialFlow === "FUTURE_OPERATOR"
-                      ? "Operadora"
-                      : selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER"
+                    {selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER"
                         ? "Cliente"
                         : "Caixa"}
                   </p>
                   <p>Parcelas previstas: {previewInstallmentCount}</p>
+                  {isCreditPayment && remainingAmount > 0 && (
+                    <p>Intervalo entre parcelas: {parsedInstallmentIntervalDays} dias</p>
+                  )}
                   {installmentPreview.length > 0 && remainingAmount > 0 && (
                     <p>
                       Valor presumido:{" "}
@@ -2113,3 +2290,5 @@ export default function NewSalePage() {
     </div>
   );
 }
+
+

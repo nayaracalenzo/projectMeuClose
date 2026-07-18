@@ -2,13 +2,55 @@ const { conflictError } = require("../errors/AppError");
 const cashRepository = require("../repositories/cashRepository");
 const bankRepository = require("../repositories/bankRepository");
 const cashSessionsRepository = require("../repositories/cashSessionsRepository");
+const financialCategoriesRepository = require("../repositories/financialCategoriesRepository");
 
-function normalizeFinancialEntryPayload(payload = {}) {
+function normalizeLegacyCategoryText(value) {
+  return String(value || "").trim().toUpperCase();
+}
+
+async function resolveFinancialCategoryId(payload = {}) {
+  const explicitId = Number(payload.financialCategoryId);
+
+  if (Number.isInteger(explicitId) && explicitId > 0) {
+    return explicitId;
+  }
+
+  const rawCategory = String(payload.category || "").trim();
+
+  if (!rawCategory) {
+    return 3;
+  }
+
+  const normalized = normalizeLegacyCategoryText(rawCategory);
+  const aliasMap = {
+    VENDA: "REC. VENDAS",
+    RECEBIMENTO: "REC. VENDAS",
+    TRANSFERENCIA: "TRANSF. CAIXA/BANCO",
+    PAGAMENTO: "DIVERSOS",
+  };
+
+  const category = await financialCategoriesRepository.getCategoryByDescription(
+    aliasMap[normalized] || rawCategory,
+  );
+
+  return category?.idFinancialCategory || 3;
+}
+
+async function normalizeFinancialEntryPayload(payload = {}) {
+  const financialCategoryId = await resolveFinancialCategoryId(payload);
+  const financialCategory = await financialCategoriesRepository.getCategoryById(
+    financialCategoryId,
+  );
+
   return {
     scope: payload.scope || "LOJA",
     movementType: payload.movementType,
-    category: payload.category || "GERAL",
-    description: payload.description || "Lançamento financeiro",
+    category:
+      payload.category ||
+      financialCategory?.description ||
+      "DIVERSOS",
+    financialCategoryId,
+    description: payload.description || "Lancamento financeiro",
     amount: Number(payload.amount),
     occurredAt: payload.occurredAt || new Date(),
     sourceType: payload.sourceType || "MANUAL",
@@ -17,6 +59,9 @@ function normalizeFinancialEntryPayload(payload = {}) {
     payablePaymentId: payload.payablePaymentId || null,
     paymentTypeId: payload.paymentTypeId || null,
     referenceCode: payload.referenceCode || null,
+    transferKey: payload.transferKey || null,
+    reversalOfCashEntryId: payload.reversalOfCashEntryId || null,
+    reversalOfBankEntryId: payload.reversalOfBankEntryId || null,
   };
 }
 
@@ -34,7 +79,7 @@ function isPreviousDay(dateValue) {
 }
 
 async function createCashEntry(payload, transaction) {
-  const normalizedPayload = normalizeFinancialEntryPayload(payload);
+  const normalizedPayload = await normalizeFinancialEntryPayload(payload);
   let cashSessionId = null;
 
   if (normalizedPayload.scope === "LOJA") {
@@ -65,7 +110,7 @@ async function createCashEntry(payload, transaction) {
 async function createBankEntry(payload, transaction) {
   return bankRepository.createEntry(
     {
-      ...normalizeFinancialEntryPayload(payload),
+      ...(await normalizeFinancialEntryPayload(payload)),
       accountLabel: payload.accountLabel || "Banco da Loja",
     },
     transaction,

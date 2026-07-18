@@ -74,6 +74,16 @@ function buildStatusWhere(status) {
   return { status };
 }
 
+function buildSaleFinancialMovementDescription(movement, saleId, customerName) {
+  if (movement?.sourceType !== "SALE_RECEIPT" && movement?.category !== "VENDA") {
+    return movement?.description;
+  }
+
+  const resolvedCustomerName = String(customerName || "").trim() || "Cliente";
+
+  return `Entrada da venda ${saleId} - ${resolvedCustomerName}`;
+}
+
 async function createSale({
   sale,
   items,
@@ -81,20 +91,30 @@ async function createSale({
   entryReceipt,
   receivable,
   financialMovements,
+  createProducts = true,
 }) {
   return sequelize.transaction(async (transaction) => {
     const createdSale = await Sales.create(sale, { transaction });
-    const createdProducts = await productsRepository.createProductsFromSale(
-      createdSale,
-      items,
-      transaction
-    );
+    const customer = createdSale.customerId
+      ? await Customers.findByPk(createdSale.customerId, {
+          attributes: ["fullName", "companyName"],
+          transaction,
+        })
+      : null;
+    const customerName = customer?.fullName || customer?.companyName || null;
+    const createdProducts = createProducts
+      ? await productsRepository.createProductsFromSale(
+          createdSale,
+          items,
+          transaction,
+        )
+      : [];
 
     const createdItems = await SaleItems.bulkCreate(
       items.map((item, index) => ({
         ...item,
         saleId: createdSale.idSale,
-        productId: createdProducts[index]?.id || null,
+        productId: createProducts ? createdProducts[index]?.id || null : null,
       })),
       { transaction }
     );
@@ -134,6 +154,11 @@ async function createSale({
       for (const movement of financialMovements) {
         const payload = {
           ...movement,
+          description: buildSaleFinancialMovementDescription(
+            movement,
+            createdSale.idSale,
+            customerName,
+          ),
           saleId: createdSale.idSale,
           paymentReceiptId: createdEntryReceipt?.idPaymentReceipt || null,
         };
@@ -210,6 +235,10 @@ async function getSaleForFinalization(idSale, transaction) {
         model: Receivables,
         attributes: ["idReceivable"],
       },
+      {
+        model: Customers,
+        attributes: ["idCustomer", "fullName", "companyName"],
+      },
     ],
     transaction,
     lock: transaction
@@ -239,6 +268,20 @@ async function finalizeSale(
 
     await existingSale.update(sale, { transaction });
 
+    const saleItems = Array.isArray(existingSale.SaleItems) ? existingSale.SaleItems : [];
+    const createdProducts = saleItems.length
+      ? await productsRepository.createProductsFromSale(existingSale, saleItems, transaction)
+      : [];
+
+    for (const [index, saleItem] of saleItems.entries()) {
+      await saleItem.update(
+        {
+          productId: createdProducts[index]?.id || null,
+        },
+        { transaction },
+      );
+    }
+
     let createdReceivable = null;
     let createdEntryReceipt = null;
 
@@ -258,9 +301,17 @@ async function finalizeSale(
     }
 
     if (Array.isArray(financialMovements) && financialMovements.length) {
+      const customerName =
+        existingSale.Customer?.fullName || existingSale.Customer?.companyName || null;
+
       for (const movement of financialMovements) {
         const payload = {
           ...movement,
+          description: buildSaleFinancialMovementDescription(
+            movement,
+            existingSale.idSale,
+            customerName,
+          ),
           saleId: existingSale.idSale,
           paymentReceiptId: createdEntryReceipt?.idPaymentReceipt || null,
         };
@@ -300,6 +351,7 @@ async function finalizeSale(
 
     return {
       sale: existingSale,
+      products: createdProducts,
       entryReceipt: createdEntryReceipt,
       receivable: createdReceivable,
     };

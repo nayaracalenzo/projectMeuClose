@@ -21,6 +21,10 @@ const CashEntriesSchema = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: false,
       },
+      financialCategoryId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       description: {
         type: DataTypes.STRING(255),
         allowNull: false,
@@ -61,6 +65,14 @@ const CashEntriesSchema = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: true,
       },
+      transferKey: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+      },
+      reversalOfCashEntryId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
     },
     {
       tableName: "cash_entries",
@@ -83,6 +95,13 @@ const CashEntriesSchema = (sequelize, DataTypes) => {
     });
     CashEntries.belongsTo(models.CashSessions, {
       foreignKey: "cashSessionId",
+    });
+    CashEntries.belongsTo(models.FinancialCategories, {
+      foreignKey: "financialCategoryId",
+    });
+    CashEntries.belongsTo(models.CashEntries, {
+      foreignKey: "reversalOfCashEntryId",
+      as: "ReversedCashEntry",
     });
   };
 

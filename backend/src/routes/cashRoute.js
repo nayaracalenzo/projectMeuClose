@@ -15,6 +15,8 @@ router.post(
   cashSessionController.closeCurrentStoreSessionController,
 );
 router.post("/transfers/to-bank", transfersController.transferStoreCashToBankController);
+router.post("/manual-entry", controller.createManualCashEntryController);
+router.post("/:idCashEntry/reverse", controller.reverseCashEntryController);
 router.get("/", controller.listCashEntriesController);
 
 module.exports = router;

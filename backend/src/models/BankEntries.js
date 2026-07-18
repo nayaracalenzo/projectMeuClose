@@ -21,6 +21,10 @@ const BankEntriesSchema = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: false,
       },
+      financialCategoryId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       description: {
         type: DataTypes.STRING(255),
         allowNull: false,
@@ -61,6 +65,14 @@ const BankEntriesSchema = (sequelize, DataTypes) => {
         type: DataTypes.STRING(100),
         allowNull: true,
       },
+      transferKey: {
+        type: DataTypes.STRING(100),
+        allowNull: true,
+      },
+      reversalOfBankEntryId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
     },
     {
       tableName: "bank_entries",
@@ -80,6 +92,13 @@ const BankEntriesSchema = (sequelize, DataTypes) => {
     });
     BankEntries.belongsTo(models.PaymentTypes, {
       foreignKey: "paymentTypeId",
+    });
+    BankEntries.belongsTo(models.FinancialCategories, {
+      foreignKey: "financialCategoryId",
+    });
+    BankEntries.belongsTo(models.BankEntries, {
+      foreignKey: "reversalOfBankEntryId",
+      as: "ReversedBankEntry",
     });
   };
 

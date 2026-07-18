@@ -428,10 +428,10 @@ export default function Orders() {
                   className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
                   onClick={() => navigate(`/pedido/${order.id}`)}
                 >
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{order.description || "-"}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatCustomerName(order.customer)}</td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{order.description || "-"}</td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{formatCustomerName(order.customer)}</td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(order.testDate)}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{order.seamstress || "-"}</td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{order.seamstress || "-"}</td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getProductionStatusBadgeClassName(
@@ -466,10 +466,10 @@ export default function Orders() {
               className="w-full px-4 py-4 text-left"
               onClick={() => navigate(`/pedido/${order.id}`)}
             >
-              <p className="text-xs text-neutral-700">Descrição: {order.description || "-"}</p>
-              <p className="text-sm font-semibold text-primary">{formatCustomerName(order.customer)}</p>
+              <p className="text-xs uppercase text-neutral-700">Descrição: {order.description || "-"}</p>
+              <p className="text-sm font-semibold uppercase text-primary">{formatCustomerName(order.customer)}</p>
               <p className="text-xs text-neutral-700">Data Prova: {formatDate(order.testDate)}</p>
-              <p className="text-xs text-neutral-700">Costureira: {order.seamstress || "-"}</p>
+              <p className="text-xs uppercase text-neutral-700">Costureira: {order.seamstress || "-"}</p>
               <p className="text-xs text-neutral-700">
                 Status:{" "}
                 <span
@@ -512,3 +512,4 @@ export default function Orders() {
     </div>
   );
 }
+

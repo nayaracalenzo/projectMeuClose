@@ -143,6 +143,21 @@ const resolveColType = (value: unknown): GridColDef["type"] => {
   }
 };
 
+const shouldPreserveOriginalCase = (fieldName: string) =>
+  String(fieldName || "").trim().toLowerCase().includes("email");
+
+const formatCellValue = (fieldName: string, value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return "-";
+  }
+
+  if (typeof value === "string") {
+    return shouldPreserveOriginalCase(fieldName) ? value : value.toUpperCase();
+  }
+
+  return String(value);
+};
+
 export default function Table(props: TableProps) {
   const isMobile = useMediaQuery("(max-width: 600px)");
   const rowSelectionModel =
@@ -189,6 +204,7 @@ export default function Table(props: TableProps) {
       flex: flexValue,
       headerName: isMobile ? shortenHeader(chave) : chave,
       minWidth: 120,
+      renderCell: (params) => formatCellValue(chave, params.value),
     };
 
     columns.push(obj);

@@ -93,11 +93,32 @@ function addMonths(baseDate, monthsToAdd) {
   );
 }
 
+function addDays(baseDate, daysToAdd) {
+  return new Date(
+    baseDate.getFullYear(),
+    baseDate.getMonth(),
+    baseDate.getDate() + daysToAdd,
+    0,
+    0,
+    0,
+    0,
+  );
+}
+
 function roundCurrency(value) {
   return Number(Number(value).toFixed(2));
 }
 
-function buildInstallments(amount, installmentCount, paymentTypeId, dueDate) {
+function buildInstallments(
+  amount,
+  installmentCount,
+  paymentTypeId,
+  dueDate,
+  options = {},
+) {
+  const strategy = options.strategy === "days_interval" ? "days_interval" : "monthly";
+  const intervalDays = Number(options.intervalDays) > 0 ? Number(options.intervalDays) : 30;
+  const baseDate = dueDate || new Date();
   const amounts = [];
   let allocated = 0;
 
@@ -114,7 +135,10 @@ function buildInstallments(amount, installmentCount, paymentTypeId, dueDate) {
   }
 
   return amounts.map((installmentAmount, index) => {
-    const dueDateValue = addMonths(dueDate || new Date(), index);
+    const dueDateValue =
+      strategy === "days_interval"
+        ? addDays(baseDate, intervalDays * (index + 1))
+        : addMonths(baseDate, index);
 
     return {
       paymentTypeId,
@@ -222,6 +246,10 @@ function validateEntryPaymentType(mainPaymentType, entryPaymentType) {
   }
 }
 
+function isCreditInstallmentPaymentType(paymentType) {
+  return paymentType?.kind === "CARD";
+}
+
 function buildReceivablePayload({
   customerId,
   mainPaymentType,
@@ -230,27 +258,36 @@ function buildReceivablePayload({
   installmentCount,
   dueDate,
   cardData,
+  installmentIntervalDays,
 }) {
   if (remainingAmount <= 0) {
     return null;
   }
 
+  const usesCreditSchedule = isCreditInstallmentPaymentType(mainPaymentType);
   const debtorType =
     mainPaymentType.financialFlow === "FUTURE_OPERATOR" ? "CARD_OPERATOR" : "CUSTOMER";
   const effectiveDueDate = dueDate || cardData.expectedSettlementDate || new Date();
   const effectiveInstallmentCount = mainPaymentType.allowsInstallments ? installmentCount : 1;
+  const installments = buildInstallments(
+    remainingAmount,
+    effectiveInstallmentCount,
+    paymentTypeId,
+    effectiveDueDate,
+    usesCreditSchedule
+      ? {
+          strategy: "days_interval",
+          intervalDays: installmentIntervalDays,
+        }
+      : undefined,
+  );
 
   return {
     originalAmount: remainingAmount,
     debtorType,
     customerId: debtorType === "CUSTOMER" ? customerId : null,
     operatorLabel: debtorType === "CARD_OPERATOR" ? cardData.operatorLabel : null,
-    installments: buildInstallments(
-      remainingAmount,
-      effectiveInstallmentCount,
-      paymentTypeId,
-      effectiveDueDate,
-    ),
+    installments,
     cardTransaction:
       debtorType === "CARD_OPERATOR"
         ? {
@@ -582,6 +619,7 @@ function deriveSaleStatusFromItems() {
 
 async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount }) {
   const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
+  const isCreditPayment = isCreditInstallmentPaymentType(mainPaymentType);
   const installmentCount =
     body.installmentCount === null || body.installmentCount === undefined || body.installmentCount === ""
       ? Number(mainPaymentType.defaultInstallments || 1)
@@ -597,6 +635,17 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
   if (!mainPaymentType.requiresDueDate && !isCardPaymentType(mainPaymentType) && dueDate) {
     throw createSalesValidationError("A forma de pagamento selecionada nao utiliza vencimento futuro.");
   }
+
+  if (isCreditPayment && dueDate) {
+    throw createSalesValidationError("O vencimento do credito e calculado automaticamente pelo intervalo de dias.");
+  }
+
+  const installmentIntervalDays =
+    body.installmentIntervalDays === null ||
+    body.installmentIntervalDays === undefined ||
+    body.installmentIntervalDays === ""
+      ? 30
+      : normalizeInteger(body.installmentIntervalDays, "Intervalo entre parcelas");
 
   const entryAmount =
     body.entryAmount === null || body.entryAmount === undefined || body.entryAmount === ""
@@ -702,12 +751,20 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     installmentCount,
     dueDate,
     cardData,
+    installmentIntervalDays,
   });
+
+  const resolvedDueDate =
+    receivable?.installments?.[0]?.dueDate ||
+    dueDate ||
+    cardData.expectedSettlementDate ||
+    null;
 
   return {
     mainPaymentType,
     installmentCount,
-    dueDate,
+    dueDate: resolvedDueDate,
+    installmentIntervalDays,
     entryReceipt,
     financialMovement: financialMovement ? [financialMovement] : [],
     receivable,
@@ -752,6 +809,7 @@ async function createQuote(body = {}) {
     entryReceipt: null,
     receivable: null,
     financialMovements: [],
+    createProducts: false,
   });
 
   return buildSaleResponse(created, {
@@ -823,6 +881,7 @@ async function finalizeSale(id, body = {}) {
           dueDate: installment.dueDate,
           amount: installment.amount,
         })) || [],
+      installmentIntervalDays: finalization.installmentIntervalDays,
     },
   });
 }
@@ -869,6 +928,7 @@ async function finalizeSaleFromScratch(body = {}) {
           dueDate: installment.dueDate,
           amount: installment.amount,
         })) || [],
+      installmentIntervalDays: finalization.installmentIntervalDays,
     },
   });
 }

@@ -163,6 +163,16 @@ function formatSaleStatus(value?: string | null) {
   return value || "-";
 }
 
+function formatSaleItemType(value?: string | null) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized === "CUSTOM_MADE") return "Sob medida";
+  if (normalized === "READY_MADE") return "Roupa pronta";
+  if (normalized === "ACCESSORY") return "AcessÃ³rio";
+  if (normalized === "SERVICE") return "ServiÃ§o";
+  if (normalized === "MISC") return "Diversos";
+  return value || "-";
+}
+
 function isProductionItem(item?: SaleDetailItem | null) {
   if (!item?.productId) return false;
   return item.itemType === "CUSTOM_MADE" || item.itemType === "SERVICE";
@@ -259,6 +269,14 @@ export default function SaleDetailsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {sale.status === "BUDGET" ? (
+              <Button
+                variant="primary"
+                onClick={() => navigate(`/nova-venda?quoteId=${sale.id}`)}
+              >
+                Finalizar venda
+              </Button>
+            ) : null}
             {firstProductionItem?.productId ? (
               <Button
                 variant="secondary"
@@ -338,7 +356,7 @@ export default function SaleDetailsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-neutral-800">{item.itemType}</td>
+                      <td className="px-4 py-3 text-neutral-800">{formatSaleItemType(item.itemType)}</td>
                       <td className="px-4 py-3 text-neutral-800">{item.quantity}</td>
                       <td className="px-4 py-3 text-right text-neutral-800">{formatCurrency(item.unitPrice)}</td>
                       <td className="px-4 py-3 text-right text-neutral-800">{formatCurrency(item.grossAmount)}</td>
