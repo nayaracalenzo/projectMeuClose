@@ -64,6 +64,24 @@ const formatSaleStatusLabel = (value?: string | null) => {
   return value || "-";
 };
 
+const getSaleStatusBadgeClassName = (value?: string | null) => {
+  const normalized = String(value || "").trim().toUpperCase();
+
+  if (normalized === "CANCELLED") {
+    return "border border-[#d8a2ab] bg-[#f7d9dd] text-[#8a1f2d]";
+  }
+
+  if (normalized === "BUDGET") {
+    return "border border-[#d7c27a] bg-[#f4ebc7] text-[#6b5600]";
+  }
+
+  if (normalized === "COMPLETED") {
+    return "border border-[#9cc7ad] bg-[#d9efe0] text-[#1f5f3a]";
+  }
+
+  return "border border-outline-variant/40 bg-secondary text-primary";
+};
+
 export default function SalesPage() {
   const pageSize = 10;
   const navigate = useNavigate();
@@ -106,8 +124,8 @@ export default function SalesPage() {
   const effectiveStatus =
     statusFilter === "DEFAULT"
       ? viewMode === "budgets"
-        ? "BUDGET"
-        : "COMPLETED"
+        ? undefined
+        : undefined
       : statusFilter;
 
   const statusOptions =
@@ -170,13 +188,20 @@ export default function SalesPage() {
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(pageSize),
-          status: effectiveStatus,
         });
+
+        if (effectiveStatus) {
+          params.set("status", effectiveStatus);
+        }
 
         const data = (await getRequest(
           `/sales?${params.toString()}`,
         )) as SalesResponse;
-        setSales(Array.isArray(data.items) ? data.items : []);
+        setSales(
+          Array.isArray(data.items)
+            ? [...data.items].sort((left, right) => Number(right.id) - Number(left.id))
+            : [],
+        );
         setTotalItems(Number(data.total) || 0);
         setTotalPages(Number(data.totalPages) || 1);
       } catch (err: unknown) {
@@ -349,7 +374,11 @@ export default function SalesPage() {
                     {formatDate(sale.createdAt)}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
-                    <span className="inline-flex rounded-full bg-secondary px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-primary">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getSaleStatusBadgeClassName(
+                        sale.status,
+                      )}`}
+                    >
                       {formatSaleStatusLabel(sale.status)}
                     </span>
                   </td>
@@ -397,7 +426,14 @@ export default function SalesPage() {
                 Data: {formatDate(sale.createdAt)}
               </p>
               <p className="text-xs text-neutral-700">
-                Status: {formatSaleStatusLabel(sale.status)}
+                Status:{" "}
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${getSaleStatusBadgeClassName(
+                    sale.status,
+                  )}`}
+                >
+                  {formatSaleStatusLabel(sale.status)}
+                </span>
               </p>
               <p className="mt-1 text-sm font-semibold text-primary">
                 {formatCurrency(sale.finalAmount)}

@@ -358,6 +358,124 @@ async function finalizeSale(
   });
 }
 
+async function getSaleForCancellation(idSale, transaction) {
+  return Sales.findOne({
+    where: {
+      idSale,
+    },
+    include: [
+      {
+        model: SaleItems,
+        attributes: ["idSaleItem", "productId"],
+      },
+      {
+        model: Receivables,
+        attributes: ["idReceivable", "status", "openAmount"],
+        required: false,
+        include: [
+          {
+            model: ReceivableInstallments,
+            attributes: ["idReceivableInstallment", "status"],
+            required: false,
+          },
+        ],
+      },
+    ],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: Sales,
+        }
+      : undefined,
+  });
+}
+
+async function getOrCreateCancelledStatus(transaction) {
+  const existingStatus = await Status.findOne({
+    where: {
+      desc: {
+        [Op.iLike]: "cancelada",
+      },
+    },
+    transaction,
+  });
+
+  if (existingStatus) {
+    return existingStatus;
+  }
+
+  return Status.create(
+    {
+      desc: "cancelada",
+    },
+    { transaction },
+  );
+}
+
+async function cancelSale(idSale) {
+  return sequelize.transaction(async (transaction) => {
+    const sale = await getSaleForCancellation(idSale, transaction);
+
+    if (!sale) {
+      return null;
+    }
+
+    await sale.update(
+      {
+        status: "CANCELLED",
+      },
+      { transaction },
+    );
+
+    const productIds = Array.isArray(sale.SaleItems)
+      ? sale.SaleItems.map((item) => Number(item.productId) || null).filter(Boolean)
+      : [];
+
+    if (productIds.length) {
+      const cancelledStatus = await getOrCreateCancelledStatus(transaction);
+
+      await Products.update(
+        {
+          statusId: cancelledStatus.id,
+        },
+        {
+          where: {
+            id: productIds,
+          },
+          transaction,
+        },
+      );
+    }
+
+    if (sale.Receivable) {
+      await sale.Receivable.update(
+        {
+          status: "CANCELLED",
+          openAmount: 0,
+        },
+        { transaction },
+      );
+
+      if (Array.isArray(sale.Receivable.ReceivableInstallments) && sale.Receivable.ReceivableInstallments.length) {
+        await ReceivableInstallments.update(
+          {
+            status: "CANCELLED",
+          },
+          {
+            where: {
+              receivableId: sale.Receivable.idReceivable,
+            },
+            transaction,
+          },
+        );
+      }
+    }
+
+    return sale;
+  });
+}
+
 async function getSaleById(idSale) {
   const legacyCompletedSignal = buildLegacyCompletedSignal();
 
@@ -490,7 +608,7 @@ async function listSales({ page = 1, pageSize = 10, status, search, customerId }
         attributes: ["idSaleItem", "description", "itemType", "subtotal"],
       },
     ],
-    order: [["createdAt", "DESC"], ["idSale", "DESC"]],
+    order: [["idSale", "DESC"], ["createdAt", "DESC"]],
     limit: pageSize,
     offset: (page - 1) * pageSize,
     distinct: true,
@@ -499,8 +617,10 @@ async function listSales({ page = 1, pageSize = 10, status, search, customerId }
 
 module.exports = {
   createSale,
+  cancelSale,
   finalizeSale,
   getSaleById,
+  getSaleForCancellation,
   getSaleForFinalization,
   listSales,
 };

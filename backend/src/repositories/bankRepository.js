@@ -5,6 +5,7 @@ const {
   PaymentReceipts,
   PayablePayments,
   ReceivableInstallments,
+  Sales,
   sequelize,
 } = require("../models");
 
@@ -61,6 +62,11 @@ async function getEntryById(idBankEntry, transaction) {
         model: FinancialCategories,
         attributes: ["idFinancialCategory", "description"],
       },
+      {
+        model: Sales,
+        attributes: ["idSale", "status"],
+        required: false,
+      },
     ],
     transaction,
     lock: transaction
@@ -90,6 +96,10 @@ async function findByTransferKey(transferKey, transaction) {
     },
     transaction,
   });
+}
+
+async function deleteEntry(entry, transaction) {
+  return entry.destroy({ transaction });
 }
 
 async function listAccountOptions(scope) {
@@ -165,6 +175,16 @@ async function listEntries(filters = {}) {
           `),
           "totalInstallments",
         ],
+        [
+          sequelize.literal(`
+            EXISTS (
+              SELECT 1
+              FROM "bank_entries" be_reversal
+              WHERE be_reversal."reversalOfBankEntryId" = "BankEntries"."idBankEntry"
+            )
+          `),
+          "hasReversal",
+        ],
       ],
     },
     include: [
@@ -172,6 +192,11 @@ async function listEntries(filters = {}) {
         model: FinancialCategories,
         required: false,
         attributes: ["idFinancialCategory", "description"],
+      },
+      {
+        model: Sales,
+        required: false,
+        attributes: ["idSale", "status"],
       },
       {
         model: PaymentReceipts,
@@ -238,6 +263,7 @@ module.exports = {
   getEntryById,
   findReversalByOriginId,
   findByTransferKey,
+  deleteEntry,
   listAccountOptions,
   listEntries,
   summarizeEntries,

@@ -36,7 +36,17 @@ async function getSaleByIdController(req, res, next) {
   }
 }
 
+async function cancelSaleController(req, res, next) {
+  try {
+    const data = await service.cancelSale(req.params.id);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
+  cancelSaleController,
   createSaleController,
   finalizeSaleController,
   getSaleByIdController,

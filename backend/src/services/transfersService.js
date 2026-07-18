@@ -152,6 +152,61 @@ async function transferStoreCashToBank(body = {}) {
   });
 }
 
+async function transferBankToCash(body = {}) {
+  const scope = normalizeScope(body.scope || "LOJA");
+  const amount = normalizeAmount(body.amount);
+  const occurredAt = normalizeDate(body.occurredAt);
+  const description = normalizeDescription(body.description);
+  const referenceCode = normalizeReferenceCode(body.referenceCode);
+  const financialCategoryId = await getRequiredFinancialCategoryId(body.financialCategoryId);
+  const accountLabel = normalizeAccountLabel(scope, body.accountLabel);
+  const transferKey = buildTransferKey(scope);
+
+  return sequelize.transaction(async (transaction) => {
+    const bankEntry = await createBankEntry(
+      {
+        scope,
+        movementType: "OUT",
+        financialCategoryId,
+        category: "TRANSFERENCIA",
+        description,
+        accountLabel,
+        amount,
+        occurredAt,
+        sourceType: "MANUAL",
+        paymentTypeId: null,
+        referenceCode,
+        transferKey,
+      },
+      transaction,
+    );
+
+    const cashEntry = await createCashEntry(
+      {
+        scope,
+        movementType: "IN",
+        financialCategoryId,
+        category: "TRANSFERENCIA",
+        description,
+        amount,
+        occurredAt,
+        sourceType: "MANUAL",
+        paymentTypeId: null,
+        referenceCode,
+        transferKey,
+      },
+      transaction,
+    );
+
+    return {
+      message: "Transferencia do banco para o caixa registrada com sucesso.",
+      bankEntryId: bankEntry.idBankEntry,
+      cashEntryId: cashEntry.idCashEntry,
+    };
+  });
+}
+
 module.exports = {
   transferStoreCashToBank,
+  transferBankToCash,
 };

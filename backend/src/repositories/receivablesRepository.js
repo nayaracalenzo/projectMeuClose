@@ -138,7 +138,7 @@ function buildStatusWhere(status, currentWhere = {}) {
   switch (status) {
     case "A_RECEBER":
       where.status = {
-        [Op.ne]: "PAID",
+        [Op.notIn]: ["PAID", "CANCELLED"],
       };
       break;
     case "RECEBIDAS":
@@ -146,14 +146,14 @@ function buildStatusWhere(status, currentWhere = {}) {
       break;
     case "ATRASADAS":
       where.status = {
-        [Op.ne]: "PAID",
+        [Op.notIn]: ["PAID", "CANCELLED"],
       };
       dueDate[Op.lt] = today;
       where.dueDate = dueDate;
       break;
     case "VENCE_HOJE":
       where.status = {
-        [Op.ne]: "PAID",
+        [Op.notIn]: ["PAID", "CANCELLED"],
       };
       dueDate[Op.gte] = today;
       dueDate[Op.lte] = endOfToday;
@@ -161,7 +161,7 @@ function buildStatusWhere(status, currentWhere = {}) {
       break;
     case "A_VENCER":
       where.status = {
-        [Op.ne]: "PAID",
+        [Op.notIn]: ["PAID", "CANCELLED"],
       };
       dueDate[Op.gt] = endOfToday;
       where.dueDate = dueDate;
@@ -318,6 +318,7 @@ async function summarizeInstallments({ startDate, endDate, search, status, custo
             sequelize.literal(`
               CASE
                 WHEN "ReceivableInstallments"."status" = 'PAID' THEN 0
+                WHEN "ReceivableInstallments"."status" = 'CANCELLED' THEN 0
                 ELSE "ReceivableInstallments"."amount" - "ReceivableInstallments"."paidAmount"
               END
             `),
@@ -337,12 +338,16 @@ async function summarizeInstallments({ startDate, endDate, search, status, custo
 }
 
 async function listStandaloneReceipts({ startDate, endDate, search, customerId } = {}) {
-  const saleWhere =
-    customerId && Number(customerId) > 0
+  const saleWhere = {
+    ...(customerId && Number(customerId) > 0
       ? {
           customerId: Number(customerId),
         }
-      : undefined;
+      : {}),
+    status: {
+      [Op.ne]: "CANCELLED",
+    },
+  };
 
   return PaymentReceipts.findAll({
     where: buildStandaloneReceiptsWhere({ startDate, endDate, search }),
@@ -369,12 +374,16 @@ async function listStandaloneReceipts({ startDate, endDate, search, customerId }
 }
 
 async function summarizeStandaloneReceipts({ startDate, endDate, search, customerId } = {}) {
-  const saleWhere =
-    customerId && Number(customerId) > 0
+  const saleWhere = {
+    ...(customerId && Number(customerId) > 0
       ? {
           customerId: Number(customerId),
         }
-      : undefined;
+      : {}),
+    status: {
+      [Op.ne]: "CANCELLED",
+    },
+  };
 
   const [totals] = await PaymentReceipts.findAll({
     where: buildStandaloneReceiptsWhere({ startDate, endDate, search }),

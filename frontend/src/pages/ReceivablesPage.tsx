@@ -82,6 +82,7 @@ const getReceivableOriginName = (row: ReceivableRow) =>
   row.originName || row.supplierName || row.operatorLabel || row.customerName;
 
 const renderStatus = (row: ReceivableRow) => {
+  if (row.status === "CANCELLED") return "Cancelada";
   if (row.filter === "RECEBIDAS") return "Recebida";
   if (row.filter === "VENCE_HOJE") return "Vence hoje";
   if (row.filter === "A_VENCER") return "A vencer";

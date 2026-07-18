@@ -933,6 +933,36 @@ async function finalizeSaleFromScratch(body = {}) {
   });
 }
 
+async function cancelSale(id) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const sale = await repository.getSaleById(normalizedId);
+
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  if (resolveSaleStatus(sale) === "CANCELLED") {
+    throw createSalesValidationError("A venda ja esta cancelada.");
+  }
+
+  const cancelled = await repository.cancelSale(normalizedId);
+
+  if (!cancelled) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  return {
+    id: cancelled.idSale,
+    status: "CANCELLED",
+    message: "Venda cancelada com sucesso.",
+  };
+}
+
 async function getSaleById(id) {
   const normalizedId = Number(id);
 
@@ -981,6 +1011,7 @@ module.exports = {
   createSalesValidationError,
   createSale,
   createQuote,
+  cancelSale,
   finalizeSale,
   getSaleById,
   listSales,
