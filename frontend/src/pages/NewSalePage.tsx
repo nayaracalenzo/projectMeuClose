@@ -502,6 +502,17 @@ export default function NewSalePage() {
       selectedPaymentType.financialFlow === "IMMEDIATE_CASH",
     [selectedPaymentType],
   );
+  const immediateReceiptDestinationLabel = useMemo(() => {
+    if (!selectedPaymentType || selectedPaymentType.financialFlow !== "IMMEDIATE_CASH") {
+      return "";
+    }
+
+    if (selectedPaymentType.kind === "CASH") {
+      return "Recebimento imediato no caixa.";
+    }
+
+    return "Recebimento imediato no banco.";
+  }, [selectedPaymentType]);
   const entryPaymentTypeOptions = useMemo(
     () => paymentTypes.filter((item) => item.id === 1 || item.id === 2),
     [paymentTypes],
@@ -1812,7 +1823,7 @@ export default function NewSalePage() {
                           Destino do recebimento
                         </label>
                         <input
-                          value="Recebimento imediato no caixa."
+                          value={immediateReceiptDestinationLabel}
                           disabled
                           className={paymentReadonlyFieldClassName}
                         />
@@ -2034,7 +2045,7 @@ export default function NewSalePage() {
                       onClick={handleFinalizeQuote}
                       disabled={!canSaveSale}
                     >
-                      {isSaving ? "Concluindo..." : "Gerar pedido"}
+                      {isSaving ? "Concluindo..." : "Gerar venda"}
                     </Button>
                   </div>
                 </div>

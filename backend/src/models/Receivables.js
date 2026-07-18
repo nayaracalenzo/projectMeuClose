@@ -38,7 +38,7 @@ const ReceivablesSchema = (sequelize, DataTypes) => {
         allowNull: false,
       },
       status: {
-        type: DataTypes.ENUM("OPEN", "PARTIAL", "PAID", "OVERDUE"),
+        type: DataTypes.ENUM("OPEN", "PARTIAL", "PAID", "OVERDUE", "CANCELLED"),
         allowNull: false,
         defaultValue: "OPEN",
       },

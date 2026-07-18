@@ -18,7 +18,37 @@ async function listBankAccountOptionsController(req, res, next) {
   }
 }
 
+async function createManualBankEntryController(req, res, next) {
+  try {
+    const data = await service.createManualEntry(req.body);
+    return res.status(201).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function reverseBankEntryController(req, res, next) {
+  try {
+    const data = await service.reverseEntry(req.params.idBankEntry, req.user, req.body);
+    return res.status(201).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function deleteBankEntryController(req, res, next) {
+  try {
+    const data = await service.deleteEntry(req.params.idBankEntry, req.user, req.body);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listBankEntriesController,
   listBankAccountOptionsController,
+  createManualBankEntryController,
+  reverseBankEntryController,
+  deleteBankEntryController,
 };

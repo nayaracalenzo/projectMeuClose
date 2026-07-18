@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/Button";
-import { getRequest } from "../services/request";
+import CustomerModal from "../components/CustomerModal";
+import NoticeToast from "../components/NoticeToast";
+import { getRequest, postRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 
@@ -107,6 +109,19 @@ type SaleDetailsResponse = {
   } | null;
 };
 
+type ToastState = {
+  open: boolean;
+  tone: "success" | "warning" | "error";
+  title?: string;
+  message: string;
+};
+
+const EMPTY_TOAST: ToastState = {
+  open: false,
+  tone: "success",
+  message: "",
+};
+
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-outline-variant/35 bg-white px-4 py-3">
@@ -184,6 +199,9 @@ export default function SaleDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sale, setSale] = useState<SaleDetailsResponse | null>(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -222,6 +240,35 @@ export default function SaleDetailsPage() {
     if (!sale) return null;
     return sale.items.find((item) => isProductionItem(item)) || null;
   }, [sale]);
+
+  const canCancelSale = sale?.status !== "CANCELLED";
+
+  async function handleCancelSale() {
+    if (!sale) return;
+
+    try {
+      setCancelLoading(true);
+      await postRequest(`/sales/${sale.id}/cancel`, {});
+      const updated = (await getRequest(`/sales/${sale.id}`)) as SaleDetailsResponse;
+      setSale(updated);
+      setCancelModalOpen(false);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Venda cancelada",
+        message: "A venda foi cancelada e os itens de producao vinculados foram marcados como cancelados.",
+      });
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel cancelar",
+        message: getUserFacingApiErrorMessage(err, "Nao foi possivel cancelar a venda."),
+      });
+    } finally {
+      setCancelLoading(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -269,6 +316,11 @@ export default function SaleDetailsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {canCancelSale ? (
+              <Button variant="secondary" onClick={() => setCancelModalOpen(true)}>
+                Cancelar venda
+              </Button>
+            ) : null}
             {sale.status === "BUDGET" ? (
               <Button
                 variant="primary"
@@ -476,6 +528,50 @@ export default function SaleDetailsPage() {
           </section>
         </div>
       </div>
+
+      <CustomerModal
+        open={cancelModalOpen}
+        onClose={() => setCancelModalOpen(false)}
+        title="Cancelar venda"
+        subtitle="Confirme o cancelamento desta venda."
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-700">
+            Ao cancelar a venda, os pedidos de producao vinculados tambem serao marcados como cancelados.
+          </p>
+          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+            <p>Venda: #{sale.id}</p>
+            <p>Cliente: {sale.customer?.name || "Sem cliente"}</p>
+            <p>Status atual: {formatSaleStatus(sale.status)}</p>
+            <p>Valor final: {formatCurrency(sale.finalAmount)}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleCancelSale()}
+              isLoading={cancelLoading}
+            >
+              Confirmar cancelamento
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setCancelModalOpen(false)}
+            >
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <NoticeToast
+        open={toast.open}
+        tone={toast.tone}
+        title={toast.title}
+        message={toast.message}
+        onClose={() => setToast(EMPTY_TOAST)}
+      />
     </div>
   );
 }

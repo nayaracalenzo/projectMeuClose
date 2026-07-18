@@ -23,9 +23,9 @@ async function resolveFinancialCategoryId(payload = {}) {
 
   const normalized = normalizeLegacyCategoryText(rawCategory);
   const aliasMap = {
-    VENDA: "REC. VENDAS",
-    RECEBIMENTO: "REC. VENDAS",
-    TRANSFERENCIA: "TRANSF. CAIXA/BANCO",
+    VENDA: "RECEITAS DE VENDAS",
+    RECEBIMENTO: "RECEITAS DE VENDAS",
+    TRANSFERENCIA: "TRANSFERENCIAS ENTRE CAIXA E BANCO",
     PAGAMENTO: "DIVERSOS",
   };
 

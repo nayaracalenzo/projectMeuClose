@@ -50,6 +50,7 @@ function getInstallmentFilter(status, dueDate, paidAmount, amount) {
 
   const openBalance = Number(amount) - Number(paidAmount);
 
+  if (status === "CANCELLED") return "TODAS";
   if (status === "PAID" || openBalance <= 0) return "RECEBIDAS";
   if (normalizedDueDate.getTime() < today.getTime()) return "ATRASADAS";
   if (normalizedDueDate.getTime() === today.getTime()) return "VENCE_HOJE";
@@ -324,7 +325,7 @@ async function listInstallments({
         item.amount,
       );
       const openBalance =
-        item.status === "PAID"
+        item.status === "PAID" || item.status === "CANCELLED"
           ? 0
           : Math.max(0, Number(item.amount) - Number(item.paidAmount));
       const normalizedPaymentType = paymentType ? buildPaymentTypeResponse(paymentType) : null;

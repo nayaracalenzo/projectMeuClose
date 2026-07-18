@@ -25,6 +25,7 @@ interface CashRow {
   amountOut: number;
   balance: number;
   canReverse: boolean;
+  hasReversal?: boolean;
   sourceType: string;
 }
 
@@ -123,6 +124,7 @@ export default function Registers() {
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
+  const [reverseReason, setReverseReason] = useState("");
   const [openingBalanceInput, setOpeningBalanceInput] = useState("");
   const [countedBalanceInput, setCountedBalanceInput] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
@@ -282,6 +284,7 @@ export default function Registers() {
   };
 
   const resetReverseModal = () => {
+    setReverseReason("");
     setReverseModalOpen(false);
   };
 
@@ -418,7 +421,9 @@ export default function Registers() {
 
     try {
       setSessionActionLoading(true);
-      await postRequest(`/cash/${selectedRow.id}/reverse`, {});
+      await postRequest(`/cash/${selectedRow.id}/reverse`, {
+        reason: reverseReason.trim(),
+      });
       resetReverseModal();
       await refreshData();
       setToast({
@@ -440,6 +445,12 @@ export default function Registers() {
   }
 
   const handleSelectRow = (rowId: number) => {
+    const row = rows.find((item) => item.id === rowId);
+
+    if (!row?.canReverse) {
+      return;
+    }
+
     setSelectedRowId((current) => (current === rowId ? null : rowId));
   };
 
@@ -703,6 +714,7 @@ export default function Registers() {
                       checked={selectedRowId === row.id}
                       onChange={() => handleSelectRow(row.id)}
                       onClick={(event) => event.stopPropagation()}
+                      disabled={!row.canReverse}
                       aria-label={`Selecionar lancamento de caixa ${row.description}`}
                       className="h-4 w-4 cursor-pointer rounded border border-outline-variant/60 accent-primary"
                     />
@@ -753,7 +765,13 @@ export default function Registers() {
         ) : (
           rows.map((row) => (
             <div key={row.id} className="px-4 py-4">
-              <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
+              <button
+                type="button"
+                onClick={() => handleSelectRow(row.id)}
+                disabled={!row.canReverse}
+                className="block w-full text-left disabled:cursor-default disabled:opacity-100"
+              >
+                <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
               <p className="text-xs uppercase text-neutral-700">
                 Parcela: {row.parcela || "-"}
               </p>
@@ -774,6 +792,7 @@ export default function Registers() {
               <p className="mt-1 text-sm font-semibold text-primary">
                 Saldo: {formatCurrency(row.balance)}
               </p>
+              </button>
             </div>
           ))
         )}
@@ -1037,11 +1056,22 @@ export default function Registers() {
             </div>
           ) : null}
 
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">Motivo</label>
+            <textarea
+              value={reverseReason}
+              onChange={(e) => setReverseReason(e.target.value)}
+              className="min-h-24 w-full rounded border border-outline-variant/50 bg-white px-4 py-3 text-[15px] text-primary"
+            />
+          </div>
+
           <div className="flex gap-2">
             <button
               type="button"
               onClick={handleReverseEntry}
-              disabled={sessionActionLoading || !selectedRow?.canReverse}
+              disabled={
+                sessionActionLoading || !selectedRow?.canReverse || !reverseReason.trim()
+              }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {sessionActionLoading ? "Extornando..." : "Confirmar extorno"}

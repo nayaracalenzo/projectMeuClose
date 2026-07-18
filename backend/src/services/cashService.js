@@ -124,6 +124,34 @@ function buildAuditHistory(kind, scope, entry, occurredAt) {
   } em ${dateLabel}, valor ${amount}, descricao ${entry.description}.`;
 }
 
+function isCancelledSaleEntry(entry) {
+  return entry?.sourceType === "SALE_RECEIPT" && entry?.Sale?.status === "CANCELLED";
+}
+
+function hasEntryReversal(entry) {
+  return (
+    Boolean(entry?.reversalOfCashEntryId) ||
+    Boolean(entry?.get?.("hasReversal")) ||
+    Boolean(entry?.hasReversal)
+  );
+}
+
+function isReversalDescription(entry) {
+  return String(entry?.description || "").trim().toUpperCase().startsWith("ESTORNO - ");
+}
+
+function canReverseEntry(entry) {
+  if (!entry || hasEntryReversal(entry) || isReversalDescription(entry)) {
+    return false;
+  }
+
+  if (entry.sourceType === "MANUAL") {
+    return true;
+  }
+
+  return isCancelledSaleEntry(entry);
+}
+
 async function getRequiredFinancialCategoryId(rawFinancialCategoryId) {
   const normalized = Number(rawFinancialCategoryId);
 
@@ -185,10 +213,8 @@ async function listEntries(query = {}) {
       sourceType: item.sourceType,
       transferKey: item.transferKey || null,
       reversalOfCashEntryId: item.reversalOfCashEntryId || null,
-      canReverse:
-        item.sourceType === "MANUAL" &&
-        !item.reversalOfCashEntryId &&
-        !String(item.description || "").trim().toUpperCase().startsWith("ESTORNO - "),
+      hasReversal: Boolean(item.get?.("hasReversal") || item.hasReversal),
+      canReverse: canReverseEntry(item),
     })),
     total: Number(result.count || 0),
     page,
@@ -228,13 +254,14 @@ async function createManualEntry(body = {}) {
   };
 }
 
-async function reverseEntry(idCashEntry, user) {
+async function reverseEntry(idCashEntry, user, body = {}) {
   const normalizedId = Number(idCashEntry);
 
   if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
     throw createCashValidationError("Lancamento de caixa invalido.");
   }
 
+  const reason = normalizeDescription(body.reason, "Motivo");
   const userId = normalizeUserId(user);
   const occurredAt = new Date();
 
@@ -245,14 +272,10 @@ async function reverseEntry(idCashEntry, user) {
       throw notFoundError("Lancamento de caixa nao encontrado.");
     }
 
-    if (entry.sourceType !== "MANUAL") {
+    if (!canReverseEntry(entry)) {
       throw createCashValidationError(
-        "Somente lancamentos manuais ou transferencias manuais podem ser extornados.",
+        "Somente lancamentos manuais, transferencias manuais ou vendas canceladas podem ser extornados uma unica vez.",
       );
-    }
-
-    if (entry.reversalOfCashEntryId) {
-      throw createCashValidationError("Nao e possivel extornar um lancamento de extorno.");
     }
 
     const existingReversal = await repository.findReversalByOriginId(normalizedId, transaction);
@@ -288,6 +311,7 @@ async function reverseEntry(idCashEntry, user) {
         userId,
         occurredAt,
         history: buildAuditHistory("EXTORNO", entry.scope, entry, occurredAt),
+        reason,
       },
       transaction,
     );
@@ -332,6 +356,7 @@ async function reverseEntry(idCashEntry, user) {
               ).format(occurredAt)}, valor ${Number(relatedBankEntry.amount || 0).toFixed(
                 2,
               )}, descricao ${relatedBankEntry.description}.`,
+              reason,
             },
             transaction,
           );

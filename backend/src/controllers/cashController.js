@@ -20,7 +20,7 @@ async function createManualCashEntryController(req, res, next) {
 
 async function reverseCashEntryController(req, res, next) {
   try {
-    const data = await service.reverseEntry(req.params.idCashEntry, req.user);
+    const data = await service.reverseEntry(req.params.idCashEntry, req.user, req.body);
     return res.status(201).json(data);
   } catch (error) {
     return next(error);
