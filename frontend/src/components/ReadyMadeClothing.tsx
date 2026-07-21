@@ -38,6 +38,7 @@ export interface ReadyMadeSummaryItem {
 }
 
 interface ReadyMadeClothingProps {
+  initialProducts?: ReadyMadeProductDraft[];
   onSummaryChange?: (items: ReadyMadeSummaryItem[]) => void;
   onProductsChange?: (items: ReadyMadeProductDraft[]) => void;
 }
@@ -49,6 +50,7 @@ type NoticeState = {
 };
 
 export default function ReadyMadeClothing({
+  initialProducts,
   onSummaryChange,
   onProductsChange,
 }: ReadyMadeClothingProps) {
@@ -59,17 +61,20 @@ export default function ReadyMadeClothing({
   const [quickCreateError, setQuickCreateError] = useState("");
   const [quickCreateSubmitting, setQuickCreateSubmitting] = useState(false);
   const [notice, setNotice] = useState<NoticeState | null>(null);
-  const [products, setProducts] = useState<ReadyMadeProduct[]>([
-    {
-      id: 1,
-      name: "",
-      size: "",
-      quantity: "1",
-      price: "",
-      materialCost: "",
-      discountPercent: "",
-    },
-  ]);
+  const buildEmptyProduct = (id: number): ReadyMadeProduct => ({
+    id,
+    name: "",
+    size: "",
+    quantity: "1",
+    price: "",
+    materialCost: "",
+    discountPercent: "",
+  });
+  const [products, setProducts] = useState<ReadyMadeProduct[]>(
+    initialProducts?.length
+      ? initialProducts.map((product, index) => ({ ...product, id: product.id || index + 1 }))
+      : [buildEmptyProduct(1)],
+  );
 
   const fieldClassName =
     "h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";

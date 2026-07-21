@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
-import { deleteRequest, getRequest, postRequest, updateRequest } from "../services/request";
+import {
+  deleteRequest,
+  getRequest,
+  postRequest,
+  updateRequest,
+} from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
-import { formatCurrency, formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
+import {
+  formatCurrency,
+  formatCurrencyInput,
+  parseCurrencyToNumber,
+} from "../utils/currency";
 
 type ReceivableFilter =
   | "A_RECEBER"
@@ -138,7 +147,9 @@ export default function ReceivablesPage() {
   const [message, setMessage] = useState("");
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [receivableFormOpen, setReceivableFormOpen] = useState(false);
-  const [receivableFormMode, setReceivableFormMode] = useState<"create" | "edit">("create");
+  const [receivableFormMode, setReceivableFormMode] = useState<
+    "create" | "edit"
+  >("create");
   const [quitModalOpen, setQuitModalOpen] = useState(false);
   const [formCustomerId, setFormCustomerId] = useState("");
   const [formPaymentTypeId, setFormPaymentTypeId] = useState("");
@@ -146,13 +157,17 @@ export default function ReceivablesPage() {
   const [formDueDate, setFormDueDate] = useState(() => toIsoDate(new Date()));
   const [receiptPaymentTypeId, setReceiptPaymentTypeId] = useState("");
   const [receiptAmount, setReceiptAmount] = useState("");
-  const [receiptPaidAt, setReceiptPaidAt] = useState(() => toIsoDate(new Date()));
+  const [receiptPaidAt, setReceiptPaidAt] = useState(() =>
+    toIsoDate(new Date()),
+  );
   const [receiptReferenceCode, setReceiptReferenceCode] = useState("");
   const [discardInterest, setDiscardInterest] = useState(false);
   const [receiptConfirmOpen, setReceiptConfirmOpen] = useState(false);
   const [reverseReceiptModalOpen, setReverseReceiptModalOpen] = useState(false);
   const [reverseReceiptReason, setReverseReceiptReason] = useState("");
-  const [reverseReceiptOptions, setReverseReceiptOptions] = useState<InstallmentReceiptOption[]>([]);
+  const [reverseReceiptOptions, setReverseReceiptOptions] = useState<
+    InstallmentReceiptOption[]
+  >([]);
   const [reverseReceiptId, setReverseReceiptId] = useState("");
 
   useEffect(() => {
@@ -204,7 +219,9 @@ export default function ReceivablesPage() {
   useEffect(() => {
     const fetchPaymentTypes = async () => {
       try {
-        const data = (await getRequest("/payment-types")) as PaymentTypeOption[];
+        const data = (await getRequest(
+          "/payment-types",
+        )) as PaymentTypeOption[];
         setPaymentTypes(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error("Erro ao buscar formas de pagamento", error);
@@ -217,7 +234,9 @@ export default function ReceivablesPage() {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const data = (await getRequest("/clients?page=1&pageSize=100&status=ativo")) as {
+        const data = (await getRequest(
+          "/clients?page=1&pageSize=100&status=ativo",
+        )) as {
           items?: Array<{
             id: number;
             fullName?: string | null;
@@ -251,27 +270,32 @@ export default function ReceivablesPage() {
   const selectedRow = rows.find((row) => row.id === selectedRowId) || null;
   const canManageSelectedRow = Boolean(
     selectedRow &&
-      selectedRow.id > 0 &&
-      !selectedRow.saleId &&
-      selectedRow.paidAmount <= 0 &&
-      selectedRow.openAmount === selectedRow.amount,
+    selectedRow.id > 0 &&
+    !selectedRow.saleId &&
+    selectedRow.paidAmount <= 0 &&
+    selectedRow.openAmount === selectedRow.amount,
   );
   const canReverseSelectedReceipt = Boolean(
     selectedRow &&
-      selectedRow.id > 0 &&
-      selectedRow.saleId &&
-      selectedRow.paidAmount > 0,
+    selectedRow.id > 0 &&
+    selectedRow.saleId &&
+    selectedRow.paidAmount > 0,
   );
 
   const overdueDays = useMemo(() => {
     if (!selectedRow) return 0;
-    return calculateOverdueDays(selectedRow.interestBaseDate || selectedRow.dueDate, receiptPaidAt);
+    return calculateOverdueDays(
+      selectedRow.interestBaseDate || selectedRow.dueDate,
+      receiptPaidAt,
+    );
   }, [receiptPaidAt, selectedRow]);
 
   const currentInterest = useMemo(() => {
     if (!selectedRow || discardInterest || overdueDays <= 0) return 0;
     const dailyRate = MONTHLY_INTEREST_RATE / 30;
-    return Number((selectedRow.openAmount * dailyRate * overdueDays).toFixed(2));
+    return Number(
+      (selectedRow.openAmount * dailyRate * overdueDays).toFixed(2),
+    );
   }, [discardInterest, overdueDays, selectedRow]);
 
   const amountDue = useMemo(() => {
@@ -291,7 +315,9 @@ export default function ReceivablesPage() {
 
   const principalRemainingAfterPayment = useMemo(() => {
     if (!selectedRow) return 0;
-    return Number(Math.max(selectedRow.openAmount - settledAmount, 0).toFixed(2));
+    return Number(
+      Math.max(selectedRow.openAmount - settledAmount, 0).toFixed(2),
+    );
   }, [selectedRow, settledAmount]);
 
   const handleSelectRow = (rowId: number) => {
@@ -319,8 +345,12 @@ export default function ReceivablesPage() {
     if (!selectedRow || !canManageSelectedRow) return;
 
     setReceivableFormMode("edit");
-    setFormCustomerId(selectedRow.customerId ? String(selectedRow.customerId) : "");
-    setFormPaymentTypeId(selectedRow.paymentTypeId ? String(selectedRow.paymentTypeId) : "");
+    setFormCustomerId(
+      selectedRow.customerId ? String(selectedRow.customerId) : "",
+    );
+    setFormPaymentTypeId(
+      selectedRow.paymentTypeId ? String(selectedRow.paymentTypeId) : "",
+    );
     setFormAmount(String(selectedRow.amount.toFixed(2)));
     setFormDueDate(selectedRow.dueDate.slice(0, 10));
     setReceivableFormOpen(true);
@@ -362,8 +392,8 @@ export default function ReceivablesPage() {
         getUserFacingApiErrorMessage(
           error,
           receivableFormMode === "create"
-            ? "NÃ£o foi possÃ­vel criar a conta a receber."
-            : "NÃ£o foi possÃ­vel alterar a conta a receber.",
+            ? "Não foi possÃ­vel criar a conta a receber."
+            : "Não foi possÃ­vel alterar a conta a receber.",
         ),
       );
     }
@@ -372,7 +402,9 @@ export default function ReceivablesPage() {
   const handleDeleteReceivable = async () => {
     if (!selectedRow || !canManageSelectedRow) return;
 
-    const confirmed = window.confirm("Deseja realmente excluir esta conta a receber?");
+    const confirmed = window.confirm(
+      "Deseja realmente excluir esta conta a receber?",
+    );
     if (!confirmed) return;
 
     try {
@@ -384,7 +416,10 @@ export default function ReceivablesPage() {
       await fetchRows();
     } catch (error: unknown) {
       setMessage(
-        getUserFacingApiErrorMessage(error, "NÃ£o foi possÃ­vel excluir a conta a receber."),
+        getUserFacingApiErrorMessage(
+          error,
+          "Não foi possÃ­vel excluir a conta a receber.",
+        ),
       );
     }
   };
@@ -393,7 +428,9 @@ export default function ReceivablesPage() {
     if (!selectedRow) return;
 
     const today = toIsoDate(new Date());
-    setReceiptPaymentTypeId(selectedRow.paymentTypeId ? String(selectedRow.paymentTypeId) : "");
+    setReceiptPaymentTypeId(
+      selectedRow.paymentTypeId ? String(selectedRow.paymentTypeId) : "",
+    );
     setReceiptPaidAt(today);
     setDiscardInterest(false);
     setReceiptAmount("");
@@ -406,10 +443,13 @@ export default function ReceivablesPage() {
     if (!selectedRow || !canReverseSelectedReceipt) return;
 
     try {
-      await postRequest(`/receivables/${selectedRow.id}/reverse-latest-receipt`, {
-        reason: reverseReceiptReason.trim(),
-        paymentReceiptId: reverseReceiptId ? Number(reverseReceiptId) : null,
-      });
+      await postRequest(
+        `/receivables/${selectedRow.id}/reverse-latest-receipt`,
+        {
+          reason: reverseReceiptReason.trim(),
+          paymentReceiptId: reverseReceiptId ? Number(reverseReceiptId) : null,
+        },
+      );
       setMessage("Baixa ajustada com sucesso.");
       setReverseReceiptModalOpen(false);
       setReverseReceiptReason("");
@@ -419,7 +459,10 @@ export default function ReceivablesPage() {
       await fetchRows();
     } catch (error: unknown) {
       setMessage(
-        getUserFacingApiErrorMessage(error, "Nao foi possivel ajustar a baixa do recebimento."),
+        getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel ajustar a baixa do recebimento.",
+        ),
       );
     }
   };
@@ -438,7 +481,9 @@ export default function ReceivablesPage() {
     if (!selectedRow || !canReverseSelectedReceipt) return;
 
     try {
-      const data = (await getRequest(`/receivables/${selectedRow.id}/receipts`)) as {
+      const data = (await getRequest(
+        `/receivables/${selectedRow.id}/receipts`,
+      )) as {
         receipts?: InstallmentReceiptOption[];
       };
       const receipts = Array.isArray(data?.receipts) ? data.receipts : [];
@@ -448,7 +493,10 @@ export default function ReceivablesPage() {
       setReverseReceiptModalOpen(true);
     } catch (error: unknown) {
       setMessage(
-        getUserFacingApiErrorMessage(error, "Nao foi possivel carregar os recebimentos da parcela."),
+        getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel carregar os recebimentos da parcela.",
+        ),
       );
     }
   };
@@ -491,7 +539,10 @@ export default function ReceivablesPage() {
       await fetchRows();
     } catch (error: unknown) {
       setMessage(
-        getUserFacingApiErrorMessage(error, "Não foi possível quitar o recebimento."),
+        getUserFacingApiErrorMessage(
+          error,
+          "Não foi possível quitar o recebimento.",
+        ),
       );
     }
   };
@@ -505,7 +556,9 @@ export default function ReceivablesPage() {
       {receivableFormOpen ? (
         <div className="mb-5 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Cliente</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Cliente
+            </label>
             <select
               value={formCustomerId}
               onChange={(e) => setFormCustomerId(e.target.value)}
@@ -537,7 +590,9 @@ export default function ReceivablesPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Valor</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Valor
+            </label>
             <input
               type="number"
               min="0.01"
@@ -548,7 +603,9 @@ export default function ReceivablesPage() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Vencimento</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Vencimento
+            </label>
             <input
               type="date"
               value={formDueDate}
@@ -562,7 +619,9 @@ export default function ReceivablesPage() {
               onClick={handleSubmitReceivable}
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
             >
-              {receivableFormMode === "create" ? "Gravar conta a receber" : "Salvar alteraÃ§Ã£o"}
+              {receivableFormMode === "create"
+                ? "Gravar conta a receber"
+                : "Salvar alteraÃ§ão"}
             </button>
             <button
               type="button"
@@ -608,7 +667,9 @@ export default function ReceivablesPage() {
 
         <div className="flex flex-col gap-3 md:flex-row">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">De</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              De
+            </label>
             <input
               type="date"
               value={startDate}
@@ -618,7 +679,9 @@ export default function ReceivablesPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Até</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Até
+            </label>
             <input
               type="date"
               value={endDate}
@@ -646,16 +709,32 @@ export default function ReceivablesPage() {
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
-          {loading ? "Carregando recebimentos..." : `${totalRows} recebimento(s) encontrado(s).`}
+          {loading
+            ? "Carregando recebimentos..."
+            : `${totalRows} recebimento(s) encontrado(s).`}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" onClick={handleOpenCreateReceivable}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleOpenCreateReceivable}
+          >
             Incluir
           </Button>
-          <Button variant="secondary" size="sm" onClick={handleOpenEditReceivable} disabled={!canManageSelectedRow}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleOpenEditReceivable}
+            disabled={!canManageSelectedRow}
+          >
             Alterar
           </Button>
-          <Button variant="secondary" size="sm" onClick={handleDeleteReceivable} disabled={!canManageSelectedRow}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleDeleteReceivable}
+            disabled={!canManageSelectedRow}
+          >
             Excluir
           </Button>
           <Button
@@ -677,20 +756,30 @@ export default function ReceivablesPage() {
         </div>
       </div>
 
-      {message ? <p className="mb-4 text-sm text-neutral-700">{message}</p> : null}
+      {message ? (
+        <p className="mb-4 text-sm text-neutral-700">{message}</p>
+      ) : null}
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Origem</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Parcela</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Origem
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Parcela
+              </th>
               <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
                 Vencimento
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Status</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Forma</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Status
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Forma
+              </th>
               <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
                 Valor
               </th>
@@ -739,11 +828,15 @@ export default function ReceivablesPage() {
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {getReceivableOriginName(row)}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.parcela}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.parcela}
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(row.dueDate)}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{renderStatus(row)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {renderStatus(row)}
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {row.paymentTypeName || "-"}
                   </td>
@@ -779,7 +872,9 @@ export default function ReceivablesPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
             disabled={loading || page >= totalPages}
           >
             Próxima
@@ -811,7 +906,9 @@ export default function ReceivablesPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-primary">Conta</label>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Conta
+                  </label>
                   <input
                     value="VENDA"
                     readOnly
@@ -829,7 +926,9 @@ export default function ReceivablesPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-primary">Nr. doc.</label>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Nr. doc.
+                  </label>
                   <input
                     value={selectedRow.parcela}
                     readOnly
@@ -837,7 +936,9 @@ export default function ReceivablesPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-primary">Cliente</label>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Cliente
+                  </label>
                   <input
                     value={getReceivableOriginName(selectedRow)}
                     readOnly
@@ -865,7 +966,9 @@ export default function ReceivablesPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-primary">Valor</label>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Valor
+                  </label>
                   <input
                     value={formatCurrency(selectedRow.openAmount)}
                     readOnly
@@ -893,7 +996,8 @@ export default function ReceivablesPage() {
                 </div>
                 <div className="flex items-end">
                   <p className="text-sm text-[#9F1D1D]">
-                    Dias de atraso: <span className="font-semibold">{overdueDays}</span>
+                    Dias de atraso:{" "}
+                    <span className="font-semibold">{overdueDays}</span>
                   </p>
                 </div>
                 <div>
@@ -938,13 +1042,17 @@ export default function ReceivablesPage() {
                   </label>
                   <input
                     value={receiptAmount}
-                    onChange={(e) => setReceiptAmount(formatCurrencyInput(e.target.value))}
+                    onChange={(e) =>
+                      setReceiptAmount(formatCurrencyInput(e.target.value))
+                    }
                     placeholder="R$ 0,00"
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] font-semibold text-primary"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-semibold text-primary">Troco</label>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Troco
+                  </label>
                   <input
                     value={formatCurrency(changeAmount)}
                     readOnly
@@ -1038,11 +1146,7 @@ export default function ReceivablesPage() {
               >
                 Confirmar
               </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={resetQuitFlow}
-              >
+              <Button variant="secondary" size="sm" onClick={resetQuitFlow}>
                 Cancelar
               </Button>
             </div>

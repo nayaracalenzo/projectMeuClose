@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
-import { getRequest, postRequest } from "../services/request";
+import { deleteRequest, getRequest, postRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 
@@ -209,7 +209,7 @@ function formatReceiptType(receiptType: SaleReceipt["receiptType"]) {
 
 function formatSaleStatus(value?: string | null) {
   const normalized = String(value || "").trim().toUpperCase();
-  if (normalized === "BUDGET") return "Orcamento";
+  if (normalized === "BUDGET") return "Orçamento";
   if (normalized === "COMPLETED") return "Concluido";
   if (normalized === "CANCELLED") return "Cancelado";
   return value || "-";
@@ -239,6 +239,8 @@ export default function SaleDetailsPage() {
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [discardModalOpen, setDiscardModalOpen] = useState(false);
+  const [discardLoading, setDiscardLoading] = useState(false);
   const [cancelItemModalOpen, setCancelItemModalOpen] = useState(false);
   const [cancelItemLoading, setCancelItemLoading] = useState(false);
   const [cancelItemReason, setCancelItemReason] = useState("");
@@ -339,6 +341,7 @@ export default function SaleDetailsPage() {
       sale.receivable.originType === "CUSTOMER" &&
       sale.status !== "CANCELLED",
   );
+  const isBudgetSale = sale?.status === "BUDGET";
 
   async function refreshSale() {
     const data = (await getRequest(`/sales/${id}`)) as SaleDetailsResponse;
@@ -374,6 +377,32 @@ export default function SaleDetailsPage() {
       });
     } finally {
       setCancelLoading(false);
+    }
+  }
+
+  async function handleDiscardQuote() {
+    if (!sale || sale.status !== "BUDGET") return;
+
+    try {
+      setDiscardLoading(true);
+      await deleteRequest(`/sales/${sale.id}`, {});
+      setDiscardModalOpen(false);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Orçamento descartado",
+        message: "O orçamento foi descartado com sucesso.",
+      });
+      navigate("/vendas?tab=budgets");
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel descartar",
+        message: getUserFacingApiErrorMessage(err, "Nao foi possivel descartar o orçamento."),
+      });
+    } finally {
+      setDiscardLoading(false);
     }
   }
 
@@ -491,14 +520,36 @@ export default function SaleDetailsPage() {
             >
               Voltar para vendas
             </button>
-            <h1 className="font-editorial text-5xl text-primary md:text-4xl">Detalhes da Venda</h1>
+            <h1 className="font-editorial text-5xl text-primary md:text-4xl">
+              {isBudgetSale ? "Detalhes do Orçamento" : "Detalhes da Venda"}
+            </h1>
             <p className="mt-2 text-sm text-neutral-700">
-              Visualize os itens, recebimentos e parcelas vinculadas a esta venda.
+              {isBudgetSale
+                ? "Visualize os itens e dados vinculados a este orçamento."
+                : "Visualize os itens, recebimentos e parcelas vinculadas a esta venda."}
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {canCancelSale ? (
+            {isBudgetSale ? (
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/nova-venda?quoteId=${sale.id}&mode=edit`)}
+              >
+                Editar orçamento
+              </Button>
+            ) : null}
+            {isBudgetSale ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setDiscardModalOpen(true);
+                }}
+              >
+                Descartar orçamento
+              </Button>
+            ) : null}
+            {!isBudgetSale && canCancelSale ? (
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -509,8 +560,11 @@ export default function SaleDetailsPage() {
                 Cancelar venda
               </Button>
             ) : null}
-            {sale.status === "BUDGET" ? (
-              <Button variant="primary" onClick={() => navigate(`/nova-venda?quoteId=${sale.id}`)}>
+            {isBudgetSale ? (
+              <Button
+                variant="primary"
+                onClick={() => navigate(`/nova-venda?quoteId=${sale.id}&mode=finalize`)}
+              >
                 Finalizar venda
               </Button>
             ) : null}
@@ -533,21 +587,12 @@ export default function SaleDetailsPage() {
                 Renegociar pagamento
               </Button>
             ) : null}
-            {firstProductionItem?.productId ? (
+            {!isBudgetSale && firstProductionItem?.productId ? (
               <Button variant="secondary" onClick={() => navigate(`/pedido/${firstProductionItem.productId}`)}>
                 Abrir pedido de producao
               </Button>
             ) : null}
           </div>
-        </div>
-
-        <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <InfoCard label="Venda" value={`#${sale.id}`} />
-          <InfoCard label="Cliente" value={sale.customer?.name || "Sem cliente"} />
-          <InfoCard label="Status" value={formatSaleStatus(sale.status)} />
-          <InfoCard label="Forma principal" value={sale.paymentType?.name || "-"} />
-          <InfoCard label="Valor final" value={formatCurrency(sale.finalAmount)} />
-          <InfoCard label="Recebido" value={formatCurrency(totalReceived)} />
         </div>
 
         {sale.customerCreditAmount && sale.customerCreditAmount > 0 ? (
@@ -566,6 +611,11 @@ export default function SaleDetailsPage() {
           <h2 className="font-editorial text-3xl text-primary">Resumo</h2>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <InfoCard label="Venda" value={`#${sale.id}`} />
+            <InfoCard label="Cliente" value={sale.customer?.name || "Sem cliente"} />
+            <InfoCard label="Status" value={formatSaleStatus(sale.status)} />
+            <InfoCard label="Valor final" value={formatCurrency(sale.finalAmount)} />
+            <InfoCard label="Recebido" value={formatCurrency(totalReceived)} />
             <InfoCard label="Subtotal bruto" value={formatCurrency(sale.totalAmount)} />
             <InfoCard label="Desconto dos itens" value={formatCurrency(totalItemDiscount)} />
             <InfoCard label="Saldo em aberto" value={formatCurrency(sale.receivable?.openAmount || 0)} />
@@ -573,12 +623,13 @@ export default function SaleDetailsPage() {
             <InfoCard label="Criada em" value={formatDateTime(sale.createdAt)} />
             <InfoCard label="Atualizada em" value={formatDateTime(sale.updatedAt)} />
             <InfoCard label="Vencimento base" value={formatDate(sale.dueDate)} />
-            <InfoCard label="Medicoes" value={String(sale.measurementsCount || 0)} />
           </div>
         </section>
 
         <section className="mb-6 rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-          <h2 className="font-editorial text-3xl text-primary">Itens da Venda</h2>
+          <h2 className="font-editorial text-3xl text-primary">
+            {isBudgetSale ? "Itens do Orçamento" : "Itens da Venda"}
+          </h2>
 
           <div className="mt-5 overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-y-2 text-sm">
@@ -773,6 +824,49 @@ export default function SaleDetailsPage() {
           </section>
         </div>
       </div>
+
+      <CustomerModal
+        open={discardModalOpen}
+        onClose={() => {
+          setDiscardModalOpen(false);
+        }}
+        title="Descartar orçamento"
+        subtitle="Confirme a exclusao deste orçamento em aberto."
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-700">
+            Essa acao remove o orçamento e os itens vinculados que ainda nao possuem financeiro gerado.
+          </p>
+
+          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+            <p className="font-medium text-primary">Orçamento</p>
+            <p className="mt-2">Venda: #{sale.id}</p>
+            <p>Cliente: {sale.customer?.name || "Sem cliente"}</p>
+            <p>Status: {formatSaleStatus(sale.status)}</p>
+            <p>Valor final: {formatCurrency(sale.finalAmount)}</p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleDiscardQuote()}
+              isLoading={discardLoading}
+            >
+              Confirmar descarte
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setDiscardModalOpen(false);
+              }}
+            >
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
 
       <CustomerModal
         open={cancelModalOpen}

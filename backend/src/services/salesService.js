@@ -711,6 +711,79 @@ function normalizeMeasurementRecord(record = {}) {
   return hasAnyValue ? normalized : null;
 }
 
+async function normalizeBudgetPaymentDraft(body = {}) {
+  const hasAnyDraftValue = [
+    body.paymentTypeId,
+    body.installmentCount,
+    body.installmentIntervalDays,
+    body.dueDate,
+    body.entryAmount,
+    body.entryPaymentTypeId,
+    body.entryReferenceCode,
+    body.paymentReferenceCode,
+    body.useCustomerCredit,
+    body.customerCreditAmount,
+  ].some((value) => value !== null && value !== undefined && value !== "");
+
+  if (!hasAnyDraftValue) {
+    return null;
+  }
+
+  const paymentTypeId =
+    body.paymentTypeId === null || body.paymentTypeId === undefined || body.paymentTypeId === ""
+      ? null
+      : normalizeInteger(body.paymentTypeId, "Forma de pagamento");
+  const entryPaymentTypeId =
+    body.entryPaymentTypeId === null ||
+    body.entryPaymentTypeId === undefined ||
+    body.entryPaymentTypeId === ""
+      ? null
+      : normalizeInteger(body.entryPaymentTypeId, "Forma da entrada");
+
+  if (paymentTypeId) {
+    const paymentType = await paymentTypesRepository.getPaymentTypeById(paymentTypeId);
+    if (!paymentType) {
+      throw createSalesValidationError("Forma de pagamento invalida.");
+    }
+  }
+
+  if (entryPaymentTypeId) {
+    const entryPaymentType = await paymentTypesRepository.getPaymentTypeById(entryPaymentTypeId);
+    if (!entryPaymentType) {
+      throw createSalesValidationError("Forma da entrada invalida.");
+    }
+  }
+
+  return {
+    paymentTypeId,
+    installmentCount:
+      body.installmentCount === null || body.installmentCount === undefined || body.installmentCount === ""
+        ? null
+        : normalizeInteger(body.installmentCount, "Quantidade de parcelas"),
+    installmentIntervalDays:
+      body.installmentIntervalDays === null ||
+      body.installmentIntervalDays === undefined ||
+      body.installmentIntervalDays === ""
+        ? null
+        : normalizeInteger(body.installmentIntervalDays, "Intervalo entre parcelas"),
+    dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
+    entryAmount:
+      body.entryAmount === null || body.entryAmount === undefined || body.entryAmount === ""
+        ? null
+        : roundCurrency(normalizeDecimal(body.entryAmount, "Valor da entrada")),
+    entryPaymentTypeId,
+    entryReferenceCode: body.entryReferenceCode ? String(body.entryReferenceCode).trim() : null,
+    paymentReferenceCode: body.paymentReferenceCode ? String(body.paymentReferenceCode).trim() : null,
+    useCustomerCredit: Boolean(body.useCustomerCredit),
+    customerCreditAmount:
+      body.customerCreditAmount === null ||
+      body.customerCreditAmount === undefined ||
+      body.customerCreditAmount === ""
+        ? null
+        : roundCurrency(normalizeDecimal(body.customerCreditAmount, "Valor do credito")),
+  };
+}
+
 function normalizeSaleItem(item = {}) {
   const itemType = String(item.itemType || "").trim();
 
@@ -900,6 +973,49 @@ function mapSaleItem(item) {
   };
 }
 
+function mapMeasurementRecord(record) {
+  const mapped = {};
+
+  for (const field of MEASUREMENT_FIELDS) {
+    mapped[field] =
+      record[field] === null || record[field] === undefined ? null : Number(record[field]);
+  }
+
+  return mapped;
+}
+
+function mapBudgetPaymentDraft(draft) {
+  if (!draft) return null;
+
+  const paymentType = draft.PaymentType || draft.PaymentTypes || null;
+  const entryPaymentType = draft.EntryPaymentType || null;
+
+  return {
+    paymentTypeId: draft.paymentTypeId || null,
+    paymentTypeName: paymentType?.desc || null,
+    installmentCount:
+      draft.installmentCount === null || draft.installmentCount === undefined
+        ? null
+        : Number(draft.installmentCount),
+    installmentIntervalDays:
+      draft.installmentIntervalDays === null || draft.installmentIntervalDays === undefined
+        ? null
+        : Number(draft.installmentIntervalDays),
+    dueDate: draft.dueDate || null,
+    entryAmount:
+      draft.entryAmount === null || draft.entryAmount === undefined ? null : Number(draft.entryAmount),
+    entryPaymentTypeId: draft.entryPaymentTypeId || null,
+    entryPaymentTypeName: entryPaymentType?.desc || null,
+    entryReferenceCode: draft.entryReferenceCode || null,
+    paymentReferenceCode: draft.paymentReferenceCode || null,
+    useCustomerCredit: Boolean(draft.useCustomerCredit),
+    customerCreditAmount:
+      draft.customerCreditAmount === null || draft.customerCreditAmount === undefined
+        ? null
+        : Number(draft.customerCreditAmount),
+  };
+}
+
 function resolveSaleStatus(sale) {
   const isLegacyCompleted =
     typeof sale?.get === "function"
@@ -1028,9 +1144,13 @@ function mapSaleDetails(sale) {
   const receipts = Array.isArray(sale.PaymentReceipts)
     ? sale.PaymentReceipts.map(mapPaymentReceipt)
     : [];
-  const measurementsCount = Array.isArray(sale.CustomerMeasurements)
-    ? sale.CustomerMeasurements.length
-    : 0;
+  const measurements = Array.isArray(sale.CustomerMeasurements)
+    ? sale.CustomerMeasurements.map(mapMeasurementRecord)
+    : [];
+  const measurementsCount = measurements.length;
+  const budgetPaymentDraft = mapBudgetPaymentDraft(
+    sale.SaleBudgetPaymentDraft || sale.SaleBudgetPaymentDrafts || null,
+  );
 
   return {
     id: sale.idSale,
@@ -1067,6 +1187,8 @@ function mapSaleDetails(sale) {
     items,
     receipts,
     measurementsCount,
+    measurements,
+    paymentDraft: budgetPaymentDraft,
     netReceivedAmount: 0,
     customerCreditAmount: 0,
     receivable: receivable
@@ -1363,6 +1485,7 @@ function buildSaleResponse(created, extra = {}) {
 
 async function createQuote(body = {}) {
   const normalized = normalizeQuoteBase(body);
+  const budgetPaymentDraft = await normalizeBudgetPaymentDraft(body);
 
   const created = await repository.createSale({
     sale: {
@@ -1379,6 +1502,7 @@ async function createQuote(body = {}) {
     },
     items: normalized.items,
     customerMeasurements: normalized.customerMeasurements,
+    budgetPaymentDraft,
     entryReceipt: null,
     additionalReceipts: [],
     customerCreditUsages: [],
@@ -1398,11 +1522,11 @@ function validateEditableBudgetSale(sale) {
   }
 
   if (sale.status !== "BUDGET") {
-    throw createSalesValidationError("Somente orcamentos em aberto podem ser alterados.");
+    throw createSalesValidationError("Somente orçamentos em aberto podem ser alterados.");
   }
 
   if (sale.PaymentReceipts?.length || sale.Receivable || sale.CardTransaction || sale.CardTransactions) {
-    throw createSalesValidationError("Este orcamento ja possui registros financeiros vinculados.");
+    throw createSalesValidationError("Este orçamento ja possui registros financeiros vinculados.");
   }
 }
 
@@ -1414,6 +1538,7 @@ async function updateQuote(id, body = {}) {
   }
 
   const normalized = normalizeQuoteBase(body);
+  const budgetPaymentDraft = await normalizeBudgetPaymentDraft(body);
   const sale = await repository.getSaleForFinalization(normalizedId);
   validateEditableBudgetSale(sale);
 
@@ -1428,6 +1553,7 @@ async function updateQuote(id, body = {}) {
     },
     items: normalized.items,
     customerMeasurements: normalized.customerMeasurements,
+    budgetPaymentDraft,
   });
 
   if (!updated) {
@@ -1453,17 +1579,17 @@ async function finalizeSale(id, body = {}) {
   }
 
   if (sale.status !== "BUDGET") {
-    throw createSalesValidationError("Somente vendas em orcamento podem ser concluidas.");
+    throw createSalesValidationError("Somente vendas em orçamento podem ser concluidas.");
   }
 
   const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
 
   if (!items.length) {
-    throw createSalesValidationError("Nao foi possivel concluir um orcamento sem itens.");
+    throw createSalesValidationError("Nao foi possivel concluir um orçamento sem itens.");
   }
 
   if (sale.PaymentReceipts?.length || sale.Receivable || sale.CardTransaction || sale.CardTransactions) {
-    throw createSalesValidationError("Este orcamento ja possui registros financeiros vinculados.");
+    throw createSalesValidationError("Este orçamento ja possui registros financeiros vinculados.");
   }
 
   await ensureOpenStoreCashSessionForSaleFinalization();
@@ -2073,7 +2199,7 @@ async function deleteQuote(id) {
   return {
     id: normalizedId,
     status: "DELETED",
-    message: "Orcamento descartado com sucesso.",
+    message: "Orçamento descartado com sucesso.",
   };
 }
 

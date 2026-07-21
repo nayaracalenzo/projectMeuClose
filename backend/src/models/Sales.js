@@ -85,6 +85,9 @@ const SalesSchema = (sequelize, DataTypes) => {
     Sales.hasOne(models.CardTransactions, {
       foreignKey: "saleId",
     });
+    Sales.hasOne(models.SaleBudgetPaymentDrafts, {
+      foreignKey: "saleId",
+    });
   }
   return Sales;
 };

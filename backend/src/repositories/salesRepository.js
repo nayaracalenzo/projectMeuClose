@@ -10,6 +10,7 @@ const {
   Products,
   ReceivableInstallments,
   Receivables,
+  SaleBudgetPaymentDrafts,
   SaleItems,
   Sales,
   Status,
@@ -21,6 +22,46 @@ const { Op } = require("sequelize");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 const productsRepository = require("./productsRepository");
 const receivablesRepository = require("./receivablesRepository");
+
+let hasSaleBudgetPaymentDraftsTableCache = null;
+
+async function hasSaleBudgetPaymentDraftsTable(transaction) {
+  if (hasSaleBudgetPaymentDraftsTableCache !== null) {
+    return hasSaleBudgetPaymentDraftsTableCache;
+  }
+
+  try {
+    await sequelize.getQueryInterface().describeTable("sale_budget_payment_drafts", {
+      transaction,
+    });
+    hasSaleBudgetPaymentDraftsTableCache = true;
+  } catch (error) {
+    hasSaleBudgetPaymentDraftsTableCache = false;
+  }
+
+  return hasSaleBudgetPaymentDraftsTableCache;
+}
+
+function buildSaleBudgetPaymentDraftInclude() {
+  return {
+    model: SaleBudgetPaymentDrafts,
+    required: false,
+    include: [
+      {
+        model: PaymentTypes,
+        as: "PaymentType",
+        attributes: ["idPaymentType", "desc"],
+        required: false,
+      },
+      {
+        model: PaymentTypes,
+        as: "EntryPaymentType",
+        attributes: ["idPaymentType", "desc"],
+        required: false,
+      },
+    ],
+  };
+}
 
 function buildLegacyCompletedSignalSql() {
   return `
@@ -101,6 +142,7 @@ async function createSale({
   sale,
   items,
   customerMeasurements,
+  budgetPaymentDraft,
   entryReceipt,
   additionalReceipts = [],
   customerCreditUsages = [],
@@ -109,6 +151,7 @@ async function createSale({
   createProducts = true,
 }) {
   return sequelize.transaction(async (transaction) => {
+    const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
     const createdSale = await Sales.create(sale, { transaction });
     const customer = createdSale.customerId
       ? await Customers.findByPk(createdSale.customerId, {
@@ -135,6 +178,7 @@ async function createSale({
     );
 
     let createdMeasurements = [];
+    let createdBudgetPaymentDraft = null;
 
     if (customerMeasurements.length) {
       createdMeasurements = await CustomerMeasurements.bulkCreate(
@@ -144,6 +188,16 @@ async function createSale({
           saleId: createdSale.idSale,
         })),
         { transaction }
+      );
+    }
+
+    if (canUseBudgetPaymentDrafts && budgetPaymentDraft) {
+      createdBudgetPaymentDraft = await SaleBudgetPaymentDrafts.create(
+        {
+          saleId: createdSale.idSale,
+          ...budgetPaymentDraft,
+        },
+        { transaction },
       );
     }
 
@@ -266,6 +320,7 @@ async function createSale({
       products: createdProducts,
       items: createdItems,
       measurements: createdMeasurements,
+      budgetPaymentDraft: createdBudgetPaymentDraft,
       entryReceipt: createdEntryReceipt,
       additionalReceipts: createdAdditionalReceipts,
       receivable: createdReceivable,
@@ -274,42 +329,48 @@ async function createSale({
 }
 
 async function getSaleForFinalization(idSale, transaction) {
+  const include = [
+    {
+      model: SaleItems,
+      attributes: [
+        "idSaleItem",
+        "itemType",
+        "description",
+        "quantity",
+        "unitPrice",
+        "discountType",
+        "discountValue",
+        "subtotal",
+        "metadata",
+      ],
+    },
+    {
+      model: PaymentReceipts,
+      attributes: ["idPaymentReceipt"],
+    },
+    {
+      model: Receivables,
+      attributes: ["idReceivable"],
+    },
+    {
+      model: CardTransactions,
+      attributes: ["idCardTransaction"],
+    },
+    {
+      model: Customers,
+      attributes: ["idCustomer", "fullName", "companyName"],
+    },
+  ];
+
+  if (await hasSaleBudgetPaymentDraftsTable(transaction)) {
+    include.push(buildSaleBudgetPaymentDraftInclude());
+  }
+
   return Sales.findOne({
     where: {
       idSale,
     },
-    include: [
-      {
-        model: SaleItems,
-        attributes: [
-          "idSaleItem",
-          "itemType",
-          "description",
-          "quantity",
-          "unitPrice",
-          "discountType",
-          "discountValue",
-          "subtotal",
-          "metadata",
-        ],
-      },
-      {
-        model: PaymentReceipts,
-        attributes: ["idPaymentReceipt"],
-      },
-      {
-        model: Receivables,
-        attributes: ["idReceivable"],
-      },
-      {
-        model: CardTransactions,
-        attributes: ["idCardTransaction"],
-      },
-      {
-        model: Customers,
-        attributes: ["idCustomer", "fullName", "companyName"],
-      },
-    ],
+    include,
     transaction,
     lock: transaction
       ? {
@@ -326,9 +387,11 @@ async function updateQuote(
     sale,
     items,
     customerMeasurements,
+    budgetPaymentDraft,
   },
 ) {
   return sequelize.transaction(async (transaction) => {
+    const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
     const existingSale = await getSaleForFinalization(idSale, transaction);
 
     if (!existingSale) {
@@ -369,16 +432,44 @@ async function updateQuote(
       );
     }
 
+    let createdBudgetPaymentDraft = null;
+
+    if (canUseBudgetPaymentDrafts) {
+      const existingDraft = await SaleBudgetPaymentDrafts.findOne({
+        where: { saleId: existingSale.idSale },
+        transaction,
+      });
+
+      if (budgetPaymentDraft) {
+        if (existingDraft) {
+          await existingDraft.update(budgetPaymentDraft, { transaction });
+          createdBudgetPaymentDraft = existingDraft;
+        } else {
+          createdBudgetPaymentDraft = await SaleBudgetPaymentDrafts.create(
+            {
+              saleId: existingSale.idSale,
+              ...budgetPaymentDraft,
+            },
+            { transaction },
+          );
+        }
+      } else if (existingDraft) {
+        await existingDraft.destroy({ transaction });
+      }
+    }
+
     return {
       sale: existingSale,
       items: createdItems,
       measurements: createdMeasurements,
+      budgetPaymentDraft: createdBudgetPaymentDraft,
     };
   });
 }
 
 async function deleteQuote(idSale) {
   return sequelize.transaction(async (transaction) => {
+    const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
     const existingSale = await getSaleForFinalization(idSale, transaction);
 
     if (!existingSale) {
@@ -394,6 +485,13 @@ async function deleteQuote(idSale) {
       where: { saleId: existingSale.idSale },
       transaction,
     });
+
+    if (canUseBudgetPaymentDrafts) {
+      await SaleBudgetPaymentDrafts.destroy({
+        where: { saleId: existingSale.idSale },
+        transaction,
+      });
+    }
 
     await existingSale.destroy({ transaction });
 
@@ -413,6 +511,7 @@ async function finalizeSale(
   },
 ) {
   return sequelize.transaction(async (transaction) => {
+    const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
     const existingSale = await getSaleForFinalization(idSale, transaction);
 
     if (!existingSale) {
@@ -420,6 +519,13 @@ async function finalizeSale(
     }
 
     await existingSale.update(sale, { transaction });
+
+    if (canUseBudgetPaymentDrafts) {
+      await SaleBudgetPaymentDrafts.destroy({
+        where: { saleId: existingSale.idSale },
+        transaction,
+      });
+    }
 
     const saleItems = Array.isArray(existingSale.SaleItems) ? existingSale.SaleItems : [];
     const createdProducts = saleItems.length
@@ -872,6 +978,74 @@ async function updateCardTransactionByReceivableId(receivableId, values, transac
 
 async function getSaleById(idSale) {
   const legacyCompletedSignal = buildLegacyCompletedSignal();
+  const include = [
+    {
+      model: Customers,
+    },
+    {
+      model: Users,
+    },
+    {
+      model: PaymentTypes,
+    },
+    {
+      model: SaleItems,
+      include: [
+        {
+          model: Products,
+          include: [
+            {
+              model: Employees,
+              attributes: ["idEmployee", "shortName", "fullName"],
+            },
+            {
+              model: Status,
+              attributes: ["id", "desc"],
+            },
+          ],
+        },
+      ],
+    },
+    {
+      model: PaymentReceipts,
+      include: [
+        {
+          model: PaymentTypes,
+        },
+      ],
+    },
+    {
+      model: Receivables,
+      include: [
+        {
+          model: Suppliers,
+          attributes: ["idSupplier", "fullName", "tradeName"],
+          required: false,
+        },
+        {
+          model: ReceivableInstallments,
+          include: [
+            {
+              model: PaymentTypes,
+            },
+          ],
+        },
+        {
+          model: CardTransactions,
+        },
+      ],
+    },
+    {
+      model: CardTransactions,
+    },
+    {
+      model: CustomerMeasurements,
+    },
+  ];
+
+  if (await hasSaleBudgetPaymentDraftsTable()) {
+    include.splice(4, 0, buildSaleBudgetPaymentDraftInclude());
+  }
 
   return Sales.findOne({
     where: {
@@ -880,70 +1054,7 @@ async function getSaleById(idSale) {
     attributes: {
       include: [[legacyCompletedSignal, "isLegacyCompleted"]],
     },
-    include: [
-      {
-        model: Customers,
-      },
-      {
-        model: Users,
-      },
-      {
-        model: PaymentTypes,
-      },
-      {
-        model: SaleItems,
-        include: [
-          {
-            model: Products,
-            include: [
-              {
-                model: Employees,
-                attributes: ["idEmployee", "shortName", "fullName"],
-              },
-              {
-                model: Status,
-                attributes: ["id", "desc"],
-              },
-            ],
-          },
-        ],
-      },
-      {
-        model: PaymentReceipts,
-        include: [
-          {
-            model: PaymentTypes,
-          },
-        ],
-      },
-      {
-        model: Receivables,
-        include: [
-          {
-            model: Suppliers,
-            attributes: ["idSupplier", "fullName", "tradeName"],
-            required: false,
-          },
-          {
-            model: ReceivableInstallments,
-            include: [
-              {
-                model: PaymentTypes,
-              },
-            ],
-          },
-          {
-            model: CardTransactions,
-          },
-        ],
-      },
-      {
-        model: CardTransactions,
-      },
-      {
-        model: CustomerMeasurements,
-      },
-    ],
+    include,
     order: [
       [SaleItems, "idSaleItem", "ASC"],
       [PaymentReceipts, "paidAt", "ASC"],
