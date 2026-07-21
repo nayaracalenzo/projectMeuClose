@@ -423,6 +423,7 @@ async function registerReceipt(installmentId, payload) {
       include: [
         {
           model: Receivables,
+          required: true,
         },
       ],
       transaction,
@@ -518,8 +519,25 @@ async function getInstallmentById(installmentId) {
       },
       {
         model: PaymentReceipts,
-        attributes: ["idPaymentReceipt"],
+        attributes: [
+          "idPaymentReceipt",
+          "saleId",
+          "receivableInstallmentId",
+          "paymentTypeId",
+          "receiptType",
+          "amount",
+          "paidAt",
+          "referenceCode",
+          "createdAt",
+        ],
         required: false,
+        include: [
+          {
+            model: PaymentTypes,
+            attributes: ["idPaymentType", "desc"],
+            required: false,
+          },
+        ],
       },
       {
         model: PaymentTypes,
@@ -527,6 +545,49 @@ async function getInstallmentById(installmentId) {
         required: false,
       },
     ],
+  });
+}
+
+async function listInstallmentReceipts(installmentId) {
+  return PaymentReceipts.findAll({
+    where: {
+      receivableInstallmentId: installmentId,
+    },
+    include: [
+      {
+        model: PaymentTypes,
+        attributes: ["idPaymentType", "desc"],
+        required: false,
+      },
+    ],
+    order: [["paidAt", "DESC"], ["idPaymentReceipt", "DESC"]],
+  });
+}
+
+async function deletePaymentReceipt(idPaymentReceipt, transaction) {
+  return PaymentReceipts.destroy({
+    where: {
+      idPaymentReceipt,
+    },
+    transaction,
+  });
+}
+
+async function updateInstallment(installmentId, values, transaction) {
+  return ReceivableInstallments.update(values, {
+    where: {
+      idReceivableInstallment: installmentId,
+    },
+    transaction,
+  });
+}
+
+async function updateReceivable(receivableId, values, transaction) {
+  return Receivables.update(values, {
+    where: {
+      idReceivable: receivableId,
+    },
+    transaction,
   });
 }
 
@@ -682,12 +743,16 @@ module.exports = {
   createStandaloneReceipt,
   getCustomerById,
   getInstallmentById,
+  listInstallmentReceipts,
+  deletePaymentReceipt,
   listInstallments,
   summarizeInstallments,
   listStandaloneReceipts,
   summarizeStandaloneReceipts,
   createManualReceivable,
   updateManualReceivable,
+  updateInstallment,
+  updateReceivable,
   deleteManualReceivable,
   registerReceipt,
 };

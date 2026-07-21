@@ -11,5 +11,7 @@ router.post("/", controller.createReceivableController);
 router.put("/:installmentId", controller.updateReceivableController);
 router.delete("/:installmentId", controller.deleteReceivableController);
 router.post("/:installmentId/receipts", controller.registerReceiptController);
+router.get("/:installmentId/receipts", controller.listInstallmentReceiptsController);
+router.post("/:installmentId/reverse-latest-receipt", controller.reverseLatestReceiptController);
 
 module.exports = router;

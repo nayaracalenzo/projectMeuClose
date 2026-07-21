@@ -20,6 +20,14 @@ type SaleDetailItem = {
   discountAmount: number;
   subtotal: number;
   metadata: Record<string, unknown> | null;
+  isCancelled?: boolean;
+  cancellation?: {
+    cancelledAt: string | null;
+    reason: string | null;
+    resolution: string | null;
+    refundAmount: number;
+    creditAmount: number;
+  } | null;
   productStatus: string | null;
   seamstress: string | null;
   fittingDate: string | null;
@@ -29,7 +37,7 @@ type SaleReceipt = {
   id: number;
   saleId: number;
   receivableInstallmentId: number | null;
-  receiptType: "ENTRY" | "SALE_FULL" | "INSTALLMENT";
+  receiptType: "ENTRY" | "SALE_FULL" | "INSTALLMENT" | "CUSTOMER_CREDIT";
   amount: number;
   paidAt: string;
   referenceCode: string | null;
@@ -52,6 +60,20 @@ type SaleInstallment = {
     id: number;
     name: string;
   } | null;
+};
+
+type PaymentTypeOption = {
+  id: number;
+  name: string;
+  kind: string | null;
+  active: boolean;
+  requiresDueDate: boolean;
+  allowsEntryAmount: boolean;
+  allowedEntryPaymentKinds: string[];
+  allowsInstallments: boolean;
+  maxInstallments: number | null;
+  defaultInstallments: number;
+  financialFlow: "IMMEDIATE_CASH" | "FUTURE_CUSTOMER";
 };
 
 type SaleDetailsResponse = {
@@ -80,6 +102,16 @@ type SaleDetailsResponse = {
   items: SaleDetailItem[];
   receipts: SaleReceipt[];
   measurementsCount: number;
+  netReceivedAmount?: number;
+  customerCreditAmount?: number;
+  customerCredits?: Array<{
+    id: number;
+    originalAmount: number;
+    balanceAmount: number;
+    description: string;
+    status: string;
+    createdAt: string;
+  }>;
   receivable: {
     id: number;
     debtorType: string;
@@ -121,6 +153,10 @@ const EMPTY_TOAST: ToastState = {
   tone: "success",
   message: "",
 };
+
+function getTodayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
@@ -166,14 +202,15 @@ function formatItemDiscount(item: SaleDetailItem) {
 
 function formatReceiptType(receiptType: SaleReceipt["receiptType"]) {
   if (receiptType === "ENTRY") return "Entrada";
-  if (receiptType === "SALE_FULL") return "Venda à vista";
+  if (receiptType === "SALE_FULL") return "Venda a vista";
+  if (receiptType === "CUSTOMER_CREDIT") return "Credito da cliente";
   return "Parcela";
 }
 
 function formatSaleStatus(value?: string | null) {
   const normalized = String(value || "").trim().toUpperCase();
-  if (normalized === "BUDGET") return "Orçamento";
-  if (normalized === "COMPLETED") return "Concluído";
+  if (normalized === "BUDGET") return "Orcamento";
+  if (normalized === "COMPLETED") return "Concluido";
   if (normalized === "CANCELLED") return "Cancelado";
   return value || "-";
 }
@@ -182,8 +219,8 @@ function formatSaleItemType(value?: string | null) {
   const normalized = String(value || "").trim().toUpperCase();
   if (normalized === "CUSTOM_MADE") return "Sob medida";
   if (normalized === "READY_MADE") return "Roupa pronta";
-  if (normalized === "ACCESSORY") return "AcessÃ³rio";
-  if (normalized === "SERVICE") return "ServiÃ§o";
+  if (normalized === "ACCESSORY") return "Acessorio";
+  if (normalized === "SERVICE") return "Servico";
   if (normalized === "MISC") return "Diversos";
   return value || "-";
 }
@@ -201,6 +238,20 @@ export default function SaleDetailsPage() {
   const [sale, setSale] = useState<SaleDetailsResponse | null>(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelItemModalOpen, setCancelItemModalOpen] = useState(false);
+  const [cancelItemLoading, setCancelItemLoading] = useState(false);
+  const [cancelItemReason, setCancelItemReason] = useState("");
+  const [cancelItemResolution, setCancelItemResolution] = useState("APPLY_REMAINING");
+  const [selectedSaleItem, setSelectedSaleItem] = useState<SaleDetailItem | null>(null);
+  const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
+  const [renegotiateModalOpen, setRenegotiateModalOpen] = useState(false);
+  const [renegotiateLoading, setRenegotiateLoading] = useState(false);
+  const [renegotiateReason, setRenegotiateReason] = useState("");
+  const [renegotiatePaymentTypeId, setRenegotiatePaymentTypeId] = useState("");
+  const [renegotiateInstallmentCount, setRenegotiateInstallmentCount] = useState("1");
+  const [renegotiateIntervalDays, setRenegotiateIntervalDays] = useState("30");
+  const [renegotiateDueDate, setRenegotiateDueDate] = useState(() => getTodayIsoDate());
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   useEffect(() => {
@@ -214,9 +265,9 @@ export default function SaleDetailsPage() {
         const maybeAxiosError = err as { response?: { status?: number } };
 
         if (maybeAxiosError.response?.status === 404) {
-          setError("Venda não encontrada.");
+          setError("Venda nao encontrada.");
         } else {
-          setError(getUserFacingApiErrorMessage(err, "Não foi possível carregar a venda."));
+          setError(getUserFacingApiErrorMessage(err, "Nao foi possivel carregar a venda."));
         }
       } finally {
         setLoading(false);
@@ -226,6 +277,19 @@ export default function SaleDetailsPage() {
     void fetchSale();
   }, [id]);
 
+  useEffect(() => {
+    const fetchPaymentTypes = async () => {
+      try {
+        const data = (await getRequest("/payment-types")) as PaymentTypeOption[];
+        setPaymentTypes(Array.isArray(data) ? data : []);
+      } catch (_error) {
+        setPaymentTypes([]);
+      }
+    };
+
+    void fetchPaymentTypes();
+  }, []);
+
   const totalItemDiscount = useMemo(() => {
     if (!sale) return 0;
     return Number(sale.items.reduce((acc, item) => acc + item.discountAmount, 0).toFixed(2));
@@ -233,6 +297,9 @@ export default function SaleDetailsPage() {
 
   const totalReceived = useMemo(() => {
     if (!sale) return 0;
+    if (typeof sale.netReceivedAmount === "number") {
+      return Number(sale.netReceivedAmount.toFixed(2));
+    }
     return Number(sale.receipts.reduce((acc, receipt) => acc + receipt.amount, 0).toFixed(2));
   }, [sale]);
 
@@ -242,21 +309,61 @@ export default function SaleDetailsPage() {
   }, [sale]);
 
   const canCancelSale = sale?.status !== "CANCELLED";
+  const productionItemsCount = useMemo(
+    () => sale?.items.filter((item) => isProductionItem(item)).length || 0,
+    [sale],
+  );
+  const receivableInstallmentsCount = useMemo(
+    () => sale?.receivable?.installments.length || 0,
+    [sale],
+  );
+  const activeItemsCount = useMemo(
+    () => sale?.items.filter((item) => !item.isCancelled).length || 0,
+    [sale],
+  );
+  const projectedFinalAmountAfterItemCancellation = useMemo(() => {
+    if (!sale || !selectedSaleItem) return 0;
+    return Math.max(0, Number((sale.finalAmount - selectedSaleItem.subtotal).toFixed(2)));
+  }, [sale, selectedSaleItem]);
+  const projectedOverpaymentAmount = useMemo(() => {
+    if (!selectedSaleItem) return 0;
+    return Math.max(0, Number((totalReceived - projectedFinalAmountAfterItemCancellation).toFixed(2)));
+  }, [projectedFinalAmountAfterItemCancellation, selectedSaleItem, totalReceived]);
+  const renegotiationPaymentOptions = useMemo(
+    () => paymentTypes.filter((item) => item.financialFlow === "FUTURE_CUSTOMER"),
+    [paymentTypes],
+  );
+  const canRenegotiatePayment = Boolean(
+    sale?.receivable &&
+      sale.receivable.openAmount > 0 &&
+      sale.receivable.originType === "CUSTOMER" &&
+      sale.status !== "CANCELLED",
+  );
+
+  async function refreshSale() {
+    const data = (await getRequest(`/sales/${id}`)) as SaleDetailsResponse;
+    setSale(data);
+  }
 
   async function handleCancelSale() {
     if (!sale) return;
 
     try {
       setCancelLoading(true);
-      await postRequest(`/sales/${sale.id}/cancel`, {});
-      const updated = (await getRequest(`/sales/${sale.id}`)) as SaleDetailsResponse;
-      setSale(updated);
+      const response = (await postRequest(`/sales/${sale.id}/cancel`, {
+        reason: cancelReason.trim(),
+      })) as {
+        reversedCashEntries?: number;
+        reversedBankEntries?: number;
+      };
+      await refreshSale();
       setCancelModalOpen(false);
+      setCancelReason("");
       setToast({
         open: true,
         tone: "success",
         title: "Venda cancelada",
-        message: "A venda foi cancelada e os itens de producao vinculados foram marcados como cancelados.",
+        message: `A venda foi cancelada, a producao vinculada foi atualizada e foram gerados ${response.reversedCashEntries || 0} estorno(s) no caixa e ${response.reversedBankEntries || 0} no banco.`,
       });
     } catch (err: unknown) {
       setToast({
@@ -267,6 +374,81 @@ export default function SaleDetailsPage() {
       });
     } finally {
       setCancelLoading(false);
+    }
+  }
+
+  async function handleCancelSaleItem() {
+    if (!sale || !selectedSaleItem) return;
+
+    try {
+      setCancelItemLoading(true);
+      const response = (await postRequest(`/sales/${sale.id}/items/${selectedSaleItem.id}/cancel`, {
+        reason: cancelItemReason.trim(),
+        financialResolution: cancelItemResolution,
+      })) as {
+        refundAmount?: number;
+        creditAmount?: number;
+      };
+
+      await refreshSale();
+      setCancelItemModalOpen(false);
+      setSelectedSaleItem(null);
+      setCancelItemReason("");
+      setCancelItemResolution("APPLY_REMAINING");
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Peca cancelada",
+        message:
+          response.creditAmount && response.creditAmount > 0
+            ? `A peca foi cancelada. O valor de ${formatCurrency(response.creditAmount)} foi registrado como credito da cliente.`
+            : response.refundAmount && response.refundAmount > 0
+              ? `A peca foi cancelada e foi registrada devolucao de ${formatCurrency(response.refundAmount)}.`
+              : "A peca foi cancelada e a venda foi recalculada com sucesso.",
+      });
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel cancelar a peca",
+        message: getUserFacingApiErrorMessage(err, "Nao foi possivel cancelar a peca da venda."),
+      });
+    } finally {
+      setCancelItemLoading(false);
+    }
+  }
+
+  async function handleRenegotiatePayment() {
+    if (!sale) return;
+
+    try {
+      setRenegotiateLoading(true);
+      await postRequest(`/sales/${sale.id}/renegotiate-payment`, {
+        reason: renegotiateReason.trim(),
+        paymentTypeId: Number(renegotiatePaymentTypeId),
+        installmentCount: Number(renegotiateInstallmentCount),
+        installmentIntervalDays: Number(renegotiateIntervalDays),
+        dueDate: renegotiateDueDate,
+      });
+
+      await refreshSale();
+      setRenegotiateModalOpen(false);
+      setRenegotiateReason("");
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Pagamento renegociado",
+        message: "O saldo em aberto foi redistribuido nas novas parcelas com sucesso.",
+      });
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel renegociar",
+        message: getUserFacingApiErrorMessage(err, "Nao foi possivel renegociar o pagamento da venda."),
+      });
+    } finally {
+      setRenegotiateLoading(false);
     }
   }
 
@@ -317,24 +499,43 @@ export default function SaleDetailsPage() {
 
           <div className="flex flex-wrap gap-2">
             {canCancelSale ? (
-              <Button variant="secondary" onClick={() => setCancelModalOpen(true)}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setCancelReason("");
+                  setCancelModalOpen(true);
+                }}
+              >
                 Cancelar venda
               </Button>
             ) : null}
             {sale.status === "BUDGET" ? (
-              <Button
-                variant="primary"
-                onClick={() => navigate(`/nova-venda?quoteId=${sale.id}`)}
-              >
+              <Button variant="primary" onClick={() => navigate(`/nova-venda?quoteId=${sale.id}`)}>
                 Finalizar venda
               </Button>
             ) : null}
-            {firstProductionItem?.productId ? (
+            {canRenegotiatePayment ? (
               <Button
                 variant="secondary"
-                onClick={() => navigate(`/pedido/${firstProductionItem.productId}`)}
+                onClick={() => {
+                  setRenegotiateReason("");
+                  setRenegotiatePaymentTypeId(
+                    sale.paymentType?.id ? String(sale.paymentType.id) : String(renegotiationPaymentOptions[0]?.id || ""),
+                  );
+                  setRenegotiateInstallmentCount(String(sale.receivable?.installments.length || sale.installmentCount || 1));
+                  setRenegotiateIntervalDays("30");
+                  setRenegotiateDueDate(
+                    sale.receivable?.installments[0]?.dueDate?.slice(0, 10) || getTodayIsoDate(),
+                  );
+                  setRenegotiateModalOpen(true);
+                }}
               >
-                Abrir pedido de produção
+                Renegociar pagamento
+              </Button>
+            ) : null}
+            {firstProductionItem?.productId ? (
+              <Button variant="secondary" onClick={() => navigate(`/pedido/${firstProductionItem.productId}`)}>
+                Abrir pedido de producao
               </Button>
             ) : null}
           </div>
@@ -348,6 +549,12 @@ export default function SaleDetailsPage() {
           <InfoCard label="Valor final" value={formatCurrency(sale.finalAmount)} />
           <InfoCard label="Recebido" value={formatCurrency(totalReceived)} />
         </div>
+
+        {sale.customerCreditAmount && sale.customerCreditAmount > 0 ? (
+          <div className="mb-4 rounded-xl border border-[#b38a3d] bg-[#fff6df] px-4 py-3 text-sm text-[#6b520f]">
+            Esta venda possui credito da cliente no valor de {formatCurrency(sale.customerCreditAmount)}.
+          </div>
+        ) : null}
 
         {error ? (
           <div className="mb-4 rounded-xl border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
@@ -366,7 +573,7 @@ export default function SaleDetailsPage() {
             <InfoCard label="Criada em" value={formatDateTime(sale.createdAt)} />
             <InfoCard label="Atualizada em" value={formatDateTime(sale.updatedAt)} />
             <InfoCard label="Vencimento base" value={formatDate(sale.dueDate)} />
-            <InfoCard label="Medições" value={String(sale.measurementsCount || 0)} />
+            <InfoCard label="Medicoes" value={String(sale.measurementsCount || 0)} />
           </div>
         </section>
 
@@ -377,35 +584,54 @@ export default function SaleDetailsPage() {
             <table className="min-w-full border-separate border-spacing-y-2 text-sm">
               <thead>
                 <tr className="text-left">
-                  <th className="px-4 py-2 font-semibold text-primary">Descrição</th>
+                  <th className="px-4 py-2 font-semibold text-primary">Descricao</th>
                   <th className="px-4 py-2 font-semibold text-primary">Tipo</th>
                   <th className="px-4 py-2 font-semibold text-primary">Qtd.</th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">Unitário</th>
+                  <th className="px-4 py-2 font-semibold text-primary text-right">Unitario</th>
                   <th className="px-4 py-2 font-semibold text-primary text-right">Bruto</th>
                   <th className="px-4 py-2 font-semibold text-primary text-right">Desconto</th>
                   <th className="px-4 py-2 font-semibold text-primary text-right">Final</th>
                   <th className="px-4 py-2 font-semibold text-primary">Costureira</th>
                   <th className="px-4 py-2 font-semibold text-primary">Data Prova</th>
+                  <th className="px-4 py-2 font-semibold text-primary text-right">Acoes</th>
                 </tr>
               </thead>
               <tbody>
                 {sale.items.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="bg-surface-lowest px-4 py-6 text-center text-neutral-700">
+                    <td colSpan={10} className="bg-surface-lowest px-4 py-6 text-center text-neutral-700">
                       Nenhum item encontrado para esta venda.
                     </td>
                   </tr>
                 ) : (
                   sale.items.map((item) => (
-                    <tr key={item.id} className="bg-surface-lowest">
+                    <tr key={item.id} className={item.isCancelled ? "bg-[#f8eeee]" : "bg-surface-lowest"}>
                       <td className="px-4 py-3 text-neutral-800">
                         <div className="flex flex-col gap-1">
-                          <span className="font-medium text-primary">{item.description}</span>
-                          <span className="text-xs text-neutral-600">
-                            {isProductionItem(item)
-                              ? `Pedido #${item.productId}`
-                              : "Sem produção vinculada"}
+                          <span className={`font-medium ${item.isCancelled ? "text-[#7a1717]" : "text-primary"}`}>
+                            {item.description}
                           </span>
+                          {item.isCancelled ? (
+                            <span className="text-xs font-medium uppercase tracking-[0.08em] text-[#7a1717]">
+                              Item cancelado
+                            </span>
+                          ) : null}
+                          <span className="text-xs text-neutral-600">
+                            {isProductionItem(item) ? `Pedido #${item.productId}` : "Sem producao vinculada"}
+                          </span>
+                          {item.cancellation?.reason ? (
+                            <span className="text-xs text-neutral-600">Motivo: {item.cancellation.reason}</span>
+                          ) : null}
+                          {item.cancellation?.refundAmount ? (
+                            <span className="text-xs text-neutral-600">
+                              Devolucao: {formatCurrency(item.cancellation.refundAmount)}
+                            </span>
+                          ) : null}
+                          {item.cancellation?.creditAmount ? (
+                            <span className="text-xs text-neutral-600">
+                              Credito: {formatCurrency(item.cancellation.creditAmount)}
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-neutral-800">{formatSaleItemType(item.itemType)}</td>
@@ -416,6 +642,25 @@ export default function SaleDetailsPage() {
                       <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(item.subtotal)}</td>
                       <td className="px-4 py-3 text-neutral-800">{item.seamstress || "-"}</td>
                       <td className="px-4 py-3 text-neutral-800">{formatDate(item.fittingDate)}</td>
+                      <td className="px-4 py-3 text-right">
+                        {sale.status !== "CANCELLED" && !item.isCancelled && activeItemsCount > 1 ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedSaleItem(item);
+                              setCancelItemReason("");
+                              setCancelItemResolution("APPLY_REMAINING");
+                              setCancelItemModalOpen(true);
+                            }}
+                          >
+                            Cancelar peca
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-neutral-500">-</span>
+                        )}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -443,14 +688,14 @@ export default function SaleDetailsPage() {
                       <div>
                         <p className="text-sm font-semibold text-primary">{formatReceiptType(receipt.receiptType)}</p>
                         <p className="text-sm text-neutral-700">
-                          {receipt.paymentType?.name || "Forma não identificada"}
+                          {receipt.paymentType?.name || "Forma nao identificada"}
                         </p>
                       </div>
                       <p className="text-sm font-semibold text-primary">{formatCurrency(receipt.amount)}</p>
                     </div>
                     <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                       <p>Data: {formatDateTime(receipt.paidAt)}</p>
-                      <p>Referência: {receipt.referenceCode || "-"}</p>
+                      <p>Referencia: {receipt.referenceCode || "-"}</p>
                     </div>
                   </div>
                 ))
@@ -459,12 +704,12 @@ export default function SaleDetailsPage() {
 
             {sale.cardTransaction ? (
               <div className="mt-5 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4">
-                <p className="text-sm font-semibold text-primary">Transação de cartão</p>
+                <p className="text-sm font-semibold text-primary">Transacao de cartao</p>
                 <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                   <p>Operadora: {sale.cardTransaction.operatorLabel || "-"}</p>
                   <p>Bandeira: {sale.cardTransaction.cardBrand || "-"}</p>
-                  <p>Autorização: {sale.cardTransaction.authorizationCode || "-"}</p>
-                  <p>Parcelas no cartão: {sale.cardTransaction.clientInstallmentCount}</p>
+                  <p>Autorizacao: {sale.cardTransaction.authorizationCode || "-"}</p>
+                  <p>Parcelas no cartao: {sale.cardTransaction.clientInstallmentCount}</p>
                   <p>Taxa prevista: {formatCurrency(sale.cardTransaction.feeAmount)}</p>
                   <p>Repasse previsto: {formatDate(sale.cardTransaction.expectedSettlementDate)}</p>
                 </div>
@@ -477,7 +722,7 @@ export default function SaleDetailsPage() {
 
             {!sale.receivable ? (
               <div className="mt-5 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
-                Esta venda não gerou contas a receber.
+                Esta venda nao gerou contas a receber.
               </div>
             ) : (
               <>
@@ -506,7 +751,7 @@ export default function SaleDetailsPage() {
                               Parcela {installment.installmentNumber}/{installment.totalInstallments}
                             </p>
                             <p className="text-sm text-neutral-700">
-                              {installment.paymentType?.name || "Forma não identificada"}
+                              {installment.paymentType?.name || "Forma nao identificada"}
                             </p>
                           </div>
                           <p className="text-sm font-semibold text-primary">
@@ -531,33 +776,286 @@ export default function SaleDetailsPage() {
 
       <CustomerModal
         open={cancelModalOpen}
-        onClose={() => setCancelModalOpen(false)}
+        onClose={() => {
+          setCancelModalOpen(false);
+          setCancelReason("");
+        }}
         title="Cancelar venda"
-        subtitle="Confirme o cancelamento desta venda."
+        subtitle="Confirme o cancelamento com o motivo e revise os impactos financeiros e operacionais."
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-700">
-            Ao cancelar a venda, os pedidos de producao vinculados tambem serao marcados como cancelados.
+            Ao cancelar a venda, o sistema vai cancelar a venda, marcar a producao vinculada como cancelada,
+            cancelar o saldo em aberto no A Receber e gerar os estornos financeiros vinculados na data de hoje.
           </p>
-          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
-            <p>Venda: #{sale.id}</p>
-            <p>Cliente: {sale.customer?.name || "Sem cliente"}</p>
-            <p>Status atual: {formatSaleStatus(sale.status)}</p>
-            <p>Valor final: {formatCurrency(sale.finalAmount)}</p>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p className="font-medium text-primary">Venda</p>
+              <p className="mt-2">Venda: #{sale.id}</p>
+              <p>Cliente: {sale.customer?.name || "Sem cliente"}</p>
+              <p>Status atual: {formatSaleStatus(sale.status)}</p>
+              <p>Valor final: {formatCurrency(sale.finalAmount)}</p>
+            </div>
+
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p className="font-medium text-primary">Impactos</p>
+              <p className="mt-2">Producao vinculada: {productionItemsCount} item(ns)</p>
+              <p>Recebimentos ja registrados: {sale.receipts.length}</p>
+              <p>Parcelas cadastradas: {receivableInstallmentsCount}</p>
+              <p>Valor ja recebido: {formatCurrency(totalReceived)}</p>
+              <p>Saldo em aberto: {formatCurrency(sale.receivable?.openAmount || 0)}</p>
+            </div>
           </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="cancel-sale-reason">
+              Motivo do cancelamento
+            </label>
+            <textarea
+              id="cancel-sale-reason"
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-outline-variant/45 px-3 py-2 text-sm text-primary outline-none transition focus:border-primary"
+              placeholder="Descreva o motivo do cancelamento e do estorno."
+            />
+          </div>
+
           <div className="flex gap-2">
             <Button
               type="button"
               variant="primary"
               onClick={() => void handleCancelSale()}
               isLoading={cancelLoading}
+              disabled={!cancelReason.trim()}
             >
               Confirmar cancelamento
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setCancelModalOpen(false)}
+              onClick={() => {
+                setCancelModalOpen(false);
+                setCancelReason("");
+              }}
+            >
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={cancelItemModalOpen}
+        onClose={() => {
+          setCancelItemModalOpen(false);
+          setSelectedSaleItem(null);
+          setCancelItemReason("");
+          setCancelItemResolution("APPLY_REMAINING");
+        }}
+        title="Cancelar peca da venda"
+        subtitle="Confirme o cancelamento da peca e como o valor ja recebido deve ser tratado."
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-neutral-700">
+            Esse fluxo cancela apenas a peca selecionada, recalcula a venda e ajusta o A Receber.
+            Vendas com parcelas ja baixadas continuam exigindo ajuste financeiro separado.
+          </p>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p className="font-medium text-primary">Peca</p>
+              <p className="mt-2">Descricao: {selectedSaleItem?.description || "-"}</p>
+              <p>Valor da peca: {formatCurrency(selectedSaleItem?.subtotal || 0)}</p>
+              <p>Venda atual: {formatCurrency(sale.finalAmount)}</p>
+              <p>Venda apos cancelamento: {formatCurrency(projectedFinalAmountAfterItemCancellation)}</p>
+            </div>
+
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p className="font-medium text-primary">Impacto financeiro</p>
+              <p className="mt-2">Recebido ate agora: {formatCurrency(totalReceived)}</p>
+              <p>Possivel sobra: {formatCurrency(projectedOverpaymentAmount)}</p>
+              <p>Saldo atual em aberto: {formatCurrency(sale.receivable?.openAmount || 0)}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="cancel-item-reason">
+              Motivo do cancelamento
+            </label>
+            <textarea
+              id="cancel-item-reason"
+              value={cancelItemReason}
+              onChange={(event) => setCancelItemReason(event.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-outline-variant/45 px-3 py-2 text-sm text-primary outline-none transition focus:border-primary"
+              placeholder="Explique por que a peca esta sendo cancelada."
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="cancel-item-resolution">
+              Tratamento financeiro
+            </label>
+            <select
+              id="cancel-item-resolution"
+              value={cancelItemResolution}
+              onChange={(event) => setCancelItemResolution(event.target.value)}
+              className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
+            >
+              <option value="APPLY_REMAINING">Abater no saldo restante</option>
+              <option value="REFUND">Devolver dinheiro</option>
+              <option value="CREDIT">Gerar credito</option>
+            </select>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleCancelSaleItem()}
+              isLoading={cancelItemLoading}
+              disabled={!cancelItemReason.trim()}
+            >
+              Confirmar cancelamento da peca
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setCancelItemModalOpen(false);
+                setSelectedSaleItem(null);
+                setCancelItemReason("");
+                setCancelItemResolution("APPLY_REMAINING");
+              }}
+            >
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={renegotiateModalOpen}
+        onClose={() => {
+          setRenegotiateModalOpen(false);
+          setRenegotiateReason("");
+        }}
+        title="Renegociar pagamento"
+        subtitle="Redistribua apenas o saldo em aberto da venda, preservando o historico ja pago."
+      >
+        <div className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p className="font-medium text-primary">Venda</p>
+              <p className="mt-2">Venda: #{sale.id}</p>
+              <p>Cliente: {sale.customer?.name || "Sem cliente"}</p>
+              <p>Recebido liquido: {formatCurrency(totalReceived)}</p>
+              <p>Saldo em aberto: {formatCurrency(sale.receivable?.openAmount || 0)}</p>
+            </div>
+
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p className="font-medium text-primary">Regra</p>
+              <p className="mt-2">Parcelas ja pagas permanecem no historico.</p>
+              <p>Somente o saldo aberto sera redistribuido.</p>
+              <p>Cartao/operadora continua fora deste fluxo nesta etapa.</p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-payment-type">
+                Forma de pagamento
+              </label>
+              <select
+                id="renegotiate-payment-type"
+                value={renegotiatePaymentTypeId}
+                onChange={(event) => setRenegotiatePaymentTypeId(event.target.value)}
+                className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
+              >
+                <option value="">Selecione...</option>
+                {renegotiationPaymentOptions.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-due-date">
+                Primeiro vencimento
+              </label>
+              <input
+                id="renegotiate-due-date"
+                type="date"
+                value={renegotiateDueDate}
+                onChange={(event) => setRenegotiateDueDate(event.target.value)}
+                className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-installment-count">
+                Parcelas
+              </label>
+              <input
+                id="renegotiate-installment-count"
+                type="number"
+                min="1"
+                value={renegotiateInstallmentCount}
+                onChange={(event) => setRenegotiateInstallmentCount(event.target.value)}
+                className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-interval">
+                Intervalo entre parcelas (dias)
+              </label>
+              <input
+                id="renegotiate-interval"
+                type="number"
+                min="1"
+                value={renegotiateIntervalDays}
+                onChange={(event) => setRenegotiateIntervalDays(event.target.value)}
+                className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-reason">
+              Motivo da renegociacao
+            </label>
+            <textarea
+              id="renegotiate-reason"
+              value={renegotiateReason}
+              onChange={(event) => setRenegotiateReason(event.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-outline-variant/45 px-3 py-2 text-sm text-primary outline-none transition focus:border-primary"
+              placeholder="Descreva a mudanca de parcelamento."
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleRenegotiatePayment()}
+              isLoading={renegotiateLoading}
+              disabled={!renegotiateReason.trim() || !renegotiatePaymentTypeId}
+            >
+              Confirmar renegociacao
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setRenegotiateModalOpen(false);
+                setRenegotiateReason("");
+              }}
             >
               Voltar
             </Button>

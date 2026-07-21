@@ -45,10 +45,30 @@ async function registerReceiptController(req, res, next) {
   }
 }
 
+async function listInstallmentReceiptsController(req, res, next) {
+  try {
+    const data = await service.listInstallmentReceipts(req.params.installmentId);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function reverseLatestReceiptController(req, res, next) {
+  try {
+    const data = await service.reverseLatestReceipt(req.params.installmentId, req.user, req.body);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   listReceivablesController,
   createReceivableController,
   updateReceivableController,
   deleteReceivableController,
   registerReceiptController,
+  listInstallmentReceiptsController,
+  reverseLatestReceiptController,
 };

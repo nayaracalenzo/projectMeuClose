@@ -59,6 +59,18 @@ interface ReceivablesResponse {
   };
 }
 
+interface InstallmentReceiptOption {
+  id: number;
+  amount: number;
+  paidAt: string;
+  referenceCode: string | null;
+  receiptType: string;
+  paymentType: {
+    id: number;
+    name: string;
+  } | null;
+}
+
 const PAGE_SIZE = 10;
 const MONTHLY_INTEREST_RATE = 0.06;
 
@@ -138,6 +150,10 @@ export default function ReceivablesPage() {
   const [receiptReferenceCode, setReceiptReferenceCode] = useState("");
   const [discardInterest, setDiscardInterest] = useState(false);
   const [receiptConfirmOpen, setReceiptConfirmOpen] = useState(false);
+  const [reverseReceiptModalOpen, setReverseReceiptModalOpen] = useState(false);
+  const [reverseReceiptReason, setReverseReceiptReason] = useState("");
+  const [reverseReceiptOptions, setReverseReceiptOptions] = useState<InstallmentReceiptOption[]>([]);
+  const [reverseReceiptId, setReverseReceiptId] = useState("");
 
   useEffect(() => {
     setPage(1);
@@ -239,6 +255,12 @@ export default function ReceivablesPage() {
       !selectedRow.saleId &&
       selectedRow.paidAmount <= 0 &&
       selectedRow.openAmount === selectedRow.amount,
+  );
+  const canReverseSelectedReceipt = Boolean(
+    selectedRow &&
+      selectedRow.id > 0 &&
+      selectedRow.saleId &&
+      selectedRow.paidAmount > 0,
   );
 
   const overdueDays = useMemo(() => {
@@ -380,6 +402,57 @@ export default function ReceivablesPage() {
     setQuitModalOpen(true);
   };
 
+  const handleReverseLatestReceipt = async () => {
+    if (!selectedRow || !canReverseSelectedReceipt) return;
+
+    try {
+      await postRequest(`/receivables/${selectedRow.id}/reverse-latest-receipt`, {
+        reason: reverseReceiptReason.trim(),
+        paymentReceiptId: reverseReceiptId ? Number(reverseReceiptId) : null,
+      });
+      setMessage("Baixa ajustada com sucesso.");
+      setReverseReceiptModalOpen(false);
+      setReverseReceiptReason("");
+      setReverseReceiptId("");
+      setReverseReceiptOptions([]);
+      setSelectedRowId(null);
+      await fetchRows();
+    } catch (error: unknown) {
+      setMessage(
+        getUserFacingApiErrorMessage(error, "Nao foi possivel ajustar a baixa do recebimento."),
+      );
+    }
+  };
+
+  const resetQuitFlow = () => {
+    setReceiptConfirmOpen(false);
+    setQuitModalOpen(false);
+    setSelectedRowId(null);
+    setReceiptPaymentTypeId("");
+    setReceiptAmount("");
+    setReceiptReferenceCode("");
+    setDiscardInterest(false);
+  };
+
+  const handleOpenReverseReceiptModal = async () => {
+    if (!selectedRow || !canReverseSelectedReceipt) return;
+
+    try {
+      const data = (await getRequest(`/receivables/${selectedRow.id}/receipts`)) as {
+        receipts?: InstallmentReceiptOption[];
+      };
+      const receipts = Array.isArray(data?.receipts) ? data.receipts : [];
+      setReverseReceiptOptions(receipts);
+      setReverseReceiptId(receipts[0]?.id ? String(receipts[0].id) : "");
+      setReverseReceiptReason("");
+      setReverseReceiptModalOpen(true);
+    } catch (error: unknown) {
+      setMessage(
+        getUserFacingApiErrorMessage(error, "Nao foi possivel carregar os recebimentos da parcela."),
+      );
+    }
+  };
+
   const handleRegisterReceipt = async () => {
     if (!selectedRow) return;
 
@@ -414,9 +487,7 @@ export default function ReceivablesPage() {
       });
 
       setMessage("Recebimento quitado com sucesso.");
-      setReceiptConfirmOpen(false);
-      setQuitModalOpen(false);
-      setSelectedRowId(null);
+      resetQuitFlow();
       await fetchRows();
     } catch (error: unknown) {
       setMessage(
@@ -595,6 +666,14 @@ export default function ReceivablesPage() {
           >
             Quitar
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleOpenReverseReceiptModal}
+            disabled={!canReverseSelectedReceipt}
+          >
+            Ajustar baixa
+          </Button>
         </div>
       </div>
 
@@ -710,7 +789,7 @@ export default function ReceivablesPage() {
 
       <CustomerModal
         open={quitModalOpen && Boolean(selectedRow)}
-        onClose={() => setQuitModalOpen(false)}
+        onClose={resetQuitFlow}
         title="Quitação de Conta a Receber"
         subtitle="Confira os dados da conta e informe os dados do pagamento."
       >
@@ -922,7 +1001,7 @@ export default function ReceivablesPage() {
               >
                 Gravar
               </Button>
-              <Button variant="secondary" size="sm" onClick={() => setQuitModalOpen(false)}>
+              <Button variant="secondary" size="sm" onClick={resetQuitFlow}>
                 Cancelar
               </Button>
             </div>
@@ -932,7 +1011,7 @@ export default function ReceivablesPage() {
 
       <CustomerModal
         open={receiptConfirmOpen && Boolean(selectedRow)}
-        onClose={() => setReceiptConfirmOpen(false)}
+        onClose={resetQuitFlow}
         title="Confirmar quitação"
         size="sm"
         subtitle={
@@ -962,7 +1041,87 @@ export default function ReceivablesPage() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setReceiptConfirmOpen(false)}
+                onClick={resetQuitFlow}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </CustomerModal>
+
+      <CustomerModal
+        open={reverseReceiptModalOpen && Boolean(selectedRow)}
+        onClose={() => {
+          setReverseReceiptModalOpen(false);
+          setReverseReceiptReason("");
+          setReverseReceiptId("");
+          setReverseReceiptOptions([]);
+        }}
+        title="Ajustar baixa"
+        size="sm"
+        subtitle="Selecione qual recebimento deve ser removido do historico. A parcela sera reaberta e o financeiro sera estornado na data de hoje."
+      >
+        {selectedRow ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p>Cliente: {getReceivableOriginName(selectedRow)}</p>
+              <p>Parcela: {selectedRow.parcela}</p>
+              <p>Recebido atual: {formatCurrency(selectedRow.paidAmount)}</p>
+              <p>Saldo atual: {formatCurrency(selectedRow.openAmount)}</p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Recebimento a reverter
+              </label>
+              <select
+                value={reverseReceiptId}
+                onChange={(e) => setReverseReceiptId(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+              >
+                <option value="">Selecione...</option>
+                {reverseReceiptOptions.map((receipt) => (
+                  <option key={receipt.id} value={receipt.id}>
+                    {`${formatDate(receipt.paidAt)} - ${formatCurrency(receipt.amount)} - ${
+                      receipt.paymentType?.name || "Forma nao identificada"
+                    }${receipt.referenceCode ? ` - Ref. ${receipt.referenceCode}` : ""}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Motivo do ajuste
+              </label>
+              <textarea
+                value={reverseReceiptReason}
+                onChange={(e) => setReverseReceiptReason(e.target.value)}
+                rows={4}
+                className="w-full rounded border border-outline-variant/60 bg-white px-3 py-2 text-[15px] text-primary"
+                placeholder="Explique o motivo da correcao da baixa."
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleReverseLatestReceipt}
+                disabled={!reverseReceiptReason.trim() || !reverseReceiptId}
+              >
+                Confirmar ajuste
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setReverseReceiptModalOpen(false);
+                  setReverseReceiptReason("");
+                  setReverseReceiptId("");
+                  setReverseReceiptOptions([]);
+                }}
               >
                 Cancelar
               </Button>

@@ -14,7 +14,7 @@ import ReadyMadeClothing, {
 } from "../components/ReadyMadeClothing";
 import { SaleStepper } from "../components/SaleStepper";
 import type { ICustomer } from "../interfaces/ICustomer";
-import { getRequest, postRequest, updateRequest } from "../services/request";
+import { deleteRequest, getRequest, postRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import {
   formatCurrencyInput,
@@ -62,7 +62,7 @@ interface PaymentTypeOption {
   allowsInstallments: boolean;
   maxInstallments: number | null;
   defaultInstallments: number;
-  financialFlow: "IMMEDIATE_CASH" | "FUTURE_CUSTOMER" | "FUTURE_OPERATOR";
+  financialFlow: "IMMEDIATE_CASH" | "FUTURE_CUSTOMER";
 }
 
 type ModalSummaryItem = {
@@ -85,6 +85,7 @@ interface CashSessionSummary {
 
 interface CashSessionStatusResponse {
   currentSession: CashSessionSummary | null;
+  lastClosedSession?: CashSessionSummary | null;
   hasOpenSession: boolean;
   pendingPreviousDay: boolean;
 }
@@ -111,6 +112,24 @@ interface ExistingQuoteResponse {
   dueDate: string | null;
   installmentCount: number;
   items: ExistingQuoteItem[];
+}
+
+interface CustomerCreditItem {
+  id: number;
+  originalAmount: number;
+  balanceAmount: number;
+  description: string;
+  status: string;
+  createdAt: string;
+}
+
+interface CustomerCreditsResponse {
+  customer: {
+    id: number;
+    name: string;
+  };
+  totalAvailable: number;
+  items: CustomerCreditItem[];
 }
 
 type InstallmentPreviewRow = {
@@ -200,6 +219,32 @@ function mapSaleItemTypeToModalType(
   return "Diversos";
 }
 
+function getSaveMessageTone(message: string): ToastState["tone"] {
+  const normalized = String(message || "").trim().toLowerCase();
+
+  if (!normalized) {
+    return "warning";
+  }
+
+  if (
+    normalized.includes("sucesso") ||
+    normalized.includes("carregado") ||
+    normalized.includes("agora voce pode continuar")
+  ) {
+    return "success";
+  }
+
+  if (
+    normalized.includes("sera finalizada") ||
+    normalized.includes("selecione") ||
+    normalized.includes("informe")
+  ) {
+    return "warning";
+  }
+
+  return "error";
+}
+
 export default function NewSalePage() {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
@@ -252,11 +297,6 @@ export default function NewSalePage() {
   const [entryReferenceCode, setEntryReferenceCode] = useState("");
   const [paymentReferenceCode, setPaymentReferenceCode] = useState("");
   const [cashReceivedAmount, setCashReceivedAmount] = useState("");
-  const [cardOperatorLabel, setCardOperatorLabel] = useState("");
-  const [cardBrand, setCardBrand] = useState("");
-  const [cardAuthorizationCode, setCardAuthorizationCode] = useState("");
-  const [cardClientInstallmentCount, setCardClientInstallmentCount] = useState("1");
-  const [cardFeeAmount, setCardFeeAmount] = useState("");
   const [cashSessionStatus, setCashSessionStatus] = useState<CashSessionStatusResponse | null>(
     null,
   );
@@ -269,6 +309,11 @@ export default function NewSalePage() {
   const [cancelSaleModalOpen, setCancelSaleModalOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
   const [loadingExistingQuote, setLoadingExistingQuote] = useState(false);
+  const [customerCredits, setCustomerCredits] = useState<CustomerCreditItem[]>([]);
+  const [customerCreditAvailable, setCustomerCreditAvailable] = useState(0);
+  const [useCustomerCredit, setUseCustomerCredit] = useState(false);
+  const [customerCreditAmountInput, setCustomerCreditAmountInput] = useState("");
+  const [pendingExitPath, setPendingExitPath] = useState<string | null>(null);
 
   const formatDate = (dateString: string) =>
     new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
@@ -393,6 +438,44 @@ export default function NewSalePage() {
   }, []);
 
   useEffect(() => {
+    if (!saveMessage.trim()) {
+      return;
+    }
+
+    setToast({
+      open: true,
+      tone: getSaveMessageTone(saveMessage),
+      message: saveMessage,
+    });
+    setSaveMessage("");
+  }, [saveMessage]);
+
+  useEffect(() => {
+    const fetchCustomerCredits = async () => {
+      if (!selectedCustomer?.id) {
+        setCustomerCredits([]);
+        setCustomerCreditAvailable(0);
+        setUseCustomerCredit(false);
+        setCustomerCreditAmountInput("");
+        return;
+      }
+
+      try {
+        const data = (await getRequest(`/clients/${selectedCustomer.id}/credits`)) as CustomerCreditsResponse;
+        setCustomerCredits(Array.isArray(data.items) ? data.items : []);
+        setCustomerCreditAvailable(Number(data.totalAvailable || 0));
+      } catch (_error) {
+        setCustomerCredits([]);
+        setCustomerCreditAvailable(0);
+        setUseCustomerCredit(false);
+        setCustomerCreditAmountInput("");
+      }
+    };
+
+    void fetchCustomerCredits();
+  }, [selectedCustomer]);
+
+  useEffect(() => {
     const quoteId = Number(quoteIdParam);
     if (!Number.isInteger(quoteId) || quoteId <= 0) {
       return;
@@ -453,6 +536,25 @@ export default function NewSalePage() {
   }, [quoteIdParam]);
 
   const filteredCustomers = useMemo(() => customers, [customers]);
+  const hasOpenSaleDraft = tableItems.length > 0 || draftSaleId !== null;
+
+  useEffect(() => {
+    const handleNavigationIntent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ path?: string }>;
+
+      if (!hasOpenSaleDraft) {
+        return;
+      }
+
+      event.preventDefault();
+      setPendingExitPath(customEvent.detail?.path || "/vendas");
+      setCancelSaleModalOpen(true);
+    };
+
+    window.addEventListener("app:navigate-intent", handleNavigationIntent as EventListener);
+    return () =>
+      window.removeEventListener("app:navigate-intent", handleNavigationIntent as EventListener);
+  }, [hasOpenSaleDraft]);
 
   const selectedTypesLabel = useMemo(() => {
     const labels = Array.from(new Set(tableItems.map((item) => item.type)));
@@ -504,10 +606,10 @@ export default function NewSalePage() {
     }
 
     if (selectedPaymentType.kind === "CASH") {
-      return "Recebimento imediato no caixa.";
+      return "Recebimento no caixa.";
     }
 
-    return "Recebimento imediato no banco.";
+    return "Recebimento no banco.";
   }, [selectedPaymentType]);
   const entryPaymentTypeOptions = useMemo(
     () => paymentTypes.filter((item) => item.id === 1 || item.id === 2),
@@ -518,6 +620,21 @@ export default function NewSalePage() {
     const parsed = Number(entryAmount.replace(",", "."));
     return Number.isFinite(parsed) ? parsed : 0;
   }, [entryAmount]);
+  const parsedCustomerCreditAmount = useMemo(() => {
+    if (!customerCreditAmountInput.trim()) return 0;
+    return parseCurrencyToNumber(customerCreditAmountInput);
+  }, [customerCreditAmountInput]);
+  const customerCreditToApply = useMemo(() => {
+    if (!useCustomerCredit) return 0;
+    return Math.max(
+      0,
+      Math.min(
+        Number(parsedCustomerCreditAmount.toFixed(2)),
+        Number(customerCreditAvailable.toFixed(2)),
+        Math.max(0, Number((discountedTotalValue - 0.01).toFixed(2))),
+      ),
+    );
+  }, [customerCreditAvailable, discountedTotalValue, parsedCustomerCreditAmount, useCustomerCredit]);
   const parsedInstallmentIntervalDays = useMemo(() => {
     const parsed = Number(installmentIntervalDays);
     if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -527,16 +644,31 @@ export default function NewSalePage() {
     return parsed;
   }, [installmentIntervalDays]);
   const remainingAmount = useMemo(
-    () => Math.max(0, Number((discountedTotalValue - parsedEntryAmount).toFixed(2))),
-    [discountedTotalValue, parsedEntryAmount],
+    () =>
+      Math.max(
+        0,
+        Number((discountedTotalValue - customerCreditToApply - parsedEntryAmount).toFixed(2)),
+      ),
+    [customerCreditToApply, discountedTotalValue, parsedEntryAmount],
   );
   const parsedCashReceivedAmount = useMemo(() => {
     return parseCurrencyToNumber(cashReceivedAmount);
   }, [cashReceivedAmount]);
   const changeAmount = useMemo(() => {
     if (!isImmediateCashPayment) return 0;
-    return Math.max(0, Number((parsedCashReceivedAmount - discountedTotalValue).toFixed(2)));
-  }, [discountedTotalValue, isImmediateCashPayment, parsedCashReceivedAmount]);
+    return Math.max(
+      0,
+      Number((parsedCashReceivedAmount - (discountedTotalValue - customerCreditToApply)).toFixed(2)),
+    );
+  }, [customerCreditToApply, discountedTotalValue, isImmediateCashPayment, parsedCashReceivedAmount]);
+  const requiresCashSessionForCurrentSale = useMemo(
+    () => tableItems.length > 0,
+    [tableItems.length],
+  );
+  const expectedOpenCashBalance = useMemo(
+    () => Number(parseCurrencyToNumber(openingBalanceInput).toFixed(2)),
+    [openingBalanceInput],
+  );
   const previewInstallmentCount = useMemo(() => {
     if (!selectedPaymentType) return 1;
     if (selectedPaymentType.allowsInstallments) {
@@ -582,7 +714,6 @@ export default function NewSalePage() {
     }));
   }, [installmentPreview, isCreditPayment, parsedInstallmentIntervalDays, remainingAmount]);
   const canSaveSale =
-    draftSaleId !== null &&
     !isSaving &&
     !!selectedCustomer &&
     tableItems.length > 0 &&
@@ -591,9 +722,12 @@ export default function NewSalePage() {
     (!selectedPaymentType?.allowsEntryAmount ||
       parsedEntryAmount <= 0 ||
       !!entryPaymentTypeId) &&
-    (!isImmediateCashPayment || parsedCashReceivedAmount >= discountedTotalValue) &&
+    (!isImmediateCashPayment ||
+      parsedCashReceivedAmount >= Number((discountedTotalValue - customerCreditToApply).toFixed(2))) &&
     (!isImmediateCheckPayment || !!paymentReferenceCode.trim()) &&
-    parsedEntryAmount < discountedTotalValue;
+    (!useCustomerCredit ||
+      (customerCreditToApply > 0 && customerCreditToApply < discountedTotalValue)) &&
+    parsedEntryAmount + customerCreditToApply < discountedTotalValue;
   const canCreateQuote = !isSaving && !!selectedCustomer && tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
 
@@ -663,7 +797,9 @@ export default function NewSalePage() {
       }
 
       if (!parsed?.hasOpenSession) {
-        setOpeningBalanceInput(formatCurrencyInput("0"));
+        setOpeningBalanceInput(
+          formatCurrency(parsed?.lastClosedSession?.expectedBalance ?? 0),
+        );
         setCashSessionNotes("");
         setOpenCashModalOpen(true);
         setSaveMessage("");
@@ -1088,6 +1224,48 @@ export default function NewSalePage() {
       ...product.measurements,
     }));
 
+  const buildQuotePayload = () => {
+    if (!selectedCustomer) {
+      return null;
+    }
+
+    return {
+      customerId: selectedCustomer.id,
+      totalAmount: totalValue,
+      finalAmount: discountedTotalValue,
+      discountType: saleDiscountPayload.discountType,
+      discountValue: saleDiscountPayload.discountValue,
+      items: buildSaleItemsPayload(),
+      customerMeasurements: buildCustomerMeasurementsPayload(),
+    };
+  };
+
+  const buildFinalizePayload = () => {
+    const quotePayload = buildQuotePayload();
+
+    if (!quotePayload) {
+      return null;
+    }
+
+    return {
+      ...quotePayload,
+      paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
+      installmentCount: previewInstallmentCount,
+      installmentIntervalDays: isCreditPayment ? parsedInstallmentIntervalDays : null,
+      dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
+      entryAmount:
+        selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
+          ? parsedEntryAmount
+          : null,
+      entryPaymentTypeId: entryPaymentTypeId ? Number(entryPaymentTypeId) : null,
+      entryPaidAt: parsedEntryAmount > 0 ? getCurrentDateInputValue() : null,
+      entryReferenceCode: entryReferenceCode || null,
+      paymentReferenceCode: paymentReferenceCode || null,
+      useCustomerCredit,
+      customerCreditAmount: customerCreditToApply > 0 ? customerCreditToApply : null,
+    };
+  };
+
   const resetSaleForm = async () => {
     setDraftSaleId(null);
     setSelectedCustomer(null);
@@ -1111,27 +1289,51 @@ export default function NewSalePage() {
     setEntryReferenceCode("");
     setPaymentReferenceCode("");
     setCashReceivedAmount("");
+    setCustomerCredits([]);
+    setCustomerCreditAvailable(0);
+    setUseCustomerCredit(false);
+    setCustomerCreditAmountInput("");
     setStep(1);
     const updatedCashSessionStatus = await getRequest("/cash/session-status");
     setCashSessionStatus((updatedCashSessionStatus as CashSessionStatusResponse) || null);
   };
 
   const handleBackToStart = () => {
-    if (tableItems.length > 0 || draftSaleId !== null) {
+    if (hasOpenSaleDraft) {
+      setPendingExitPath("/vendas");
       setCancelSaleModalOpen(true);
       return;
     }
 
-    setStep(1);
+    navigate("/vendas");
   };
 
   const handleContinueOpenSale = () => {
     setCancelSaleModalOpen(false);
+    setPendingExitPath(null);
   };
 
-  const handleCancelOpenSale = async () => {
+  const handleDiscardOpenSale = async () => {
     setCancelSaleModalOpen(false);
+
+    if (draftSaleId !== null) {
+      try {
+        setIsSaving(true);
+        setSaveMessage("");
+        await deleteRequest(`/sales/${draftSaleId}`, {});
+      } catch (error: unknown) {
+        setSaveMessage(
+          getUserFacingApiErrorMessage(error, "NÃ£o foi possÃ­vel descartar o orÃ§amento."),
+        );
+        setIsSaving(false);
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    }
+
     await resetSaleForm();
+    navigate(pendingExitPath || "/vendas");
   };
 
   const createDraftSale = async () => {
@@ -1172,14 +1374,62 @@ export default function NewSalePage() {
     }
   };
 
+  const saveOrUpdateDraftSale = async () => {
+    if (!selectedCustomer || tableItems.length === 0) {
+      return null;
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveMessage("");
+      const payload = buildQuotePayload();
+
+      if (!payload) {
+        return null;
+      }
+
+      if (hasGeneratedQuote && draftSaleId !== null) {
+        const updated = await updateRequest(`/sales/${draftSaleId}`, payload);
+        const persistedDraftSaleId = Number((updated as { id?: number }).id || draftSaleId);
+        setDraftSaleId(persistedDraftSaleId);
+        setSaveMessage("OrÃ§amento atualizado com sucesso.");
+        return persistedDraftSaleId;
+      }
+
+      const created = await postRequest("/sales", payload);
+      const nextDraftSaleId = Number((created as { id?: number }).id);
+      setDraftSaleId(nextDraftSaleId);
+      setSaveMessage("OrÃ§amento gerado com sucesso.");
+      return nextDraftSaleId;
+    } catch (error: unknown) {
+      setSaveMessage(
+        getUserFacingApiErrorMessage(error, "NÃ£o foi possÃ­vel salvar o orÃ§amento."),
+      );
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleCreateQuote = async () => {
-    const createdDraftSaleId = await createDraftSale();
+    const createdDraftSaleId = await saveOrUpdateDraftSale();
 
     if (!createdDraftSaleId) {
       return;
     }
 
     navigate(`/vendas?tab=budgets&highlight=${createdDraftSaleId}`);
+  };
+
+  const handleSaveQuoteAndExit = async () => {
+    const persistedDraftSaleId = await saveOrUpdateDraftSale();
+
+    if (!persistedDraftSaleId) {
+      return;
+    }
+
+    setCancelSaleModalOpen(false);
+    navigate(pendingExitPath || `/vendas?tab=budgets&highlight=${persistedDraftSaleId}`);
   };
 
   const handleStartFinalizeSale = async () => {
@@ -1241,7 +1491,74 @@ export default function NewSalePage() {
     }
   };
 
+  const handleOpenPaymentStep = async () => {
+    setSaveMessage("");
+    setStep(4);
+  };
+
+  const handleCompleteSale = async () => {
+    if (!selectedCustomer || tableItems.length === 0) {
+      return;
+    }
+
+    if (requiresCashSessionForCurrentSale) {
+      const canContinue = await ensureCashSessionBeforeCashPayment();
+      if (!canContinue) {
+        setSaveMessage("A venda só será finalizada com o caixa da loja aberto.");
+        return;
+      }
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveMessage("");
+      const payload = buildFinalizePayload();
+
+      if (!payload) {
+        return;
+      }
+
+      if (draftSaleId !== null) {
+        await updateRequest(`/sales/${draftSaleId}/finalize`, {
+          paymentTypeId: payload.paymentTypeId,
+          installmentCount: payload.installmentCount,
+          installmentIntervalDays: payload.installmentIntervalDays,
+          dueDate: payload.dueDate,
+          entryAmount: payload.entryAmount,
+          entryPaymentTypeId: payload.entryPaymentTypeId,
+          entryPaidAt: payload.entryPaidAt,
+          entryReferenceCode: payload.entryReferenceCode,
+          paymentReferenceCode: payload.paymentReferenceCode,
+        });
+      } else {
+        await postRequest("/sales", payload);
+      }
+
+      await resetSaleForm();
+      navigate("/vendas");
+    } catch (error: unknown) {
+      const message = getUserFacingApiErrorMessage(
+        error,
+        "NÃ£o foi possÃ­vel concluir o pedido.",
+      );
+
+      if (
+        message.includes("Existe um caixa da loja aberto de dia anterior") ||
+        message.includes("Feche o caixa antes de continuar") ||
+        message.includes("Abra o caixa da loja antes de registrar")
+      ) {
+        await ensureCashSessionBeforeCashPayment();
+      } else {
+        setSaveMessage(message);
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   void handleSaveSale;
+  void handleStartFinalizeSale;
+  void handleFinalizeQuote;
 
   const currentModalType = resolveModalTypeFromSelection();
 
@@ -1373,7 +1690,6 @@ export default function NewSalePage() {
                     <select
                       value={selectedCategoryCode}
                       onChange={(e) => handleCategoryChange(e.target.value)}
-                      disabled={hasGeneratedQuote}
                       className={paymentFieldClassName}
                     >
                       <option value="">Selecione...</option>
@@ -1397,7 +1713,6 @@ export default function NewSalePage() {
                             e.target.value as ClothingSubtype | "",
                           )
                         }
-                        disabled={hasGeneratedQuote}
                         className={paymentFieldClassName}
                       >
                         <option value="">Selecione...</option>
@@ -1413,7 +1728,7 @@ export default function NewSalePage() {
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!currentModalType || hasGeneratedQuote}
+                      disabled={!currentModalType}
                       onClick={() =>
                         currentModalType && openModal(currentModalType)
                       }
@@ -1489,7 +1804,7 @@ export default function NewSalePage() {
                     <Button
                       type="button"
                       className="w-full"
-                      disabled={!currentModalType || hasGeneratedQuote}
+                      disabled={!currentModalType}
                       onClick={() =>
                         currentModalType && openModal(currentModalType)
                       }
@@ -1501,9 +1816,9 @@ export default function NewSalePage() {
 
                 {hasGeneratedQuote ? (
                   <div className="rounded-lg border border-outline-variant/45 bg-white px-4 py-3 text-sm text-neutral-700">
-                    Este orçamento já foi gerado. Para manter os dados
-                    consistentes, os itens ficaram bloqueados e agora falta
-                    apenas concluir o pagamento.
+                    Este orçamento já foi salvo. Se precisar, você pode
+                    continuar editando os itens e atualizar o orçamento antes
+                    de concluir o pagamento.
                   </div>
                 ) : null}
 
@@ -1574,7 +1889,6 @@ export default function NewSalePage() {
                       type="button"
                       variant="secondary"
                       onClick={handleBackToStart}
-                      disabled={hasGeneratedQuote}
                     >
                       Voltar
                     </Button>
@@ -1583,17 +1897,19 @@ export default function NewSalePage() {
                         variant="tertiary"
                         type="button"
                         onClick={handleCreateQuote}
-                        disabled={!canCreateQuote || hasGeneratedQuote}
+                        disabled={!canCreateQuote}
                       >
                         {isSaving
-                          ? "Gerando..."
+                          ? hasGeneratedQuote
+                            ? "Atualizando..."
+                            : "Gerando..."
                           : hasGeneratedQuote
-                            ? "Ir para pagamento"
+                            ? "Atualizar orÃ§amento"
                             : "Gerar orçamento"}
                       </Button>
                       <Button
                         type="button"
-                        onClick={handleStartFinalizeSale}
+                        onClick={handleOpenPaymentStep}
                         disabled={!canCreateQuote}
                       >
                         {isSaving ? "Preparando..." : "Finalizar venda"}
@@ -1632,6 +1948,57 @@ export default function NewSalePage() {
                   </div>
                 </div>
 
+                {customerCreditAvailable > 0 ? (
+                  <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr] md:items-end">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-primary">Credito da cliente</p>
+                        <p className="text-sm text-neutral-700">
+                          Saldo disponivel: <span className="font-semibold text-primary">{formatCurrency(customerCreditAvailable)}</span>
+                        </p>
+                        <label className="flex items-center gap-2 text-sm text-neutral-700">
+                          <input
+                            type="checkbox"
+                            checked={useCustomerCredit}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setUseCustomerCredit(checked);
+                              if (!checked) {
+                                setCustomerCreditAmountInput("");
+                              }
+                            }}
+                            className="h-4 w-4 rounded border border-outline-variant/60 accent-primary"
+                          />
+                          Usar credito nesta venda
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Valor do credito
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={customerCreditAmountInput}
+                          onChange={(e) =>
+                            setCustomerCreditAmountInput(formatCurrencyInput(e.target.value))
+                          }
+                          disabled={!useCustomerCredit}
+                          placeholder="R$ 0,00"
+                          className={useCustomerCredit ? paymentFieldClassName : paymentReadonlyFieldClassName}
+                        />
+                      </div>
+                    </div>
+
+                    {customerCredits.length > 0 ? (
+                      <p className="mt-3 text-xs text-neutral-600">
+                        Creditos ativos: {customerCredits.length} registro(s).
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {isImmediateCheckPayment && (
                   <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-2">
                     <div>
@@ -1652,7 +2019,7 @@ export default function NewSalePage() {
                         Total a pagar
                       </label>
                       <input
-                        value={formatCurrency(discountedTotalValue)}
+                        value={formatCurrency(discountedTotalValue - customerCreditToApply)}
                         disabled
                         className={paymentReadonlyFieldClassName}
                       />
@@ -1682,7 +2049,7 @@ export default function NewSalePage() {
                         Total a pagar
                       </label>
                       <input
-                        value={formatCurrency(discountedTotalValue)}
+                        value={formatCurrency(discountedTotalValue - customerCreditToApply)}
                         disabled
                         className={paymentReadonlyFieldClassName}
                       />
@@ -1863,7 +2230,7 @@ export default function NewSalePage() {
                           <tr className="text-left">
                             <th className="px-3 py-2 font-semibold text-primary">Doc.</th>
                             <th className="px-3 py-2 font-semibold text-primary text-right">Valor</th>
-                            <th className="px-3 py-2 font-semibold text-primary">Data venc.</th>
+                            <th className="px-3 py-2 font-semibold text-right text-primary">Data venc.</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1875,7 +2242,7 @@ export default function NewSalePage() {
                               <td className="px-3 py-2 text-right text-neutral-800">
                                 {formatCurrency(installment.amount)}
                               </td>
-                              <td className="px-3 py-2 text-neutral-800">
+                              <td className="px-3 py-2 text-neutral-800 text-right">
                                 {formatDate(installment.dueDate)}
                               </td>
                             </tr>
@@ -1886,69 +2253,6 @@ export default function NewSalePage() {
                   </div>
                 )}
 
-                {selectedPaymentType?.financialFlow === "FUTURE_OPERATOR" && (
-                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-5">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Operadora
-                      </label>
-                      <input
-                        value={cardOperatorLabel}
-                        onChange={(e) => setCardOperatorLabel(e.target.value)}
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Bandeira
-                      </label>
-                      <input
-                        value={cardBrand}
-                        onChange={(e) => setCardBrand(e.target.value)}
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Autorização
-                      </label>
-                      <input
-                        value={cardAuthorizationCode}
-                        onChange={(e) =>
-                          setCardAuthorizationCode(e.target.value)
-                        }
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Parcelas no cartão
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={cardClientInstallmentCount}
-                        onChange={(e) =>
-                          setCardClientInstallmentCount(e.target.value)
-                        }
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Taxa prevista
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={cardFeeAmount}
-                        onChange={(e) => setCardFeeAmount(e.target.value)}
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                  </div>
-                )}
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div>
@@ -1987,6 +2291,7 @@ export default function NewSalePage() {
                   <p>Subtotal: {formatCurrency(totalValue)}</p>
                   <p>Desconto: {formatCurrency(discountAmount)}</p>
                   <p>Valor final: {formatCurrency(discountedTotalValue)}</p>
+                  <p>Credito aplicado: {formatCurrency(customerCreditToApply)}</p>
                   {isImmediateCashPayment && (
                     <>
                       <p>
@@ -2004,8 +2309,8 @@ export default function NewSalePage() {
                   <p>
                     Destino do saldo:{" "}
                     {selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER"
-                        ? "Cliente"
-                        : "Caixa"}
+                        ? "A receber"
+                        : "Caixa/Banco"}
                   </p>
                   <p>Parcelas previstas: {previewInstallmentCount}</p>
                   {isCreditPayment && remainingAmount > 0 && (
@@ -2032,10 +2337,10 @@ export default function NewSalePage() {
                     </Button>
                     <Button
                       type="button"
-                      onClick={handleFinalizeQuote}
+                      onClick={handleCompleteSale}
                       disabled={!canSaveSale}
                     >
-                      {isSaving ? "Concluindo..." : "Gerar venda"}
+                      {isSaving ? "Concluindo..." : "Concluir venda"}
                     </Button>
                   </div>
                 </div>
@@ -2069,12 +2374,12 @@ export default function NewSalePage() {
             <p className="text-sm text-neutral-700">
               Entrada: {formatCurrency(parsedEntryAmount)}
             </p>
+            <p className="text-sm text-neutral-700">
+              Credito aplicado: {formatCurrency(customerCreditToApply)}
+            </p>
             <p className="mb-3 text-sm text-neutral-700">
               Saldo: {formatCurrency(remainingAmount)}
             </p>
-            {saveMessage && (
-              <p className="mb-3 text-sm text-neutral-700">{saveMessage}</p>
-            )}
             <p className="mt-4 border-t border-outline-variant/35 pt-3 text-sm font-semibold text-primary">
               Valor total: {formatCurrency(discountedTotalValue)}
             </p>
@@ -2131,9 +2436,18 @@ export default function NewSalePage() {
         open={openCashModalOpen}
         onClose={() => setOpenCashModalOpen(false)}
         title="Abrir Caixa da Loja"
-        subtitle="Nao existe caixa da loja aberto no dia. Abra o caixa para continuar."
+        subtitle="Nao existe caixa da loja aberto no dia. A venda só será finalizada com o caixa aberto."
       >
         <div className="space-y-4">
+          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+            <p>
+              Valor esperado do caixa:{" "}
+              <span className="font-semibold text-primary">
+                {formatCurrency(expectedOpenCashBalance)}
+              </span>
+            </p>
+          </div>
+
           <div>
             <label className="mb-1 block text-sm font-medium text-primary">
               Saldo inicial
@@ -2254,12 +2568,12 @@ export default function NewSalePage() {
         open={cancelSaleModalOpen}
         onClose={handleContinueOpenSale}
         title="Venda em andamento"
-        subtitle="Esta venda ainda esta aberta."
+        subtitle="A venda ainda não foi encerrada."
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-700">
-            Tem certeza que deseja voltar? Os produtos adicionados e os dados da
-            venda em andamento serão descartados.
+            Deseja gerar ou atualizar o orçamento antes de sair, ou prefere
+            descartar esta venda em andamento?
           </p>
 
           <div className="flex gap-2">
@@ -2268,14 +2582,22 @@ export default function NewSalePage() {
               variant="primary"
               onClick={handleContinueOpenSale}
             >
-              Continuar venda
+              Continuar editando
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSaveQuoteAndExit()}
+              disabled={!canCreateQuote || isSaving}
+            >
+              {hasGeneratedQuote ? "Atualizar orçamento" : "Gerar orçamento"}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => void handleCancelOpenSale()}
+              onClick={() => void handleDiscardOpenSale()}
+              disabled={isSaving}
             >
-              Cancelar venda
+              Descartar
             </Button>
           </div>
         </div>
@@ -2291,5 +2613,3 @@ export default function NewSalePage() {
     </div>
   );
 }
-
-

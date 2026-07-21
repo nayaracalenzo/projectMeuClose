@@ -21,7 +21,7 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
         allowNull: true,
       },
       receiptType: {
-        type: DataTypes.ENUM("ENTRY", "SALE_FULL", "INSTALLMENT"),
+        type: DataTypes.ENUM("ENTRY", "SALE_FULL", "INSTALLMENT", "CUSTOMER_CREDIT"),
         allowNull: false,
       },
       amount: {
@@ -52,6 +52,9 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
     });
     PaymentReceipts.belongsTo(models.PaymentTypes, {
       foreignKey: "paymentTypeId",
+    });
+    PaymentReceipts.hasMany(models.CustomerCreditUsages, {
+      foreignKey: "paymentReceiptId",
     });
   };
 

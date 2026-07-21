@@ -12,6 +12,16 @@ async function findOpenStoreSession(transaction) {
   });
 }
 
+async function findLatestClosedSession(transaction) {
+  return CashSessions.findOne({
+    where: {
+      status: "CLOSED",
+    },
+    order: [["closedAt", "DESC"], ["idCashSession", "DESC"]],
+    transaction,
+  });
+}
+
 async function createSession(payload, transaction) {
   return CashSessions.create(payload, { transaction });
 }
@@ -62,6 +72,7 @@ async function findSessionsByDateRange({ fromDate, toDate }) {
 
 module.exports = {
   findOpenStoreSession,
+  findLatestClosedSession,
   createSession,
   updateSession,
   sumSessionEntries,

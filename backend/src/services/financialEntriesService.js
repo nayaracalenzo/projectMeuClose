@@ -1,4 +1,4 @@
-const { conflictError } = require("../errors/AppError");
+const { conflictError, validationError } = require("../errors/AppError");
 const cashRepository = require("../repositories/cashRepository");
 const bankRepository = require("../repositories/bankRepository");
 const cashSessionsRepository = require("../repositories/cashSessionsRepository");
@@ -8,6 +8,13 @@ function normalizeLegacyCategoryText(value) {
   return String(value || "").trim().toUpperCase();
 }
 
+function createFinancialCategoryError(message) {
+  return validationError(message, {
+    name: "FinancialCategoryValidationError",
+    code: "FINANCIAL_CATEGORY_VALIDATION_ERROR",
+  });
+}
+
 async function resolveFinancialCategoryId(payload = {}) {
   const explicitId = Number(payload.financialCategoryId);
 
@@ -15,25 +22,42 @@ async function resolveFinancialCategoryId(payload = {}) {
     return explicitId;
   }
 
+  if (
+    payload.sourceType === "SALE_RECEIPT" ||
+    payload.sourceType === "RECEIVABLE_RECEIPT"
+  ) {
+    const salesRevenueCategory =
+      (await financialCategoriesRepository.getCategoryByDescription("VENDA")) 
+
+    if (!salesRevenueCategory?.idFinancialCategory) {
+      throw createFinancialCategoryError("Categoria financeira de receita de vendas nao encontrada.");
+    }
+
+    return salesRevenueCategory.idFinancialCategory;
+  }
+
   const rawCategory = String(payload.category || "").trim();
 
   if (!rawCategory) {
-    return 3;
+    throw createFinancialCategoryError("Categoria financeira e obrigatoria.");
   }
 
   const normalized = normalizeLegacyCategoryText(rawCategory);
   const aliasMap = {
-    VENDA: "RECEITAS DE VENDAS",
-    RECEBIMENTO: "RECEITAS DE VENDAS",
+    VENDA: "VENDA",
+    RECEBIMENTO: "VENDA",
     TRANSFERENCIA: "TRANSFERENCIAS ENTRE CAIXA E BANCO",
-    PAGAMENTO: "DIVERSOS",
   };
 
   const category = await financialCategoriesRepository.getCategoryByDescription(
     aliasMap[normalized] || rawCategory,
   );
 
-  return category?.idFinancialCategory || 3;
+  if (!category?.idFinancialCategory) {
+    throw createFinancialCategoryError("Categoria financeira invalida.");
+  }
+
+  return category.idFinancialCategory;
 }
 
 async function normalizeFinancialEntryPayload(payload = {}) {
@@ -45,10 +69,7 @@ async function normalizeFinancialEntryPayload(payload = {}) {
   return {
     scope: payload.scope || "LOJA",
     movementType: payload.movementType,
-    category:
-      payload.category ||
-      financialCategory?.description ||
-      "DIVERSOS",
+    category: payload.category || financialCategory?.description,
     financialCategoryId,
     description: payload.description || "Lancamento financeiro",
     amount: Number(payload.amount),

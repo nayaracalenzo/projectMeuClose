@@ -74,7 +74,11 @@ const getProductionStatusBadgeClassName = (status?: string | null) => {
   const normalized = String(status || "").trim().toLowerCase();
 
   if (normalized === "entregue") {
-    return "bg-secondary text-primary";
+    return "bg-[#DFF4E4] text-[#17663A]";
+  }
+
+  if (normalized === "produzida") {
+    return "bg-[#DDEBFF] text-[#1F4F99]";
   }
 
   if (normalized === "a produzir") {
@@ -268,7 +272,9 @@ export default function Orders() {
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5 flex justify-center gap-4 md:justify-between">
         <div>
-          <h1 className="pb-2 pt-12 text-6xl font-semibold text-primary md:text-4xl">Produção</h1>
+          <h1 className="pb-2 pt-12 text-6xl font-semibold text-primary md:text-4xl">
+            Produção
+          </h1>
           <p className="text-sm text-neutral-700">{headingText}</p>
         </div>
         <div className="hidden gap-2 md:flex">
@@ -304,7 +310,10 @@ export default function Orders() {
 
       <div className="mb-4 grid w-full max-w-2xl gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-2">
-          <label htmlFor="orders-status-filter" className="text-sm font-medium text-primary">
+          <label
+            htmlFor="orders-status-filter"
+            className="text-sm font-medium text-primary"
+          >
             Filtrar por situação
           </label>
           <select
@@ -323,7 +332,10 @@ export default function Orders() {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label htmlFor="orders-date-order" className="text-sm font-medium text-primary">
+          <label
+            htmlFor="orders-date-order"
+            className="text-sm font-medium text-primary"
+          >
             Ordenar por data
           </label>
           <select
@@ -355,36 +367,10 @@ export default function Orders() {
         title="Gerar PDF de produção"
         subtitle="Selecione o intervalo da data de prova para montar o relatório."
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <label htmlFor="pdf-start-date" className="text-sm font-medium text-primary">
-              Data de prova inicial
-            </label>
-            <input
-              id="pdf-start-date"
-              type="date"
-              value={pdfStartDate}
-              onChange={(event) => setPdfStartDate(event.target.value)}
-              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label htmlFor="pdf-end-date" className="text-sm font-medium text-primary">
-              Data de prova final
-            </label>
-            <input
-              id="pdf-end-date"
-              type="date"
-              value={pdfEndDate}
-              onChange={(event) => setPdfEndDate(event.target.value)}
-              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-col gap-2">
-          <span className="text-sm font-medium text-primary">Exibir valores no PDF</span>
+        <div className="my-4 flex flex-col gap-2">
+          <span className="text-sm font-medium text-primary">
+            Exibir valores no PDF
+          </span>
           <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
             <label className="flex items-center gap-2 text-sm text-neutral-800">
               <input
@@ -393,7 +379,7 @@ export default function Orders() {
                 value="withoutValue"
                 checked={pdfValueMode === "withoutValue"}
                 onChange={() => setPdfValueMode("withoutValue")}
-                className="h-4 w-4 border-outline-variant/45 text-primary focus:ring-primary"
+                className="h-4 w-4  border-outline-variant/45 text-primary focus:ring-primary"
               />
               Sem valor
             </label>
@@ -408,6 +394,39 @@ export default function Orders() {
               />
               Com valor
             </label>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="pdf-start-date"
+              className="text-sm font-medium text-primary"
+            >
+              Data de prova inicial
+            </label>
+            <input
+              id="pdf-start-date"
+              type="date"
+              value={pdfStartDate}
+              onChange={(event) => setPdfStartDate(event.target.value)}
+              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="pdf-end-date"
+              className="text-sm font-medium text-primary"
+            >
+              Data de prova final
+            </label>
+            <input
+              id="pdf-end-date"
+              type="date"
+              value={pdfEndDate}
+              onChange={(event) => setPdfEndDate(event.target.value)}
+              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            />
           </div>
         </div>
 
@@ -435,24 +454,42 @@ export default function Orders() {
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead>
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Descrição</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Cliente</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Data Prova</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Costureira</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Status</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary text-right">Valor</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Descrição
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Cliente
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Data Prova
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Costureira
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Status
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary text-right">
+                Valor
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                <td
+                  colSpan={6}
+                  className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
+                >
                   Carregando produção...
                 </td>
               </tr>
             ) : productionItems.length === 0 ? (
               <tr>
-                <td colSpan={6} className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700">
+                <td
+                  colSpan={6}
+                  className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
+                >
                   Nenhum item em produção cadastrado
                 </td>
               </tr>
@@ -463,10 +500,18 @@ export default function Orders() {
                   className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
                   onClick={() => navigate(`/pedido/${order.id}`)}
                 >
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{order.description || "-"}</td>
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{formatCustomerName(order.customer)}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(order.testDate)}</td>
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">{order.seamstress || "-"}</td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                    {order.description || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                    {formatCustomerName(order.customer)}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {formatDate(order.testDate)}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                    {order.seamstress || "-"}
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getProductionStatusBadgeClassName(
@@ -488,7 +533,9 @@ export default function Orders() {
 
       <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
         {loading ? (
-          <div className="px-4 py-6 text-center text-sm text-neutral-700">Carregando produção...</div>
+          <div className="px-4 py-6 text-center text-sm text-neutral-700">
+            Carregando produção...
+          </div>
         ) : productionItems.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
             Nenhum item em produção cadastrado
@@ -501,10 +548,18 @@ export default function Orders() {
               className="w-full px-4 py-4 text-left"
               onClick={() => navigate(`/pedido/${order.id}`)}
             >
-              <p className="text-xs uppercase text-neutral-700">Descrição: {order.description || "-"}</p>
-              <p className="text-sm font-semibold uppercase text-primary">{formatCustomerName(order.customer)}</p>
-              <p className="text-xs text-neutral-700">Data Prova: {formatDate(order.testDate)}</p>
-              <p className="text-xs uppercase text-neutral-700">Costureira: {order.seamstress || "-"}</p>
+              <p className="text-xs uppercase text-neutral-700">
+                Descrição: {order.description || "-"}
+              </p>
+              <p className="text-sm font-semibold uppercase text-primary">
+                {formatCustomerName(order.customer)}
+              </p>
+              <p className="text-xs text-neutral-700">
+                Data Prova: {formatDate(order.testDate)}
+              </p>
+              <p className="text-xs uppercase text-neutral-700">
+                Costureira: {order.seamstress || "-"}
+              </p>
               <p className="text-xs text-neutral-700">
                 Status:{" "}
                 <span
@@ -515,7 +570,9 @@ export default function Orders() {
                   {order.status || "-"}
                 </span>
               </p>
-              <p className="mt-1 text-sm font-semibold text-primary">{formatCurrency(order.finalValue)}</p>
+              <p className="mt-1 text-sm font-semibold text-primary">
+                {formatCurrency(order.finalValue)}
+              </p>
             </button>
           ))
         )}
@@ -537,7 +594,9 @@ export default function Orders() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
             disabled={loading || page >= totalPages}
           >
             Próxima
@@ -547,4 +606,3 @@ export default function Orders() {
     </div>
   );
 }
-

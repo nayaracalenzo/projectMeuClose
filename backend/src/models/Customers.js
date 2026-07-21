@@ -91,6 +91,9 @@ const CustomersSchema = (sequelize, DataTypes) => {
     Customers.hasMany(models.Receivables, {
       foreignKey: "customerId",
     });
+    Customers.hasMany(models.CustomerCredits, {
+      foreignKey: "customerId",
+    });
     Customers.belongsTo(models.Professions, {
       foreignKey: "professionId",
     });

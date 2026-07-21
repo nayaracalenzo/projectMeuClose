@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "../components/Button";
+import NoticeToast from "../components/NoticeToast";
 import { getRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
@@ -50,39 +51,30 @@ type SelectOption = {
 };
 
 type ProductFormState = {
-  desc: string;
   details: string;
-  customerId: string;
   employeeId: string;
-  statusId: string;
-  categoryId: string;
-  productTypeId: string;
-  clothingTypeId: string;
-  colorId: string;
-  fabricId: string;
-  sizeId: string;
-  qtyStock: string;
   testDate: string;
-  dressmakerValue: string;
-  finalValue: string;
+};
+
+type ToastState = {
+  open: boolean;
+  tone: "success" | "warning" | "error";
+  title?: string;
+  message: string;
 };
 
 const fieldClassName =
   "w-full rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary";
 const labelClassName = "text-sm font-medium text-primary";
+const EMPTY_TOAST: ToastState = {
+  open: false,
+  tone: "success",
+  message: "",
+};
 
 function toDateInputValue(value?: string | null) {
   if (!value) return "";
   return String(value).slice(0, 10);
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return new Intl.DateTimeFormat("pt-BR").format(date);
 }
 
 function formatDateTime(value?: string | null) {
@@ -95,27 +87,6 @@ function formatDateTime(value?: string | null) {
     dateStyle: "short",
     timeStyle: "short",
   }).format(date);
-}
-
-function mapCustomerOptions(data: unknown): SelectOption[] {
-  if (!Array.isArray(data)) return [];
-
-  return data
-    .map((item) => {
-      const customer = item as {
-        id?: number;
-        fullName?: string | null;
-        companyName?: string | null;
-      };
-
-      const id = Number(customer.id);
-      const label = String(customer.fullName || customer.companyName || "").trim();
-
-      if (!Number.isInteger(id) || !label) return null;
-
-      return { id, label };
-    })
-    .filter(Boolean) as SelectOption[];
 }
 
 function mapAdminOptions(
@@ -142,21 +113,9 @@ function mapAdminOptions(
 
 function toFormState(product: ProductDetails): ProductFormState {
   return {
-    desc: product.desc || "",
     details: product.details || "",
-    customerId: product.customerId ? String(product.customerId) : "",
     employeeId: product.employeeId ? String(product.employeeId) : "",
-    statusId: product.statusId ? String(product.statusId) : "",
-    categoryId: product.categoryId ? String(product.categoryId) : "",
-    productTypeId: product.productTypeId ? String(product.productTypeId) : "",
-    clothingTypeId: product.clothingTypeId ? String(product.clothingTypeId) : "",
-    colorId: product.colorId ? String(product.colorId) : "",
-    fabricId: product.fabricId ? String(product.fabricId) : "",
-    sizeId: product.sizeId ? String(product.sizeId) : "",
-    qtyStock: String(product.qtyStock || 1),
     testDate: toDateInputValue(product.testDate),
-    dressmakerValue: String(product.dressmakerValue ?? 0),
-    finalValue: String(product.finalValue ?? 0),
   };
 }
 
@@ -175,20 +134,19 @@ function InfoCard({
   );
 }
 
-function formatDiscountLabel(product: ProductDetails) {
-  if (!product.saleId || !product.saleItemDiscountType || !product.saleItemDiscountValue) {
-    return product.saleItemDiscountAmount > 0
-      ? formatCurrency(product.saleItemDiscountAmount)
-      : "Sem desconto";
-  }
-
-  if (product.saleItemDiscountType === "PERCENTAGE") {
-    return `${product.saleItemDiscountValue.toFixed(2)}% (${formatCurrency(
-      product.saleItemDiscountAmount,
-    )})`;
-  }
-
-  return formatCurrency(product.saleItemDiscountValue);
+function ReadonlyField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <label className={labelClassName}>{label}</label>
+      <div className={`${fieldClassName} mt-2 bg-surface-lowest text-neutral-700`}>{value}</div>
+    </div>
+  );
 }
 
 export default function OrderDetails() {
@@ -197,60 +155,28 @@ export default function OrderDetails() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [saveMessage, setSaveMessage] = useState("");
   const [product, setProduct] = useState<ProductDetails | null>(null);
   const [form, setForm] = useState<ProductFormState | null>(null);
-  const [customerOptions, setCustomerOptions] = useState<SelectOption[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<SelectOption[]>([]);
-  const [statusOptions, setStatusOptions] = useState<SelectOption[]>([]);
-  const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
-  const [productTypeOptions, setProductTypeOptions] = useState<SelectOption[]>([]);
-  const [clothingTypeOptions, setClothingTypeOptions] = useState<SelectOption[]>([]);
-  const [colorOptions, setColorOptions] = useState<SelectOption[]>([]);
-  const [fabricOptions, setFabricOptions] = useState<SelectOption[]>([]);
-  const [sizeOptions, setSizeOptions] = useState<SelectOption[]>([]);
+  const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError("");
+        setToast(EMPTY_TOAST);
 
-        const [
-          productData,
-          customersData,
-          employeesData,
-          statusesData,
-          categoriesData,
-          productTypesData,
-          clothingTypesData,
-          colorsData,
-          fabricsData,
-          sizesData,
-        ] = await Promise.all([
+        const [productData, employeesData] = await Promise.all([
           getRequest(`/products/${id}`),
-          getRequest("/clients"),
           getRequest("/admin/employees"),
-          getRequest("/products/status-options"),
-          getRequest("/admin/categories"),
-          getRequest("/admin/products-types"),
-          getRequest("/admin/clothings-types"),
-          getRequest("/admin/colors"),
-          getRequest("/admin/fabrics"),
-          getRequest("/admin/sizes"),
         ]);
 
         setProduct(productData as ProductDetails);
         setForm(toFormState(productData as ProductDetails));
-        setCustomerOptions(mapCustomerOptions(customersData));
-        setEmployeeOptions(mapAdminOptions(employeesData, { idKey: "idEmployee", labelKey: "shortName" }));
-        setStatusOptions(mapAdminOptions(statusesData));
-        setCategoryOptions(mapAdminOptions(categoriesData));
-        setProductTypeOptions(mapAdminOptions(productTypesData));
-        setClothingTypeOptions(mapAdminOptions(clothingTypesData));
-        setColorOptions(mapAdminOptions(colorsData));
-        setFabricOptions(mapAdminOptions(fabricsData));
-        setSizeOptions(mapAdminOptions(sizesData));
+        setEmployeeOptions(
+          mapAdminOptions(employeesData, { idKey: "idEmployee", labelKey: "shortName" }),
+        );
       } catch (err: unknown) {
         const maybeAxiosError = err as { response?: { status?: number } };
 
@@ -258,7 +184,7 @@ export default function OrderDetails() {
           setError("Pedido não encontrado.");
         } else {
           setError(
-            getUserFacingApiErrorMessage(err, "Não foi possível carregar os detalhes do pedido."),
+            getUserFacingApiErrorMessage(err, "Não foi possível carregar os detalhes do produto."),
           );
         }
       } finally {
@@ -266,19 +192,8 @@ export default function OrderDetails() {
       }
     };
 
-    fetchData();
+    void fetchData();
   }, [id]);
-
-  const remainingValuePreview = useMemo(() => {
-    if (!form) return 0;
-
-    const finalValue = Number(form.finalValue || 0);
-    const dressmakerValue = Number(form.dressmakerValue || 0);
-
-    if (!Number.isFinite(finalValue) || !Number.isFinite(dressmakerValue)) return 0;
-
-    return Number((finalValue - dressmakerValue).toFixed(2));
-  }, [form]);
 
   const handleFieldChange = (field: keyof ProductFormState, value: string) => {
     setForm((current) => {
@@ -297,20 +212,37 @@ export default function OrderDetails() {
 
     try {
       setSaving(true);
-      setSaveMessage("");
-      setError("");
+      setToast(EMPTY_TOAST);
 
       const updated = (await updateRequest(`/products/${product.id}`, {
+        desc: product.desc,
+        customerId: product.customerId,
+        statusId: product.statusId,
+        categoryId: product.categoryId,
+        productTypeId: product.productTypeId,
+        clothingTypeId: product.clothingTypeId,
+        colorId: product.colorId,
+        fabricId: product.fabricId,
+        sizeId: product.sizeId,
+        qtyStock: product.qtyStock,
+        finalValue: product.finalValue,
+        dressmakerValue: product.dressmakerValue,
         ...form,
-        dressmakerValue: form.dressmakerValue || "0",
       })) as ProductDetails;
 
       setProduct(updated);
       setForm(toFormState(updated));
-      setSaveMessage("Pedido atualizado com sucesso.");
+      setToast({
+        open: true,
+        tone: "success",
+        message: "Pedido atualizado com sucesso.",
+      });
     } catch (err: unknown) {
-      setSaveMessage("");
-      setError(getUserFacingApiErrorMessage(err, "Não foi possível salvar o pedido."));
+      setToast({
+        open: true,
+        tone: "error",
+        message: getUserFacingApiErrorMessage(err, "Não foi possível salvar o pedido."),
+      });
     } finally {
       setSaving(false);
     }
@@ -320,7 +252,7 @@ export default function OrderDetails() {
     return (
       <div className="min-h-full bg-white p-5 md:bg-surface-low">
         <div className="rounded-2xl border border-outline-variant/35 bg-white px-6 py-10 text-center text-sm text-neutral-700">
-          Carregando detalhes do pedido...
+          Carregando detalhes do produto...
         </div>
       </div>
     );
@@ -358,11 +290,8 @@ export default function OrderDetails() {
               Voltar para produção
             </button>
             <h1 className="font-editorial text-5xl text-primary md:text-4xl">
-              Detalhes do Pedido
+              Detalhes do Produto
             </h1>
-            <p className="mt-2 text-sm text-neutral-700">
-              Visualize e ajuste os dados do pedido sempre que precisar.
-            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -381,114 +310,31 @@ export default function OrderDetails() {
           <InfoCard label="Pedido" value={`#${product.id}`} />
           <InfoCard label="Cliente atual" value={product.customerName || "Sem cliente"} />
           <InfoCard label="Status atual" value={product.statusName || "-"} />
-          <InfoCard label="Valor final" value={formatCurrency(product.finalValue)} />
-          <InfoCard label="Valor restante" value={formatCurrency(product.remainingValue)} />
+          <InfoCard label="Valor da peça" value={formatCurrency(product.finalValue)} />
+          <InfoCard label="Lucro da peça" value={formatCurrency(product.remainingValue)} />
         </div>
-
-        {error ? (
-          <div className="mb-4 rounded-xl border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
-            {error}
-          </div>
-        ) : null}
-
-        {saveMessage ? (
-          <div className="mb-4 rounded-xl border border-[#7ea17e] bg-[#eef8ee] px-4 py-3 text-sm text-[#205220]">
-            {saveMessage}
-          </div>
-        ) : null}
 
         <form id="order-details-form" onSubmit={handleSubmit} className="space-y-6">
           <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-            <h2 className="font-editorial text-3xl text-primary">Dados do Pedido</h2>
+            <h2 className="font-editorial text-3xl text-primary">Dados do Produto</h2>
+            <p className="mt-2 text-sm text-neutral-600">
+              Aqui você pode ajustar apenas os dados operacionais do pedido. Para alterar valores,
+              acesse a venda vinculada.
+            </p>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <div className="xl:col-span-2">
-                <label className={labelClassName} htmlFor="order-desc">
-                  Descrição
-                </label>
-                <input
-                  id="order-desc"
-                  value={form.desc}
-                  onChange={(event) => handleFieldChange("desc", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                />
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-customer">
-                  Cliente
-                </label>
-                <select
-                  id="order-customer"
-                  value={form.customerId}
-                  onChange={(event) => handleFieldChange("customerId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {customerOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-status">
-                  Status
-                </label>
-                <select
-                  id="order-status"
-                  value={form.statusId}
-                  onChange={(event) => handleFieldChange("statusId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {statusOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-category">
-                  Tipo de Produto
-                </label>
-                <select
-                  id="order-category"
-                  value={form.categoryId}
-                  onChange={(event) => handleFieldChange("categoryId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {categoryOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-product-type">
-                  Subtipo do Produto
-                </label>
-                <select
-                  id="order-product-type"
-                  value={form.productTypeId}
-                  onChange={(event) => handleFieldChange("productTypeId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {productTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <ReadonlyField label="Descrição" value={product.desc || "-"} />
+              <ReadonlyField label="Status" value={product.statusName || "-"} />
+              <ReadonlyField label="Tipo de Produto" value={product.categoryName || "-"} />
+              <ReadonlyField label="Subtipo do Produto" value={product.productTypeName || "-"} />
+              <ReadonlyField label="Tipo de Roupa" value={product.clothingTypeName || "-"} />
+              <ReadonlyField label="Cor" value={product.colorName || "-"} />
+              <ReadonlyField label="Tecido" value={product.fabricName || "-"} />
+              <ReadonlyField label="Tamanho" value={product.sizeName || "-"} />
+              <ReadonlyField
+                label="Quantidade"
+                value={String(product.saleItemQuantity || product.qtyStock || 1)}
+              />
 
               <div>
                 <label className={labelClassName} htmlFor="order-seamstress">
@@ -510,82 +356,6 @@ export default function OrderDetails() {
               </div>
 
               <div>
-                <label className={labelClassName} htmlFor="order-clothing-type">
-                  Tipo de Roupa
-                </label>
-                <select
-                  id="order-clothing-type"
-                  value={form.clothingTypeId}
-                  onChange={(event) => handleFieldChange("clothingTypeId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {clothingTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-color">
-                  Cor
-                </label>
-                <select
-                  id="order-color"
-                  value={form.colorId}
-                  onChange={(event) => handleFieldChange("colorId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {colorOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-fabric">
-                  Tecido
-                </label>
-                <select
-                  id="order-fabric"
-                  value={form.fabricId}
-                  onChange={(event) => handleFieldChange("fabricId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {fabricOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-size">
-                  Tamanho
-                </label>
-                <select
-                  id="order-size"
-                  value={form.sizeId}
-                  onChange={(event) => handleFieldChange("sizeId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {sizeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
                 <label className={labelClassName} htmlFor="order-test-date">
                   Data da Prova
                 </label>
@@ -594,21 +364,6 @@ export default function OrderDetails() {
                   type="date"
                   value={form.testDate}
                   onChange={(event) => handleFieldChange("testDate", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                />
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-qty">
-                  Quantidade
-                </label>
-                <input
-                  id="order-qty"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={form.qtyStock}
-                  onChange={(event) => handleFieldChange("qtyStock", event.target.value)}
                   className={`${fieldClassName} mt-2`}
                 />
               </div>
@@ -629,79 +384,24 @@ export default function OrderDetails() {
           </section>
 
           <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-            <h2 className="font-editorial text-3xl text-primary">Valores</h2>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
-              <div>
-                <label className={labelClassName} htmlFor="order-final-value">
-                  Valor Final
-                </label>
-                <input
-                  id="order-final-value"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.finalValue}
-                  onChange={(event) => handleFieldChange("finalValue", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                />
-              </div>
-
-              <div>
-                <label className={labelClassName} htmlFor="order-dressmaker-value">
-                  Valor de material
-                </label>
-                <input
-                  id="order-dressmaker-value"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.dressmakerValue}
-                  onChange={(event) => handleFieldChange("dressmakerValue", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                />
-              </div>
-
-              <div>
-                <label className={labelClassName}>Valor Restante</label>
-                <div className="mt-2 rounded-md border border-outline-variant/45 bg-surface-lowest px-3 py-2 text-sm font-medium text-primary">
-                  {formatCurrency(remainingValuePreview)}
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <InfoCard
-                label="Valor bruto do item"
-                value={formatCurrency(product.saleItemGrossValue || product.finalValue)}
-              />
-              <InfoCard
-                label="Desconto do item"
-                value={formatDiscountLabel(product)}
-              />
-              <InfoCard
-                label="Valor final do item"
-                value={formatCurrency(product.saleItemSubtotal || product.finalValue)}
-              />
-              <InfoCard
-                label="Qtd. na venda"
-                value={String(product.saleItemQuantity || product.qtyStock || 1)}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
             <h2 className="font-editorial text-3xl text-primary">Informações de Controle</h2>
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               <InfoCard label="Venda vinculada" value={product.saleId ? `#${product.saleId}` : "Sem venda"} />
               <InfoCard label="Criado em" value={formatDateTime(product.createdAt)} />
               <InfoCard label="Atualizado em" value={formatDateTime(product.updatedAt)} />
-              <InfoCard label="Data da prova" value={formatDate(product.testDate)} />
             </div>
           </section>
         </form>
       </div>
+
+      <NoticeToast
+        open={toast.open}
+        tone={toast.tone}
+        title={toast.title}
+        message={toast.message}
+        onClose={() => setToast(EMPTY_TOAST)}
+      />
     </div>
   );
 }

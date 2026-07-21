@@ -76,6 +76,12 @@ const SalesSchema = (sequelize, DataTypes) => {
     Sales.hasMany(models.PaymentReceipts, {
       foreignKey: "saleId",
     });
+    Sales.hasMany(models.CustomerCredits, {
+      foreignKey: "saleId",
+    });
+    Sales.hasMany(models.CustomerCreditUsages, {
+      foreignKey: "saleId",
+    });
     Sales.hasOne(models.CardTransactions, {
       foreignKey: "saleId",
     });

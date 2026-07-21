@@ -98,6 +98,62 @@ async function findByTransferKey(transferKey, transaction) {
   });
 }
 
+async function listEntriesBySaleId(saleId, transaction) {
+  return BankEntries.findAll({
+    where: {
+      saleId,
+    },
+    include: [
+      {
+        model: FinancialCategories,
+        required: false,
+        attributes: ["idFinancialCategory", "description"],
+      },
+      {
+        model: Sales,
+        required: false,
+        attributes: ["idSale", "status"],
+      },
+    ],
+    order: [["occurredAt", "ASC"], ["idBankEntry", "ASC"]],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: BankEntries,
+        }
+      : undefined,
+  });
+}
+
+async function listEntriesByPaymentReceiptId(paymentReceiptId, transaction) {
+  return BankEntries.findAll({
+    where: {
+      paymentReceiptId,
+    },
+    include: [
+      {
+        model: FinancialCategories,
+        required: false,
+        attributes: ["idFinancialCategory", "description"],
+      },
+      {
+        model: Sales,
+        required: false,
+        attributes: ["idSale", "status"],
+      },
+    ],
+    order: [["occurredAt", "ASC"], ["idBankEntry", "ASC"]],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: BankEntries,
+        }
+      : undefined,
+  });
+}
+
 async function deleteEntry(entry, transaction) {
   return entry.destroy({ transaction });
 }
@@ -263,6 +319,8 @@ module.exports = {
   getEntryById,
   findReversalByOriginId,
   findByTransferKey,
+  listEntriesBySaleId,
+  listEntriesByPaymentReceiptId,
   deleteEntry,
   listAccountOptions,
   listEntries,

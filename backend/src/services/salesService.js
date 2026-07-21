@@ -1,6 +1,13 @@
 const { notFoundError, validationError } = require("../errors/AppError");
+const { sequelize } = require("../models");
 const repository = require("../repositories/salesRepository");
+const auditsRepository = require("../repositories/auditsRepository");
+const bankRepository = require("../repositories/bankRepository");
+const cashRepository = require("../repositories/cashRepository");
+const cashSessionsRepository = require("../repositories/cashSessionsRepository");
+const customerCreditsRepository = require("../repositories/customerCreditsRepository");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
+const { createBankEntry, createCashEntry } = require("./financialEntriesService");
 const {
   buildPaymentTypeResponse,
   isCardPaymentType,
@@ -81,6 +88,21 @@ function normalizeDate(value, fieldName) {
   return date;
 }
 
+function normalizeRequiredText(value, fieldName) {
+  const normalized = String(value || "").trim();
+
+  if (!normalized) {
+    throw createSalesValidationError(`${fieldName} obrigatorio.`);
+  }
+
+  return normalized;
+}
+
+function normalizeUserId(user) {
+  const normalized = Number(user?.id ?? user?.idUser);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
+}
+
 function addMonths(baseDate, monthsToAdd) {
   return new Date(
     baseDate.getFullYear(),
@@ -91,6 +113,341 @@ function addMonths(baseDate, monthsToAdd) {
     0,
     0,
   );
+}
+
+function buildSaleCancellationAuditHistory(sale, occurredAt) {
+  return `CANCELAMENTO da venda ${sale.idSale} em ${new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(occurredAt)}.`;
+}
+
+function buildSaleItemCancellationAuditHistory(saleId, item, occurredAt) {
+  return `CANCELAMENTO PARCIAL da venda ${saleId}, item ${item.idSaleItem}, em ${new Intl.DateTimeFormat(
+    "pt-BR",
+    {
+      dateStyle: "short",
+      timeStyle: "short",
+    },
+  ).format(occurredAt)}.`;
+}
+
+function buildCustomerCreditDescription(saleId, itemDescription) {
+  const resolvedDescription = String(itemDescription || "").trim() || "Item da venda";
+  return `Credito gerado no cancelamento da peca da venda ${saleId} - ${resolvedDescription}`;
+}
+
+function buildCustomerCreditReceiptReference() {
+  return "USO DE CREDITO DA CLIENTE";
+}
+
+function isPreviousDay(dateValue) {
+  if (!dateValue) return false;
+
+  const openedAt = new Date(dateValue);
+  const openedDay = new Date(openedAt);
+  openedDay.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return openedDay.getTime() < today.getTime();
+}
+
+async function ensureOpenStoreCashSessionForSaleFinalization() {
+  const openSession = await cashSessionsRepository.findOpenStoreSession();
+
+  if (!openSession) {
+    throw createSalesValidationError("Abra o caixa da loja antes de registrar a venda.");
+  }
+
+  if (isPreviousDay(openSession.openedAt)) {
+    throw createSalesValidationError(
+      "Existe um caixa da loja aberto de dia anterior. Feche o caixa antes de continuar.",
+    );
+  }
+}
+
+async function resolveCustomerCreditApplication(body = {}, customerId, finalAmount, transaction) {
+  const shouldUseCredit = Boolean(body.useCustomerCredit);
+  const requestedAmount =
+    body.customerCreditAmount === null ||
+    body.customerCreditAmount === undefined ||
+    body.customerCreditAmount === ""
+      ? 0
+      : normalizeDecimal(body.customerCreditAmount, "Valor do credito");
+
+  if (!shouldUseCredit) {
+    if (requestedAmount > 0) {
+      throw createSalesValidationError(
+        "Marque a opcao de usar credito para aplicar saldo da cliente nesta venda.",
+      );
+    }
+
+    return {
+      amount: 0,
+      receipt: null,
+      usages: [],
+    };
+  }
+
+  if (requestedAmount <= 0) {
+    throw createSalesValidationError("Informe um valor de credito maior que zero.");
+  }
+
+  if (requestedAmount >= finalAmount) {
+    throw createSalesValidationError("O valor do credito deve ser menor que o valor final da venda.");
+  }
+
+  const credits = await customerCreditsRepository.listActiveCreditsByCustomerId(customerId, transaction);
+  const availableAmount = roundCurrency(
+    credits.reduce((acc, item) => acc + Number(item.balanceAmount || 0), 0),
+  );
+
+  if (availableAmount <= 0) {
+    throw createSalesValidationError("A cliente nao possui credito disponivel.");
+  }
+
+  if (requestedAmount > availableAmount) {
+    throw createSalesValidationError("O valor informado excede o credito disponivel da cliente.");
+  }
+
+  let remaining = roundCurrency(requestedAmount);
+  const usages = [];
+
+  for (const credit of credits) {
+    if (remaining <= 0) {
+      break;
+    }
+
+    const currentBalance = Number(credit.balanceAmount || 0);
+    if (currentBalance <= 0) {
+      continue;
+    }
+
+    const usedAmount = roundCurrency(Math.min(currentBalance, remaining));
+    remaining = roundCurrency(remaining - usedAmount);
+
+    usages.push({
+      customerCreditId: credit.idCustomerCredit,
+      amount: usedAmount,
+      nextBalanceAmount: roundCurrency(currentBalance - usedAmount),
+      nextStatus: roundCurrency(currentBalance - usedAmount) > 0 ? "ACTIVE" : "USED",
+    });
+  }
+
+  if (remaining > 0) {
+    throw createSalesValidationError("Nao foi possivel reservar o credito informado para esta venda.");
+  }
+
+  return {
+    amount: roundCurrency(requestedAmount),
+    receipt: {
+      paymentTypeId: null,
+      receiptType: "CUSTOMER_CREDIT",
+      amount: roundCurrency(requestedAmount),
+      paidAt: new Date(),
+      referenceCode: buildCustomerCreditReceiptReference(),
+    },
+    usages,
+  };
+}
+
+function buildFinancialReversalHistory(kind, scope, entryId, amount, description, occurredAt) {
+  const placeLabel =
+    kind === "CASH"
+      ? scope === "LOJA"
+        ? "CAIXA"
+        : "CAIXA PESSOAL"
+      : scope === "LOJA"
+        ? "BANCO"
+        : "BANCO PESSOAL";
+
+  return `EXTORNO de ${placeLabel} do lancamento ${entryId} em ${new Intl.DateTimeFormat(
+    "pt-BR",
+  ).format(occurredAt)}, valor ${Number(amount || 0).toFixed(2)}, descricao ${description}.`;
+}
+
+function isReversalDescription(description) {
+  return String(description || "").trim().toUpperCase().startsWith("ESTORNO - ");
+}
+
+function isCancelledSaleItem(item) {
+  return Boolean(item?.metadata?.cancellation?.cancelledAt);
+}
+
+function normalizeFinancialResolution(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+
+  if (!normalized) {
+    return null;
+  }
+
+  if (normalized === "REFUND" || normalized === "APPLY_REMAINING" || normalized === "CREDIT") {
+    return normalized;
+  }
+
+  throw createSalesValidationError("Resolucao financeira invalida.");
+}
+
+function resolveInstallmentStatusByDueDate(dueDate) {
+  if (!dueDate) {
+    return "OPEN";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const normalizedDueDate = new Date(dueDate);
+  normalizedDueDate.setHours(0, 0, 0, 0);
+
+  return normalizedDueDate.getTime() < today.getTime() ? "OVERDUE" : "OPEN";
+}
+
+async function reverseSaleCashEntries(saleId, occurredAt, reason, userId, transaction) {
+  const entries = await cashRepository.listEntriesBySaleId(saleId, transaction);
+  let reversedCount = 0;
+
+  for (const entry of entries) {
+    if (entry.reversalOfCashEntryId || isReversalDescription(entry.description)) {
+      continue;
+    }
+
+    const existingReversal = await cashRepository.findReversalByOriginId(entry.idCashEntry, transaction);
+
+    if (existingReversal) {
+      continue;
+    }
+
+    const categoryDescription = entry.FinancialCategory?.description || entry.category;
+
+    await createCashEntry(
+      {
+        scope: entry.scope,
+        movementType: entry.movementType === "IN" ? "OUT" : "IN",
+        financialCategoryId: entry.financialCategoryId || null,
+        category: categoryDescription,
+        description: `ESTORNO - ${entry.description}`,
+        amount: Number(entry.amount),
+        occurredAt,
+        sourceType: "MANUAL",
+        saleId,
+        paymentReceiptId: entry.paymentReceiptId || null,
+        paymentTypeId: entry.paymentTypeId || null,
+        referenceCode: entry.referenceCode || null,
+        transferKey: entry.transferKey || null,
+        reversalOfCashEntryId: entry.idCashEntry,
+      },
+      transaction,
+    );
+
+    await auditsRepository.createAudit(
+      {
+        auditTypeId: 3,
+        userId,
+        occurredAt,
+        history: buildFinancialReversalHistory(
+          "CASH",
+          entry.scope,
+          entry.idCashEntry,
+          entry.amount,
+          entry.description,
+          occurredAt,
+        ),
+        reason,
+      },
+      transaction,
+    );
+
+    reversedCount += 1;
+  }
+
+  return reversedCount;
+}
+
+async function reverseSaleBankEntries(saleId, occurredAt, reason, userId, transaction) {
+  const entries = await bankRepository.listEntriesBySaleId(saleId, transaction);
+  let reversedCount = 0;
+
+  for (const entry of entries) {
+    if (entry.reversalOfBankEntryId || isReversalDescription(entry.description)) {
+      continue;
+    }
+
+    const existingReversal = await bankRepository.findReversalByOriginId(entry.idBankEntry, transaction);
+
+    if (existingReversal) {
+      continue;
+    }
+
+    const categoryDescription = entry.FinancialCategory?.description || entry.category;
+
+    await createBankEntry(
+      {
+        scope: entry.scope,
+        movementType: entry.movementType === "IN" ? "OUT" : "IN",
+        financialCategoryId: entry.financialCategoryId || null,
+        category: categoryDescription,
+        description: `ESTORNO - ${entry.description}`,
+        accountLabel: entry.accountLabel || "Banco da Loja",
+        amount: Number(entry.amount),
+        occurredAt,
+        sourceType: "MANUAL",
+        saleId,
+        paymentReceiptId: entry.paymentReceiptId || null,
+        paymentTypeId: entry.paymentTypeId || null,
+        referenceCode: entry.referenceCode || null,
+        transferKey: entry.transferKey || null,
+        reversalOfBankEntryId: entry.idBankEntry,
+      },
+      transaction,
+    );
+
+    await auditsRepository.createAudit(
+      {
+        auditTypeId: 4,
+        userId,
+        occurredAt,
+        history: buildFinancialReversalHistory(
+          "BANK",
+          entry.scope,
+          entry.idBankEntry,
+          entry.amount,
+          entry.description,
+          occurredAt,
+        ),
+        reason,
+      },
+      transaction,
+    );
+
+    reversedCount += 1;
+  }
+
+  return reversedCount;
+}
+
+async function restoreSaleCustomerCredits(saleId, transaction) {
+  const usages = await customerCreditsRepository.listCreditUsagesBySaleId(saleId, transaction);
+
+  for (const usage of usages) {
+    const credit = usage.CustomerCredit;
+    if (!credit) {
+      continue;
+    }
+
+    const nextBalanceAmount = roundCurrency(Number(credit.balanceAmount || 0) + Number(usage.amount || 0));
+
+    await credit.update(
+      {
+        balanceAmount: nextBalanceAmount,
+        status: "ACTIVE",
+      },
+      { transaction },
+    );
+  }
+
+  return usages.length;
 }
 
 function addDays(baseDate, daysToAdd) {
@@ -107,6 +464,192 @@ function addDays(baseDate, daysToAdd) {
 
 function roundCurrency(value) {
   return Number(Number(value).toFixed(2));
+}
+
+function buildReceivableInstallmentRedistribution(installments, newOriginalAmount) {
+  const activeInstallments = installments.filter((installment) => installment.status !== "CANCELLED");
+  const activeCount = activeInstallments.length;
+
+  if (!activeCount || newOriginalAmount <= 0) {
+    return installments.map((installment) => ({
+      id: installment.idReceivableInstallment,
+      amount: 0,
+      paidAmount: 0,
+      status: "CANCELLED",
+      totalInstallments: installment.totalInstallments,
+    }));
+  }
+
+  const templateInstallments = buildInstallments(
+    newOriginalAmount,
+    activeCount,
+    activeInstallments[0]?.paymentTypeId ||
+      activeInstallments[0]?.PaymentType?.idPaymentType ||
+      1,
+    activeInstallments[0]?.dueDate || new Date(),
+  );
+
+  let cursor = 0;
+
+  return installments.map((installment) => {
+    if (installment.status === "CANCELLED") {
+      return {
+        id: installment.idReceivableInstallment,
+        amount: 0,
+        paidAmount: 0,
+        status: "CANCELLED",
+        totalInstallments: installment.totalInstallments,
+      };
+    }
+
+    const template = templateInstallments[cursor] || null;
+    cursor += 1;
+
+    return {
+      id: installment.idReceivableInstallment,
+      amount: template ? template.amount : 0,
+      paidAmount: 0,
+      status: template ? resolveInstallmentStatusByDueDate(installment.dueDate) : "CANCELLED",
+      totalInstallments: activeCount,
+    };
+  });
+}
+
+function buildRefundDescription(saleId, itemDescription) {
+  return `DEVOLUCAO PARCIAL DA VENDA ${saleId} - ${String(itemDescription || "").trim() || "ITEM"}`;
+}
+
+async function createSaleRefundEntries(saleId, itemDescription, refundAmount, reason, userId, transaction) {
+  let remaining = roundCurrency(refundAmount);
+
+  if (remaining <= 0) {
+    return 0;
+  }
+
+  const occurredAt = new Date();
+  const description = buildRefundDescription(saleId, itemDescription);
+  const [cashEntries, bankEntries] = await Promise.all([
+    cashRepository.listEntriesBySaleId(saleId, transaction),
+    bankRepository.listEntriesBySaleId(saleId, transaction),
+  ]);
+
+  const incomingEntries = [
+    ...cashEntries
+      .filter((entry) => entry.movementType === "IN" && !isReversalDescription(entry.description))
+      .map((entry) => ({ kind: "CASH", entry })),
+    ...bankEntries
+      .filter((entry) => entry.movementType === "IN" && !isReversalDescription(entry.description))
+      .map((entry) => ({ kind: "BANK", entry })),
+  ].sort((left, right) => {
+    const leftTime = new Date(left.entry.occurredAt).getTime();
+    const rightTime = new Date(right.entry.occurredAt).getTime();
+
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+
+    const leftId = Number(left.kind === "CASH" ? left.entry.idCashEntry : left.entry.idBankEntry);
+    const rightId = Number(right.kind === "CASH" ? right.entry.idCashEntry : right.entry.idBankEntry);
+    return rightId - leftId;
+  });
+
+  let createdCount = 0;
+
+  for (const item of incomingEntries) {
+    if (remaining <= 0) {
+      break;
+    }
+
+    const amount = roundCurrency(Math.min(remaining, Number(item.entry.amount || 0)));
+
+    if (amount <= 0) {
+      continue;
+    }
+
+    if (item.kind === "CASH") {
+      await createCashEntry(
+        {
+          scope: item.entry.scope,
+          movementType: "OUT",
+          financialCategoryId: item.entry.financialCategoryId || null,
+          category: item.entry.FinancialCategory?.description || item.entry.category,
+          description,
+          amount,
+          occurredAt,
+          sourceType: "MANUAL",
+          saleId,
+          paymentTypeId: item.entry.paymentTypeId || null,
+          referenceCode: item.entry.referenceCode || null,
+        },
+        transaction,
+      );
+
+      await auditsRepository.createAudit(
+        {
+          auditTypeId: 3,
+          userId,
+          occurredAt,
+          history: buildFinancialReversalHistory(
+            "CASH",
+            item.entry.scope,
+            item.entry.idCashEntry,
+            amount,
+            description,
+            occurredAt,
+          ),
+          reason,
+        },
+        transaction,
+      );
+    } else {
+      await createBankEntry(
+        {
+          scope: item.entry.scope,
+          movementType: "OUT",
+          financialCategoryId: item.entry.financialCategoryId || null,
+          category: item.entry.FinancialCategory?.description || item.entry.category,
+          description,
+          accountLabel: item.entry.accountLabel || "Banco da Loja",
+          amount,
+          occurredAt,
+          sourceType: "MANUAL",
+          saleId,
+          paymentTypeId: item.entry.paymentTypeId || null,
+          referenceCode: item.entry.referenceCode || null,
+        },
+        transaction,
+      );
+
+      await auditsRepository.createAudit(
+        {
+          auditTypeId: 4,
+          userId,
+          occurredAt,
+          history: buildFinancialReversalHistory(
+            "BANK",
+            item.entry.scope,
+            item.entry.idBankEntry,
+            amount,
+            description,
+            occurredAt,
+          ),
+          reason,
+        },
+        transaction,
+      );
+    }
+
+    remaining = roundCurrency(remaining - amount);
+    createdCount += 1;
+  }
+
+  if (remaining > 0) {
+    throw createSalesValidationError(
+      "Nao foi possivel distribuir a devolucao entre os lancamentos financeiros da venda.",
+    );
+  }
+
+  return createdCount;
 }
 
 function buildInstallments(
@@ -257,7 +800,6 @@ function buildReceivablePayload({
   remainingAmount,
   installmentCount,
   dueDate,
-  cardData,
   installmentIntervalDays,
 }) {
   if (remainingAmount <= 0) {
@@ -265,9 +807,7 @@ function buildReceivablePayload({
   }
 
   const usesCreditSchedule = isCreditInstallmentPaymentType(mainPaymentType);
-  const debtorType =
-    mainPaymentType.financialFlow === "FUTURE_OPERATOR" ? "CARD_OPERATOR" : "CUSTOMER";
-  const effectiveDueDate = dueDate || cardData.expectedSettlementDate || new Date();
+  const effectiveDueDate = dueDate || new Date();
   const effectiveInstallmentCount = mainPaymentType.allowsInstallments ? installmentCount : 1;
   const installments = buildInstallments(
     remainingAmount,
@@ -284,25 +824,11 @@ function buildReceivablePayload({
 
   return {
     originalAmount: remainingAmount,
-    debtorType,
-    customerId: debtorType === "CUSTOMER" ? customerId : null,
-    operatorLabel: debtorType === "CARD_OPERATOR" ? cardData.operatorLabel : null,
+    debtorType: "CUSTOMER",
+    customerId,
+    operatorLabel: null,
     installments,
-    cardTransaction:
-      debtorType === "CARD_OPERATOR"
-        ? {
-          operatorLabel: cardData.operatorLabel,
-          cardBrand: cardData.cardBrand,
-          authorizationCode: cardData.authorizationCode,
-          clientInstallmentCount: cardData.clientInstallmentCount,
-          grossAmount: cardData.grossAmount,
-          entryAmount: cardData.entryAmount,
-          netReceivableAmount: remainingAmount,
-          feeAmount: cardData.feeAmount,
-          expectedSettlementDate: cardData.expectedSettlementDate,
-          settlementStatus: "PENDING",
-        }
-        : null,
+    cardTransaction: null,
   };
 }
 
@@ -339,6 +865,8 @@ function mapSaleItem(item) {
   const subtotal = Number(item.subtotal || 0);
   const grossAmount = Number((quantity * unitPrice).toFixed(2));
   const discountAmount = Number(Math.max(0, grossAmount - subtotal).toFixed(2));
+  const cancellation = item.metadata?.cancellation || null;
+  const isCancelled = Boolean(cancellation?.cancelledAt);
 
   return {
     id: item.idSaleItem,
@@ -356,6 +884,16 @@ function mapSaleItem(item) {
     discountAmount,
     subtotal,
     metadata: item.metadata || null,
+    isCancelled,
+    cancellation: cancellation
+      ? {
+          cancelledAt: cancellation.cancelledAt || null,
+          reason: cancellation.reason || null,
+          resolution: cancellation.resolution || null,
+          refundAmount: Number(cancellation.refundAmount || 0),
+          creditAmount: Number(cancellation.creditAmount || 0),
+        }
+      : null,
     productStatus: status?.desc || null,
     seamstress: employee?.shortName || employee?.fullName || null,
     fittingDate: product?.testDate || null,
@@ -377,6 +915,8 @@ function resolveSaleStatus(sale) {
 
 function mapPaymentReceipt(receipt) {
   const paymentType = receipt.PaymentType || receipt.PaymentTypes;
+  const fallbackPaymentTypeName =
+    receipt.receiptType === "CUSTOMER_CREDIT" ? "Credito da cliente" : null;
 
   return {
     id: receipt.idPaymentReceipt,
@@ -391,7 +931,12 @@ function mapPaymentReceipt(receipt) {
         id: paymentType.idPaymentType,
         name: paymentType.desc,
       }
-      : null,
+      : fallbackPaymentTypeName
+        ? {
+            id: 0,
+            name: fallbackPaymentTypeName,
+          }
+        : null,
   };
 }
 
@@ -522,6 +1067,8 @@ function mapSaleDetails(sale) {
     items,
     receipts,
     measurementsCount,
+    netReceivedAmount: 0,
+    customerCreditAmount: 0,
     receivable: receivable
       ? {
         id: receivable.idReceivable,
@@ -558,6 +1105,44 @@ function mapSaleDetails(sale) {
   };
 }
 
+async function enrichSaleFinancialSummary(saleDetails) {
+  const [cashEntries, bankEntries, saleCredits] = await Promise.all([
+    cashRepository.listEntriesBySaleId(saleDetails.id),
+    bankRepository.listEntriesBySaleId(saleDetails.id),
+    customerCreditsRepository.listCreditsBySaleId(saleDetails.id),
+  ]);
+
+  const netReceivedAmount = roundCurrency(
+    [...cashEntries, ...bankEntries].reduce((acc, entry) => {
+      const sign = entry.movementType === "IN" ? 1 : -1;
+      return acc + sign * Number(entry.amount || 0);
+    }, 0),
+  );
+  const customerCreditReceiptAmount = roundCurrency(
+    Array.isArray(saleDetails.receipts)
+      ? saleDetails.receipts
+          .filter((item) => item.receiptType === "CUSTOMER_CREDIT")
+          .reduce((acc, item) => acc + Number(item.amount || 0), 0)
+      : 0,
+  );
+
+  return {
+    ...saleDetails,
+    netReceivedAmount: roundCurrency(netReceivedAmount + customerCreditReceiptAmount),
+    customerCreditAmount: roundCurrency(
+      saleCredits.reduce((acc, item) => acc + Number(item.balanceAmount || 0), 0),
+    ),
+    customerCredits: saleCredits.map((item) => ({
+      id: item.idCustomerCredit,
+      originalAmount: Number(item.originalAmount || 0),
+      balanceAmount: Number(item.balanceAmount || 0),
+      description: item.description,
+      status: item.status,
+      createdAt: item.createdAt,
+    })),
+  };
+}
+
 function mapSaleListItem(sale) {
   const customer = sale.Customer || sale.Customers;
   const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
@@ -576,6 +1161,15 @@ function mapSaleListItem(sale) {
 }
 
 async function createSale(body = {}) {
+  const shouldCreateQuote =
+    body.paymentTypeId === null ||
+    body.paymentTypeId === undefined ||
+    body.paymentTypeId === "";
+
+  if (shouldCreateQuote) {
+    return createQuote(body);
+  }
+
   return finalizeSaleFromScratch(body);
 }
 
@@ -618,6 +1212,11 @@ function deriveSaleStatusFromItems() {
 }
 
 async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount }) {
+  const customerCreditApplication = await resolveCustomerCreditApplication(
+    body,
+    customerId,
+    finalAmount,
+  );
   const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
   const isCreditPayment = isCreditInstallmentPaymentType(mainPaymentType);
   const installmentCount =
@@ -663,7 +1262,7 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     );
     validateEntryPaymentType(mainPaymentType, entryPaymentType);
 
-    if (entryAmount >= finalAmount) {
+    if (entryAmount + customerCreditApplication.amount >= finalAmount) {
       throw createSalesValidationError("O valor da entrada deve ser menor que o valor final.");
     }
 
@@ -697,7 +1296,7 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     entryReceipt = {
       paymentTypeId: mainPaymentType.id,
       receiptType: "SALE_FULL",
-      amount: roundCurrency(finalAmount),
+      amount: roundCurrency(finalAmount - customerCreditApplication.amount),
       paidAt: new Date(),
       referenceCode: paymentReferenceCode,
     };
@@ -710,39 +1309,9 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     });
   }
 
-  const remainingAmount = roundCurrency(finalAmount - (entryReceipt?.amount || 0));
-  const cardClientInstallmentCount =
-    body.cardClientInstallmentCount === null ||
-      body.cardClientInstallmentCount === undefined ||
-      body.cardClientInstallmentCount === ""
-      ? installmentCount
-      : normalizeInteger(body.cardClientInstallmentCount, "Parcelas no cartao");
-
-  const cardFeeAmount =
-    body.cardFeeAmount === null || body.cardFeeAmount === undefined || body.cardFeeAmount === ""
-      ? 0
-      : normalizeDecimal(body.cardFeeAmount, "Taxa do cartao");
-
-  if (cardFeeAmount !== null && cardFeeAmount < 0) {
-    throw createSalesValidationError("Taxa do cartao invalida.");
-  }
-
-  const cardData = {
-    operatorLabel: body.cardOperatorLabel ? String(body.cardOperatorLabel).trim() : null,
-    cardBrand: body.cardBrand ? String(body.cardBrand).trim() : null,
-    authorizationCode: body.cardAuthorizationCode ? String(body.cardAuthorizationCode).trim() : null,
-    clientInstallmentCount: cardClientInstallmentCount,
-    grossAmount: roundCurrency(finalAmount),
-    entryAmount: roundCurrency(entryReceipt?.amount || 0),
-    feeAmount: roundCurrency(cardFeeAmount || 0),
-    expectedSettlementDate:
-      normalizeDate(body.cardExpectedSettlementDate, "Data prevista de repasse") || dueDate || null,
-  };
-
-  if (mainPaymentType.financialFlow === "FUTURE_OPERATOR" && !cardData.expectedSettlementDate) {
-    throw createSalesValidationError("Data prevista de repasse e obrigatoria para cartao.");
-  }
-
+  const remainingAmount = roundCurrency(
+    finalAmount - customerCreditApplication.amount - (entryReceipt?.amount || 0),
+  );
   const receivable = buildReceivablePayload({
     customerId,
     mainPaymentType,
@@ -750,14 +1319,12 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     remainingAmount,
     installmentCount,
     dueDate,
-    cardData,
     installmentIntervalDays,
   });
 
   const resolvedDueDate =
     receivable?.installments?.[0]?.dueDate ||
     dueDate ||
-    cardData.expectedSettlementDate ||
     null;
 
   return {
@@ -766,6 +1333,9 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     dueDate: resolvedDueDate,
     installmentIntervalDays,
     entryReceipt,
+    additionalReceipts: customerCreditApplication.receipt ? [customerCreditApplication.receipt] : [],
+    customerCreditUsages: customerCreditApplication.usages,
+    customerCreditAmount: customerCreditApplication.amount,
     financialMovement: financialMovement ? [financialMovement] : [],
     receivable,
     remainingAmount,
@@ -783,6 +1353,9 @@ function buildSaleResponse(created, extra = {}) {
     itemsCount: created.items?.length || created.sale.SaleItems?.length || 0,
     measurementsCount: created.measurements?.length || 0,
     entryReceiptId: created.entryReceipt?.idPaymentReceipt || null,
+    additionalReceiptIds: Array.isArray(created.additionalReceipts)
+      ? created.additionalReceipts.map((item) => item.idPaymentReceipt)
+      : [],
     receivableId: created.receivable?.receivable?.idReceivable || created.receivable?.idReceivable || null,
     ...extra,
   };
@@ -807,12 +1380,61 @@ async function createQuote(body = {}) {
     items: normalized.items,
     customerMeasurements: normalized.customerMeasurements,
     entryReceipt: null,
+    additionalReceipts: [],
+    customerCreditUsages: [],
     receivable: null,
     financialMovements: [],
     createProducts: false,
   });
 
   return buildSaleResponse(created, {
+    quote: true,
+  });
+}
+
+function validateEditableBudgetSale(sale) {
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  if (sale.status !== "BUDGET") {
+    throw createSalesValidationError("Somente orcamentos em aberto podem ser alterados.");
+  }
+
+  if (sale.PaymentReceipts?.length || sale.Receivable || sale.CardTransaction || sale.CardTransactions) {
+    throw createSalesValidationError("Este orcamento ja possui registros financeiros vinculados.");
+  }
+}
+
+async function updateQuote(id, body = {}) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const normalized = normalizeQuoteBase(body);
+  const sale = await repository.getSaleForFinalization(normalizedId);
+  validateEditableBudgetSale(sale);
+
+  const updated = await repository.updateQuote(normalizedId, {
+    sale: {
+      customerId: normalized.customerId,
+      userId: normalized.userId,
+      discountType: normalized.discountType,
+      discountValue: normalized.discountValue,
+      totalAmount: normalized.totalAmount,
+      finalAmount: normalized.finalAmount,
+    },
+    items: normalized.items,
+    customerMeasurements: normalized.customerMeasurements,
+  });
+
+  if (!updated) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  return buildSaleResponse(updated, {
     quote: true,
   });
 }
@@ -840,9 +1462,11 @@ async function finalizeSale(id, body = {}) {
     throw createSalesValidationError("Nao foi possivel concluir um orcamento sem itens.");
   }
 
-  if (sale.PaymentReceipts?.length || sale.Receivable) {
+  if (sale.PaymentReceipts?.length || sale.Receivable || sale.CardTransaction || sale.CardTransactions) {
     throw createSalesValidationError("Este orcamento ja possui registros financeiros vinculados.");
   }
+
+  await ensureOpenStoreCashSessionForSaleFinalization();
 
   const finalization = await normalizeFinalizationPayload(body, {
     customerId: sale.customerId,
@@ -854,11 +1478,13 @@ async function finalizeSale(id, body = {}) {
   const finalized = await repository.finalizeSale(normalizedId, {
     sale: {
       status: finalStatus,
-      dueDate: finalization.dueDate || finalization.receivable?.cardTransaction?.expectedSettlementDate || null,
+      dueDate: finalization.dueDate || null,
       paymentTypeId: finalization.mainPaymentType.id,
       installmentCount: finalization.installmentCount,
     },
     entryReceipt: finalization.entryReceipt,
+    additionalReceipts: finalization.additionalReceipts,
+    customerCreditUsages: finalization.customerCreditUsages,
     receivable: finalization.receivable,
     financialMovements: finalization.financialMovement,
   });
@@ -872,6 +1498,7 @@ async function finalizeSale(id, body = {}) {
       paymentTypeId: finalization.mainPaymentType.id,
       paymentTypeName: finalization.mainPaymentType.name,
       entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
+      customerCreditAmount: roundCurrency(finalization.customerCreditAmount || 0),
       remainingAmount: finalization.remainingAmount,
       debtorType: finalization.receivable?.debtorType || null,
       installments:
@@ -888,6 +1515,7 @@ async function finalizeSale(id, body = {}) {
 
 async function finalizeSaleFromScratch(body = {}) {
   const normalized = normalizeQuoteBase(body);
+  await ensureOpenStoreCashSessionForSaleFinalization();
   const finalization = await normalizeFinalizationPayload(body, {
     customerId: normalized.customerId,
     finalAmount: normalized.finalAmount,
@@ -903,13 +1531,15 @@ async function finalizeSaleFromScratch(body = {}) {
       totalAmount: normalized.totalAmount,
       finalAmount: normalized.finalAmount,
       status: finalStatus,
-      dueDate: finalization.dueDate || finalization.receivable?.cardTransaction?.expectedSettlementDate || null,
+      dueDate: finalization.dueDate || null,
       paymentTypeId: finalization.mainPaymentType.id,
       installmentCount: finalization.installmentCount,
     },
     items: normalized.items,
     customerMeasurements: normalized.customerMeasurements,
     entryReceipt: finalization.entryReceipt,
+    additionalReceipts: finalization.additionalReceipts,
+    customerCreditUsages: finalization.customerCreditUsages,
     receivable: finalization.receivable,
     financialMovements: finalization.financialMovement,
   });
@@ -919,6 +1549,7 @@ async function finalizeSaleFromScratch(body = {}) {
       paymentTypeId: finalization.mainPaymentType.id,
       paymentTypeName: finalization.mainPaymentType.name,
       entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
+      customerCreditAmount: roundCurrency(finalization.customerCreditAmount || 0),
       remainingAmount: finalization.remainingAmount,
       debtorType: finalization.receivable?.debtorType || null,
       installments:
@@ -933,12 +1564,16 @@ async function finalizeSaleFromScratch(body = {}) {
   });
 }
 
-async function cancelSale(id) {
+async function cancelSale(id, user, body = {}) {
   const normalizedId = Number(id);
 
   if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
     throw createSalesValidationError("Venda invalida.");
   }
+
+  const reason = normalizeRequiredText(body.reason, "Motivo");
+  const userId = normalizeUserId(user);
+  const occurredAt = new Date();
 
   const sale = await repository.getSaleById(normalizedId);
 
@@ -950,16 +1585,495 @@ async function cancelSale(id) {
     throw createSalesValidationError("A venda ja esta cancelada.");
   }
 
-  const cancelled = await repository.cancelSale(normalizedId);
+  const cancelled = await sequelize.transaction(async (transaction) => {
+    const [reversedCashEntries, reversedBankEntries, restoredCustomerCredits] = await Promise.all([
+      reverseSaleCashEntries(normalizedId, occurredAt, reason, userId, transaction),
+      reverseSaleBankEntries(normalizedId, occurredAt, reason, userId, transaction),
+      restoreSaleCustomerCredits(normalizedId, transaction),
+    ]);
 
-  if (!cancelled) {
+    const result = await repository.cancelSale(normalizedId, transaction);
+
+    await auditsRepository.createAudit(
+      {
+        auditTypeId: 5,
+        userId,
+        occurredAt,
+        history: buildSaleCancellationAuditHistory(result || sale, occurredAt),
+        reason,
+      },
+      transaction,
+    );
+
+    return {
+      sale: result,
+      reversedCashEntries,
+      reversedBankEntries,
+      restoredCustomerCredits,
+    };
+  });
+
+  if (!cancelled?.sale) {
     throw notFoundError("Venda nao encontrada.");
   }
 
   return {
-    id: cancelled.idSale,
+    id: cancelled.sale.idSale,
     status: "CANCELLED",
+    reversedCashEntries: cancelled.reversedCashEntries,
+    reversedBankEntries: cancelled.reversedBankEntries,
+    restoredCustomerCredits: cancelled.restoredCustomerCredits,
     message: "Venda cancelada com sucesso.",
+  };
+}
+
+async function cancelSaleItem(saleId, itemId, user, body = {}) {
+  const normalizedSaleId = Number(saleId);
+  const normalizedItemId = Number(itemId);
+
+  if (!Number.isInteger(normalizedSaleId) || normalizedSaleId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  if (!Number.isInteger(normalizedItemId) || normalizedItemId <= 0) {
+    throw createSalesValidationError("Item da venda invalido.");
+  }
+
+  const reason = normalizeRequiredText(body.reason, "Motivo");
+  const resolution = normalizeFinancialResolution(body.financialResolution);
+  const userId = normalizeUserId(user);
+  const occurredAt = new Date();
+
+  return sequelize.transaction(async (transaction) => {
+    const sale = await repository.getSaleForItemCancellation(
+      normalizedSaleId,
+      normalizedItemId,
+      transaction,
+    );
+
+    if (!sale) {
+      throw notFoundError("Venda nao encontrada.");
+    }
+
+    if (resolveSaleStatus(sale) === "CANCELLED") {
+      throw createSalesValidationError("Nao e possivel cancelar item de uma venda cancelada.");
+    }
+
+    const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
+    const targetItem = items.find((item) => Number(item.idSaleItem) === normalizedItemId);
+
+    if (!targetItem) {
+      throw notFoundError("Item da venda nao encontrado.");
+    }
+
+    if (isCancelledSaleItem(targetItem)) {
+      throw createSalesValidationError("Este item ja foi cancelado.");
+    }
+
+    const activeItems = items.filter((item) => !isCancelledSaleItem(item));
+
+    if (activeItems.length <= 1) {
+      throw createSalesValidationError(
+        "Nao e possivel cancelar o ultimo item por este fluxo. Utilize o cancelamento da venda.",
+      );
+    }
+
+    const hasInstallmentReceipts = Array.isArray(sale.PaymentReceipts)
+      ? sale.PaymentReceipts.some((receipt) => receipt.receiptType === "INSTALLMENT")
+      : false;
+
+    if (hasInstallmentReceipts) {
+      throw createSalesValidationError(
+        "O cancelamento parcial ainda nao esta disponivel para vendas com parcelas ja baixadas. Utilize o ajuste financeiro.",
+      );
+    }
+
+    const remainingActiveItems = activeItems.filter(
+      (item) => Number(item.idSaleItem) !== normalizedItemId,
+    );
+    const nextTotalAmount = roundCurrency(
+      remainingActiveItems.reduce(
+        (acc, item) => acc + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+        0,
+      ),
+    );
+    const nextFinalAmount = roundCurrency(
+      remainingActiveItems.reduce((acc, item) => acc + Number(item.subtotal || 0), 0),
+    );
+    const nextDiscountAmount = roundCurrency(Math.max(0, nextTotalAmount - nextFinalAmount));
+
+    const [saleCashEntries, saleBankEntries] = await Promise.all([
+      cashRepository.listEntriesBySaleId(normalizedSaleId, transaction),
+      bankRepository.listEntriesBySaleId(normalizedSaleId, transaction),
+    ]);
+
+    const netCollectedAmount = roundCurrency(
+      [...saleCashEntries, ...saleBankEntries].reduce((acc, entry) => {
+        const sign = entry.movementType === "IN" ? 1 : -1;
+        return acc + sign * Number(entry.amount || 0);
+      }, 0),
+    );
+    const overpaymentAmount = roundCurrency(Math.max(0, netCollectedAmount - nextFinalAmount));
+
+    if (overpaymentAmount > 0 && !resolution) {
+      throw createSalesValidationError(
+        "Escolha o tratamento financeiro do valor ja recebido para concluir o cancelamento da peca.",
+      );
+    }
+
+    if (overpaymentAmount > 0 && resolution === "APPLY_REMAINING") {
+      throw createSalesValidationError(
+        "Nao existe saldo restante suficiente para abater esse valor. Escolha devolucao ou credito.",
+      );
+    }
+
+    let refundAmount = 0;
+    let creditAmount = 0;
+    let refundEntriesCreated = 0;
+
+    if (overpaymentAmount > 0 && resolution === "REFUND") {
+      refundAmount = overpaymentAmount;
+      refundEntriesCreated = await createSaleRefundEntries(
+        normalizedSaleId,
+        targetItem.description,
+        refundAmount,
+        reason,
+        userId,
+        transaction,
+      );
+    }
+
+    if (overpaymentAmount > 0 && resolution === "CREDIT") {
+      creditAmount = overpaymentAmount;
+      await customerCreditsRepository.createCustomerCredit(
+        {
+          customerId: sale.customerId,
+          saleId: normalizedSaleId,
+          saleItemId: normalizedItemId,
+          originalAmount: creditAmount,
+          balanceAmount: creditAmount,
+          description: buildCustomerCreditDescription(normalizedSaleId, targetItem.description),
+          status: "ACTIVE",
+        },
+        transaction,
+      );
+    }
+
+    const standaloneReceivedAmount = roundCurrency(
+      Array.isArray(sale.PaymentReceipts)
+        ? sale.PaymentReceipts
+            .filter((receipt) => receipt.receiptType !== "INSTALLMENT")
+            .reduce((acc, receipt) => acc + Number(receipt.amount || 0), 0)
+        : 0,
+    );
+    const effectiveStandaloneReceived = roundCurrency(
+      Math.max(0, standaloneReceivedAmount - refundAmount),
+    );
+
+    const receivable = sale.Receivable || sale.Receivables || null;
+    const nextReceivableOriginalAmount = roundCurrency(
+      Math.max(0, nextFinalAmount - effectiveStandaloneReceived),
+    );
+    const cancellationMetadata = {
+      ...(targetItem.metadata || {}),
+      cancellation: {
+        cancelledAt: occurredAt.toISOString(),
+        reason,
+        resolution: resolution || null,
+        refundAmount,
+        creditAmount,
+        cancelledByUserId: userId,
+      },
+    };
+
+    await repository.updateSaleItem(
+      normalizedItemId,
+      {
+        metadata: cancellationMetadata,
+      },
+      transaction,
+    );
+
+    if (targetItem.productId) {
+      const cancelledStatus = await repository.getOrCreateCancelledStatus(transaction);
+      await repository.updateProductStatusByIds([targetItem.productId], cancelledStatus.id, transaction);
+    }
+
+    await repository.updateSaleSummary(
+      normalizedSaleId,
+      {
+        totalAmount: nextTotalAmount,
+        finalAmount: nextFinalAmount,
+        discountType: nextDiscountAmount > 0 ? "FIXED" : null,
+        discountValue: nextDiscountAmount > 0 ? nextDiscountAmount : null,
+      },
+      transaction,
+    );
+
+    if (receivable) {
+      if (nextReceivableOriginalAmount <= 0) {
+        await repository.updateReceivable(
+          receivable.idReceivable,
+          {
+            originalAmount: 0,
+            openAmount: 0,
+            status: "CANCELLED",
+          },
+          transaction,
+        );
+
+        for (const installment of receivable.ReceivableInstallments || []) {
+          await repository.updateReceivableInstallment(
+            installment.idReceivableInstallment,
+            {
+              amount: 0,
+              paidAmount: 0,
+              status: "CANCELLED",
+            },
+            transaction,
+          );
+        }
+      } else {
+        const redistributedInstallments = buildReceivableInstallmentRedistribution(
+          receivable.ReceivableInstallments || [],
+          nextReceivableOriginalAmount,
+        );
+
+        await repository.updateReceivable(
+          receivable.idReceivable,
+          {
+            originalAmount: nextReceivableOriginalAmount,
+            openAmount: nextReceivableOriginalAmount,
+            status: "OPEN",
+          },
+          transaction,
+        );
+
+        for (const installment of redistributedInstallments) {
+          await repository.updateReceivableInstallment(
+            installment.id,
+            {
+              amount: installment.amount,
+              paidAmount: installment.paidAmount,
+              status: installment.status,
+              totalInstallments: installment.totalInstallments,
+            },
+            transaction,
+          );
+        }
+      }
+    }
+
+    await auditsRepository.createAudit(
+      {
+        auditTypeId: 5,
+        userId,
+        occurredAt,
+        history: buildSaleItemCancellationAuditHistory(normalizedSaleId, targetItem, occurredAt),
+        reason,
+      },
+      transaction,
+    );
+
+    return {
+      idSale: normalizedSaleId,
+      idSaleItem: normalizedItemId,
+      nextFinalAmount,
+      refundAmount,
+      creditAmount,
+      refundEntriesCreated,
+      message: "Item cancelado com sucesso.",
+    };
+  });
+}
+
+async function renegotiateSalePayment(id, user, body = {}) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const reason = normalizeRequiredText(body.reason, "Motivo");
+  const sale = await repository.getSaleById(normalizedId);
+
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  if (resolveSaleStatus(sale) === "CANCELLED") {
+    throw createSalesValidationError("Nao e possivel renegociar uma venda cancelada.");
+  }
+
+  const receivable = sale.Receivable || sale.Receivables || null;
+
+  if (!receivable || Number(receivable.openAmount || 0) <= 0) {
+    throw createSalesValidationError("Esta venda nao possui saldo em aberto para renegociar.");
+  }
+
+  if (receivable.debtorType !== "CUSTOMER") {
+    throw createSalesValidationError(
+      "A renegociacao desta etapa esta disponivel apenas para contas a receber de cliente.",
+    );
+  }
+
+  const installments = Array.isArray(receivable.ReceivableInstallments)
+    ? receivable.ReceivableInstallments
+    : [];
+  const partiallyPaidInstallment = installments.find(
+    (installment) => Number(installment.paidAmount || 0) > 0 && installment.status !== "PAID",
+  );
+
+  if (partiallyPaidInstallment) {
+    throw createSalesValidationError(
+      "Nao e possivel renegociar parcelas parcialmente pagas por este fluxo. Utilize o ajuste financeiro.",
+    );
+  }
+
+  const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
+
+  if (mainPaymentType.financialFlow !== "FUTURE_CUSTOMER") {
+    throw createSalesValidationError(
+      "A renegociacao desta etapa exige uma forma de pagamento com recebimento futuro do cliente.",
+    );
+  }
+
+  const installmentCount =
+    body.installmentCount === null || body.installmentCount === undefined || body.installmentCount === ""
+      ? Number(mainPaymentType.defaultInstallments || 1)
+      : normalizeInteger(body.installmentCount, "Quantidade de parcelas");
+  validateInstallmentCount(mainPaymentType, installmentCount);
+
+  const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
+  if (mainPaymentType.requiresDueDate && !dueDate) {
+    throw createSalesValidationError("Data de vencimento e obrigatoria.");
+  }
+
+  const installmentIntervalDays =
+    body.installmentIntervalDays === null ||
+    body.installmentIntervalDays === undefined ||
+    body.installmentIntervalDays === ""
+      ? 30
+      : normalizeInteger(body.installmentIntervalDays, "Intervalo entre parcelas");
+
+  const paidInstallments = installments.filter((installment) => installment.status === "PAID");
+  const unpaidInstallments = installments.filter((installment) => installment.status !== "PAID");
+
+  if (!unpaidInstallments.length) {
+    throw createSalesValidationError("Nao existem parcelas abertas para renegociar.");
+  }
+
+  const openAmount = roundCurrency(receivable.openAmount || 0);
+  const newInstallments = buildInstallments(
+    openAmount,
+    installmentCount,
+    mainPaymentType.id,
+    dueDate || new Date(),
+    undefined,
+  );
+  const newTotalInstallments = paidInstallments.length + newInstallments.length;
+  const userId = normalizeUserId(user);
+  const occurredAt = new Date();
+
+  await sequelize.transaction(async (transaction) => {
+    if (paidInstallments.length) {
+      for (const installment of paidInstallments) {
+        await repository.updateReceivableInstallment(
+          installment.idReceivableInstallment,
+          {
+            totalInstallments: newTotalInstallments,
+          },
+          transaction,
+        );
+      }
+    }
+
+    await repository.deleteReceivableInstallmentsByIds(
+      unpaidInstallments.map((installment) => installment.idReceivableInstallment),
+      transaction,
+    );
+
+    await repository.createReceivableInstallments(
+      newInstallments.map((installment, index) => ({
+        receivableId: receivable.idReceivable,
+        paymentTypeId: installment.paymentTypeId,
+        installmentNumber: paidInstallments.length + index + 1,
+        totalInstallments: newTotalInstallments,
+        dueDate: installment.dueDate,
+        interestBaseDate: installment.interestBaseDate,
+        amount: installment.amount,
+        paidAmount: 0,
+        status: installment.status,
+      })),
+      transaction,
+    );
+
+    await repository.updateReceivable(
+      receivable.idReceivable,
+      {
+        originalAmount: roundCurrency(
+          paidInstallments.reduce((acc, installment) => acc + Number(installment.amount || 0), 0) +
+            openAmount,
+        ),
+        openAmount,
+        status: paidInstallments.length ? "PARTIAL" : "OPEN",
+      },
+      transaction,
+    );
+
+    await repository.updateSaleSummary(
+      normalizedId,
+      {
+        paymentTypeId: mainPaymentType.id,
+        installmentCount: newTotalInstallments,
+        dueDate: newInstallments[0]?.dueDate || dueDate || sale.dueDate || null,
+      },
+      transaction,
+    );
+
+    await auditsRepository.createAudit(
+      {
+        auditTypeId: 5,
+        userId,
+        occurredAt,
+        history: `RENEGOCIACAO da venda ${normalizedId} em ${new Intl.DateTimeFormat("pt-BR", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }).format(occurredAt)}.`,
+        reason,
+      },
+      transaction,
+    );
+  });
+
+  return {
+    id: normalizedId,
+    installmentCount: newTotalInstallments,
+    openAmount,
+    message: "Pagamento renegociado com sucesso.",
+  };
+}
+
+async function deleteQuote(id) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const sale = await repository.getSaleForFinalization(normalizedId);
+  validateEditableBudgetSale(sale);
+
+  const deleted = await repository.deleteQuote(normalizedId);
+
+  if (!deleted) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  return {
+    id: normalizedId,
+    status: "DELETED",
+    message: "Orcamento descartado com sucesso.",
   };
 }
 
@@ -976,7 +2090,7 @@ async function getSaleById(id) {
     throw notFoundError("Venda nao encontrada.");
   }
 
-  return mapSaleDetails(sale);
+  return enrichSaleFinancialSummary(mapSaleDetails(sale));
 }
 
 async function listSales({ page, pageSize, status, search, customerId } = {}) {
@@ -1008,11 +2122,15 @@ async function listSales({ page, pageSize, status, search, customerId } = {}) {
 
 module.exports = {
   MEASUREMENT_FIELDS,
+  cancelSaleItem,
   createSalesValidationError,
   createSale,
   createQuote,
   cancelSale,
+  deleteQuote,
   finalizeSale,
   getSaleById,
   listSales,
+  renegotiateSalePayment,
+  updateQuote,
 };

@@ -221,7 +221,7 @@ async function registerPayment(payableId, body = {}) {
       target: payable.settlementTarget,
       scope: payable.scope,
       movementType: "OUT",
-      category: payable.category || "PAGAMENTO",
+      category: payable.category,
       description: payable.description || `Pagamento a ${payable.beneficiary}`,
       accountLabel: payable.accountLabel || "Banco da Loja",
       amount,
