@@ -115,6 +115,26 @@ async function findSupplierByDocument(document, { excludeId } = {}) {
   });
 }
 
+async function findEmployeeByDocument(document, { excludeId } = {}) {
+  if (!document) return null;
+
+  const where = {
+    document,
+    dsbl: false,
+  };
+
+  if (excludeId) {
+    where.idEmployee = {
+      [Op.ne]: excludeId,
+    };
+  }
+
+  return db.Employees.findOne({
+    where,
+    order: [["idEmployee", "ASC"]],
+  });
+}
+
 async function updateResource(resource, id, payload) {
   const resourceData = getModelAndConfig(resource);
   if (!resourceData) return null;
@@ -243,6 +263,7 @@ module.exports = {
   listResource,
   createResource,
   findSupplierByDocument,
+  findEmployeeByDocument,
   updateResource,
   deleteResource,
 };

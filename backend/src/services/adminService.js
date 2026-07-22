@@ -49,6 +49,18 @@ function normalizeDate(value) {
   return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
+function validateOptionalDocument(value) {
+  if (!value) return;
+
+  if (!/^\d{11}$|^\d{14}$/.test(String(value))) {
+    throw createAdminResourceError("CPF/CNPJ deve conter 11 ou 14 digitos quando informado.");
+  }
+}
+
+function isUniqueConstraintError(error) {
+  return error?.name === "SequelizeUniqueConstraintError";
+}
+
 function sanitizePayload(resource, body = {}) {
   const config = getAdminResourceConfig(resource);
   if (!config) {
@@ -99,38 +111,45 @@ function sanitizePayload(resource, body = {}) {
 function validatePayload(resource, payload, isCreate) {
   if (resource === "payment-types") {
     if (isCreate && !payload.desc) {
-      throw createAdminResourceError("Descrição e obrigatoria.");
+      throw createAdminResourceError("Descricao e obrigatoria.");
     }
     if (!isCreate && "desc" in payload && !payload.desc) {
-      throw createAdminResourceError("Descrição e obrigatoria.");
+      throw createAdminResourceError("Descricao e obrigatoria.");
     }
     return;
   }
 
   if (resource === "suppliers") {
     if (isCreate && !payload.fullName) {
-      throw createAdminResourceError("Nome do fornecedor é obrigatório.");
+      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
     }
     if (!isCreate && "fullName" in payload && !payload.fullName) {
-      throw createAdminResourceError("Nome do fornecedor é obrigatório.");
+      throw createAdminResourceError("Nome do fornecedor e obrigatorio.");
+    }
+    if ("document" in payload) {
+      validateOptionalDocument(payload.document);
     }
     return;
   }
 
   if (resource === "employees") {
     if (isCreate && !payload.fullName) {
-      throw createAdminResourceError("Nome da funcionaria é obrigatório.");
+      throw createAdminResourceError("Nome da funcionaria e obrigatorio.");
     }
 
     if (isCreate && !payload.shortName) {
-      throw createAdminResourceError("Nome curto da funcionaria é obrigatório.");
+      throw createAdminResourceError("Nome curto da funcionaria e obrigatorio.");
     }
 
     if (isCreate && !payload.roleId) {
-      throw createAdminResourceError("Cargo da funcionaria é obrigatório.");
+      throw createAdminResourceError("Cargo da funcionaria e obrigatorio.");
+    }
+
+    if ("document" in payload) {
+      validateOptionalDocument(payload.document);
     }
   } else if (isCreate && !payload.desc) {
-    throw createAdminResourceError("Descrição e obrigatoria.");
+    throw createAdminResourceError("Descricao e obrigatoria.");
   }
 }
 
@@ -167,11 +186,19 @@ async function createResource(resource, body) {
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, true);
 
+  if (resource === "employees" && payload.document) {
+    const existingEmployee = await repository.findEmployeeByDocument(payload.document);
+
+    if (existingEmployee) {
+      throw createAdminResourceError("CPF/CNPJ ja cadastrado.");
+    }
+  }
+
   if (resource === "suppliers" && payload.document) {
     const existingSupplier = await repository.findSupplierByDocument(payload.document);
 
     if (existingSupplier?.active !== false) {
-      throw createAdminResourceError("Ja existe um fornecedor ativo com este documento.");
+      throw createAdminResourceError("CPF/CNPJ ja cadastrado.");
     }
 
     if (existingSupplier) {
@@ -185,12 +212,20 @@ async function createResource(resource, body) {
     }
   }
 
-  const created = await repository.createResource(resource, payload);
-  if (created === null) {
-    throw notFoundError("Recurso administrativo invalido.");
-  }
+  try {
+    const created = await repository.createResource(resource, payload);
+    if (created === null) {
+      throw notFoundError("Recurso administrativo invalido.");
+    }
 
-  return created;
+    return created;
+  } catch (error) {
+    if (resource === "employees" && isUniqueConstraintError(error)) {
+      throw createAdminResourceError("CPF/CNPJ ja cadastrado.");
+    }
+
+    throw error;
+  }
 }
 
 async function updateResource(resource, id, body) {
@@ -202,27 +237,45 @@ async function updateResource(resource, id, body) {
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, false);
 
+  if (resource === "employees" && payload.document) {
+    const existingEmployee = await repository.findEmployeeByDocument(payload.document, {
+      excludeId: id,
+    });
+
+    if (existingEmployee) {
+      throw createAdminResourceError("CPF/CNPJ ja cadastrado.");
+    }
+  }
+
   if (resource === "suppliers" && payload.document) {
     const existingSupplier = await repository.findSupplierByDocument(payload.document, {
       excludeId: id,
     });
 
     if (existingSupplier?.active !== false) {
-      throw createAdminResourceError("Ja existe um fornecedor ativo com este documento.");
+      throw createAdminResourceError("CPF/CNPJ ja cadastrado.");
     }
   }
 
-  const updated = await repository.updateResource(resource, id, payload);
+  try {
+    const updated = await repository.updateResource(resource, id, payload);
 
-  if (updated === null) {
-    throw notFoundError("Recurso administrativo invalido.");
+    if (updated === null) {
+      throw notFoundError("Recurso administrativo invalido.");
+    }
+
+    if (updated === undefined) {
+      throw notFoundError("Registro nao encontrado.");
+    }
+
+    return updated;
+  } catch (error) {
+    if (resource === "employees" && isUniqueConstraintError(error)) {
+      throw createAdminResourceError("CPF/CNPJ ja cadastrado.");
+    }
+
+    throw error;
   }
-
-  if (updated === undefined) {
-    throw notFoundError("Registro não encontrado.");
-  }
-
-  return updated;
 }
 
 async function deleteResource(resource, id) {
@@ -238,7 +291,7 @@ async function deleteResource(resource, id) {
   }
 
   if (removed === undefined) {
-    throw notFoundError("Registro não encontrado.");
+    throw notFoundError("Registro nao encontrado.");
   }
 
   return true;

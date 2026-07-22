@@ -77,7 +77,6 @@ export default function CustomerFormFields({
       {
         key: "document",
         label: form.typeCustomer === "INDIVIDUAL" ? "CPF" : "CNPJ",
-        required: true,
         section: "main",
       },
       {
@@ -94,7 +93,7 @@ export default function CustomerFormFields({
         section: "main",
       },
       { key: "tradeName", label: "Nome fantasia", section: "main" },
-      { key: "phone", label: "Telefone", required: true, section: "main" },
+      { key: "phone", label: "Telefone", section: "main" },
       { key: "email", label: "Email", section: "main" },
       {
         key: "professionId",

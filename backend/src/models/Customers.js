@@ -36,7 +36,7 @@ const CustomersSchema = (sequelize, DataTypes) => {
     },
     phone: {
       type: DataTypes.STRING(20),
-      allowNull: false
+      allowNull: true
     },
     email: {
       type: DataTypes.STRING(120),

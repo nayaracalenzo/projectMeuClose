@@ -186,7 +186,19 @@ async function updateClientById(id, body) {
     }
   }
 
-  const updated = await repository.updateClientById(id, payload);
+  let updated;
+  try {
+    updated = await repository.updateClientById(id, payload);
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      throw validationError("CPF/CNPJ ja cadastrado.", {
+        name: "ClientValidationError",
+        code: "CLIENT_VALIDATION_ERROR",
+      });
+    }
+
+    throw error;
+  }
   if (!updated) return null;
 
   const client = await repository.getClientById(id, { includeBlocked: true });
@@ -198,7 +210,7 @@ async function createClient(body) {
   const existingClient = await repository.findClientByDocument(payload.document);
 
   if (existingClient && existingClient.blocked !== true) {
-    throw validationError("Ja existe um cliente ativo com este CPF/CNPJ.", {
+    throw validationError("CPF/CNPJ ja cadastrado.", {
       name: "ClientValidationError",
       code: "CLIENT_VALIDATION_ERROR",
     });
@@ -223,7 +235,7 @@ async function createClient(body) {
     return getClientById(created.idCustomer);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
-      throw validationError("Ja existe um cliente cadastrado com este CPF/CNPJ.", {
+      throw validationError("CPF/CNPJ ja cadastrado.", {
         name: "ClientValidationError",
         code: "CLIENT_VALIDATION_ERROR",
       });
