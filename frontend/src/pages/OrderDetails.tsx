@@ -53,6 +53,7 @@ type SelectOption = {
 type ProductFormState = {
   details: string;
   employeeId: string;
+  statusId: string;
   testDate: string;
 };
 
@@ -115,6 +116,7 @@ function toFormState(product: ProductDetails): ProductFormState {
   return {
     details: product.details || "",
     employeeId: product.employeeId ? String(product.employeeId) : "",
+    statusId: product.statusId ? String(product.statusId) : "",
     testDate: toDateInputValue(product.testDate),
   };
 }
@@ -158,6 +160,7 @@ export default function OrderDetails() {
   const [product, setProduct] = useState<ProductDetails | null>(null);
   const [form, setForm] = useState<ProductFormState | null>(null);
   const [employeeOptions, setEmployeeOptions] = useState<SelectOption[]>([]);
+  const [statusOptions, setStatusOptions] = useState<SelectOption[]>([]);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   useEffect(() => {
@@ -167,9 +170,10 @@ export default function OrderDetails() {
         setError("");
         setToast(EMPTY_TOAST);
 
-        const [productData, employeesData] = await Promise.all([
+        const [productData, employeesData, statusesData] = await Promise.all([
           getRequest(`/products/${id}`),
           getRequest("/admin/employees"),
+          getRequest("/products/status-options"),
         ]);
 
         setProduct(productData as ProductDetails);
@@ -177,6 +181,7 @@ export default function OrderDetails() {
         setEmployeeOptions(
           mapAdminOptions(employeesData, { idKey: "idEmployee", labelKey: "shortName" }),
         );
+        setStatusOptions(mapAdminOptions(statusesData));
       } catch (err: unknown) {
         const maybeAxiosError = err as { response?: { status?: number } };
 
@@ -217,7 +222,6 @@ export default function OrderDetails() {
       const updated = (await updateRequest(`/products/${product.id}`, {
         desc: product.desc,
         customerId: product.customerId,
-        statusId: product.statusId,
         categoryId: product.categoryId,
         productTypeId: product.productTypeId,
         clothingTypeId: product.clothingTypeId,
@@ -324,7 +328,6 @@ export default function OrderDetails() {
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <ReadonlyField label="Descrição" value={product.desc || "-"} />
-              <ReadonlyField label="Status" value={product.statusName || "-"} />
               <ReadonlyField label="Tipo de Produto" value={product.categoryName || "-"} />
               <ReadonlyField label="Subtipo do Produto" value={product.productTypeName || "-"} />
               <ReadonlyField label="Tipo de Roupa" value={product.clothingTypeName || "-"} />
@@ -335,6 +338,25 @@ export default function OrderDetails() {
                 label="Quantidade"
                 value={String(product.saleItemQuantity || product.qtyStock || 1)}
               />
+
+              <div>
+                <label className={labelClassName} htmlFor="order-status">
+                  Status
+                </label>
+                <select
+                  id="order-status"
+                  value={form.statusId}
+                  onChange={(event) => handleFieldChange("statusId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {statusOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-seamstress">
