@@ -161,7 +161,9 @@ function getTodayIsoDate() {
 function InfoCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-outline-variant/35 bg-white px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.12em] text-neutral-600">{label}</p>
+      <p className="text-xs uppercase tracking-[0.12em] text-neutral-600">
+        {label}
+      </p>
       <p className="mt-1 text-sm font-medium text-primary">{value}</p>
     </div>
   );
@@ -190,7 +192,9 @@ function formatDateTime(value?: string | null) {
 
 function formatItemDiscount(item: SaleDetailItem) {
   if (!item.discountType || !item.discountValue || item.discountAmount <= 0) {
-    return item.discountAmount > 0 ? formatCurrency(item.discountAmount) : "Sem desconto";
+    return item.discountAmount > 0
+      ? formatCurrency(item.discountAmount)
+      : "Sem desconto";
   }
 
   if (item.discountType === "PERCENTAGE") {
@@ -208,7 +212,9 @@ function formatReceiptType(receiptType: SaleReceipt["receiptType"]) {
 }
 
 function formatSaleStatus(value?: string | null) {
-  const normalized = String(value || "").trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
   if (normalized === "BUDGET") return "Orçamento";
   if (normalized === "COMPLETED") return "Concluido";
   if (normalized === "CANCELLED") return "Cancelado";
@@ -216,7 +222,9 @@ function formatSaleStatus(value?: string | null) {
 }
 
 function formatSaleItemType(value?: string | null) {
-  const normalized = String(value || "").trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
   if (normalized === "CUSTOM_MADE") return "Sob medida";
   if (normalized === "READY_MADE") return "Roupa pronta";
   if (normalized === "ACCESSORY") return "Acessorio";
@@ -244,16 +252,21 @@ export default function SaleDetailsPage() {
   const [cancelItemModalOpen, setCancelItemModalOpen] = useState(false);
   const [cancelItemLoading, setCancelItemLoading] = useState(false);
   const [cancelItemReason, setCancelItemReason] = useState("");
-  const [cancelItemResolution, setCancelItemResolution] = useState("APPLY_REMAINING");
-  const [selectedSaleItem, setSelectedSaleItem] = useState<SaleDetailItem | null>(null);
+  const [cancelItemResolution, setCancelItemResolution] =
+    useState("APPLY_REMAINING");
+  const [selectedSaleItem, setSelectedSaleItem] =
+    useState<SaleDetailItem | null>(null);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
   const [renegotiateModalOpen, setRenegotiateModalOpen] = useState(false);
   const [renegotiateLoading, setRenegotiateLoading] = useState(false);
   const [renegotiateReason, setRenegotiateReason] = useState("");
   const [renegotiatePaymentTypeId, setRenegotiatePaymentTypeId] = useState("");
-  const [renegotiateInstallmentCount, setRenegotiateInstallmentCount] = useState("1");
+  const [renegotiateInstallmentCount, setRenegotiateInstallmentCount] =
+    useState("1");
   const [renegotiateIntervalDays, setRenegotiateIntervalDays] = useState("30");
-  const [renegotiateDueDate, setRenegotiateDueDate] = useState(() => getTodayIsoDate());
+  const [renegotiateDueDate, setRenegotiateDueDate] = useState(() =>
+    getTodayIsoDate(),
+  );
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   useEffect(() => {
@@ -269,7 +282,12 @@ export default function SaleDetailsPage() {
         if (maybeAxiosError.response?.status === 404) {
           setError("Venda nao encontrada.");
         } else {
-          setError(getUserFacingApiErrorMessage(err, "Nao foi possivel carregar a venda."));
+          setError(
+            getUserFacingApiErrorMessage(
+              err,
+              "Nao foi possivel carregar a venda.",
+            ),
+          );
         }
       } finally {
         setLoading(false);
@@ -282,7 +300,9 @@ export default function SaleDetailsPage() {
   useEffect(() => {
     const fetchPaymentTypes = async () => {
       try {
-        const data = (await getRequest("/payment-types")) as PaymentTypeOption[];
+        const data = (await getRequest(
+          "/payment-types",
+        )) as PaymentTypeOption[];
         setPaymentTypes(Array.isArray(data) ? data : []);
       } catch (_error) {
         setPaymentTypes([]);
@@ -294,7 +314,9 @@ export default function SaleDetailsPage() {
 
   const totalItemDiscount = useMemo(() => {
     if (!sale) return 0;
-    return Number(sale.items.reduce((acc, item) => acc + item.discountAmount, 0).toFixed(2));
+    return Number(
+      sale.items.reduce((acc, item) => acc + item.discountAmount, 0).toFixed(2),
+    );
   }, [sale]);
 
   const totalReceived = useMemo(() => {
@@ -302,7 +324,11 @@ export default function SaleDetailsPage() {
     if (typeof sale.netReceivedAmount === "number") {
       return Number(sale.netReceivedAmount.toFixed(2));
     }
-    return Number(sale.receipts.reduce((acc, receipt) => acc + receipt.amount, 0).toFixed(2));
+    return Number(
+      sale.receipts
+        .reduce((acc, receipt) => acc + receipt.amount, 0)
+        .toFixed(2),
+    );
   }, [sale]);
 
   const firstProductionItem = useMemo(() => {
@@ -325,21 +351,34 @@ export default function SaleDetailsPage() {
   );
   const projectedFinalAmountAfterItemCancellation = useMemo(() => {
     if (!sale || !selectedSaleItem) return 0;
-    return Math.max(0, Number((sale.finalAmount - selectedSaleItem.subtotal).toFixed(2)));
+    return Math.max(
+      0,
+      Number((sale.finalAmount - selectedSaleItem.subtotal).toFixed(2)),
+    );
   }, [sale, selectedSaleItem]);
   const projectedOverpaymentAmount = useMemo(() => {
     if (!selectedSaleItem) return 0;
-    return Math.max(0, Number((totalReceived - projectedFinalAmountAfterItemCancellation).toFixed(2)));
-  }, [projectedFinalAmountAfterItemCancellation, selectedSaleItem, totalReceived]);
+    return Math.max(
+      0,
+      Number(
+        (totalReceived - projectedFinalAmountAfterItemCancellation).toFixed(2),
+      ),
+    );
+  }, [
+    projectedFinalAmountAfterItemCancellation,
+    selectedSaleItem,
+    totalReceived,
+  ]);
   const renegotiationPaymentOptions = useMemo(
-    () => paymentTypes.filter((item) => item.financialFlow === "FUTURE_CUSTOMER"),
+    () =>
+      paymentTypes.filter((item) => item.financialFlow === "FUTURE_CUSTOMER"),
     [paymentTypes],
   );
   const canRenegotiatePayment = Boolean(
     sale?.receivable &&
-      sale.receivable.openAmount > 0 &&
-      sale.receivable.originType === "CUSTOMER" &&
-      sale.status !== "CANCELLED",
+    sale.receivable.openAmount > 0 &&
+    sale.receivable.originType === "CUSTOMER" &&
+    sale.status !== "CANCELLED",
   );
   const isBudgetSale = sale?.status === "BUDGET";
 
@@ -373,7 +412,10 @@ export default function SaleDetailsPage() {
         open: true,
         tone: "error",
         title: "Nao foi possivel cancelar",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel cancelar a venda."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel cancelar a venda.",
+        ),
       });
     } finally {
       setCancelLoading(false);
@@ -399,7 +441,10 @@ export default function SaleDetailsPage() {
         open: true,
         tone: "error",
         title: "Nao foi possivel descartar",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel descartar o orçamento."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel descartar o orçamento.",
+        ),
       });
     } finally {
       setDiscardLoading(false);
@@ -411,10 +456,13 @@ export default function SaleDetailsPage() {
 
     try {
       setCancelItemLoading(true);
-      const response = (await postRequest(`/sales/${sale.id}/items/${selectedSaleItem.id}/cancel`, {
-        reason: cancelItemReason.trim(),
-        financialResolution: cancelItemResolution,
-      })) as {
+      const response = (await postRequest(
+        `/sales/${sale.id}/items/${selectedSaleItem.id}/cancel`,
+        {
+          reason: cancelItemReason.trim(),
+          financialResolution: cancelItemResolution,
+        },
+      )) as {
         refundAmount?: number;
         creditAmount?: number;
       };
@@ -440,7 +488,10 @@ export default function SaleDetailsPage() {
         open: true,
         tone: "error",
         title: "Nao foi possivel cancelar a peca",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel cancelar a peca da venda."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel cancelar a peca da venda.",
+        ),
       });
     } finally {
       setCancelItemLoading(false);
@@ -467,14 +518,18 @@ export default function SaleDetailsPage() {
         open: true,
         tone: "success",
         title: "Pagamento renegociado",
-        message: "O saldo em aberto foi redistribuido nas novas parcelas com sucesso.",
+        message:
+          "O saldo em aberto foi redistribuido nas novas parcelas com sucesso.",
       });
     } catch (err: unknown) {
       setToast({
         open: true,
         tone: "error",
         title: "Nao foi possivel renegociar",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel renegociar o pagamento da venda."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel renegociar o pagamento da venda.",
+        ),
       });
     } finally {
       setRenegotiateLoading(false);
@@ -534,7 +589,9 @@ export default function SaleDetailsPage() {
             {isBudgetSale ? (
               <Button
                 variant="secondary"
-                onClick={() => navigate(`/nova-venda?quoteId=${sale.id}&mode=edit`)}
+                onClick={() =>
+                  navigate(`/nova-venda?quoteId=${sale.id}&mode=edit`)
+                }
               >
                 Editar orçamento
               </Button>
@@ -563,7 +620,9 @@ export default function SaleDetailsPage() {
             {isBudgetSale ? (
               <Button
                 variant="primary"
-                onClick={() => navigate(`/nova-venda?quoteId=${sale.id}&mode=finalize`)}
+                onClick={() =>
+                  navigate(`/nova-venda?quoteId=${sale.id}&mode=finalize`)
+                }
               >
                 Finalizar venda
               </Button>
@@ -574,12 +633,21 @@ export default function SaleDetailsPage() {
                 onClick={() => {
                   setRenegotiateReason("");
                   setRenegotiatePaymentTypeId(
-                    sale.paymentType?.id ? String(sale.paymentType.id) : String(renegotiationPaymentOptions[0]?.id || ""),
+                    sale.paymentType?.id
+                      ? String(sale.paymentType.id)
+                      : String(renegotiationPaymentOptions[0]?.id || ""),
                   );
-                  setRenegotiateInstallmentCount(String(sale.receivable?.installments.length || sale.installmentCount || 1));
+                  setRenegotiateInstallmentCount(
+                    String(
+                      sale.receivable?.installments.length ||
+                        sale.installmentCount ||
+                        1,
+                    ),
+                  );
                   setRenegotiateIntervalDays("30");
                   setRenegotiateDueDate(
-                    sale.receivable?.installments[0]?.dueDate?.slice(0, 10) || getTodayIsoDate(),
+                    sale.receivable?.installments[0]?.dueDate?.slice(0, 10) ||
+                      getTodayIsoDate(),
                   );
                   setRenegotiateModalOpen(true);
                 }}
@@ -588,7 +656,12 @@ export default function SaleDetailsPage() {
               </Button>
             ) : null}
             {!isBudgetSale && firstProductionItem?.productId ? (
-              <Button variant="secondary" onClick={() => navigate(`/pedido/${firstProductionItem.productId}`)}>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  navigate(`/pedido/${firstProductionItem.productId}`)
+                }
+              >
                 Abrir pedido de producao
               </Button>
             ) : null}
@@ -597,7 +670,8 @@ export default function SaleDetailsPage() {
 
         {sale.customerCreditAmount && sale.customerCreditAmount > 0 ? (
           <div className="mb-4 rounded-xl border border-[#b38a3d] bg-[#fff6df] px-4 py-3 text-sm text-[#6b520f]">
-            Esta venda possui credito da cliente no valor de {formatCurrency(sale.customerCreditAmount)}.
+            Esta venda possui credito da cliente no valor de{" "}
+            {formatCurrency(sale.customerCreditAmount)}.
           </div>
         ) : null}
 
@@ -612,17 +686,44 @@ export default function SaleDetailsPage() {
 
           <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <InfoCard label="Venda" value={`#${sale.id}`} />
-            <InfoCard label="Cliente" value={sale.customer?.name || "Sem cliente"} />
+            <InfoCard
+              label="Cliente"
+              value={sale.customer?.name || "Sem cliente"}
+            />
             <InfoCard label="Status" value={formatSaleStatus(sale.status)} />
-            <InfoCard label="Valor final" value={formatCurrency(sale.finalAmount)} />
+            <InfoCard
+              label="Valor final"
+              value={formatCurrency(sale.finalAmount)}
+            />
             <InfoCard label="Recebido" value={formatCurrency(totalReceived)} />
-            <InfoCard label="Subtotal bruto" value={formatCurrency(sale.totalAmount)} />
-            <InfoCard label="Desconto dos itens" value={formatCurrency(totalItemDiscount)} />
-            <InfoCard label="Saldo em aberto" value={formatCurrency(sale.receivable?.openAmount || 0)} />
-            <InfoCard label="Parcelas previstas" value={String(sale.installmentCount || 1)} />
-            <InfoCard label="Criada em" value={formatDateTime(sale.createdAt)} />
-            <InfoCard label="Atualizada em" value={formatDateTime(sale.updatedAt)} />
-            <InfoCard label="Vencimento base" value={formatDate(sale.dueDate)} />
+            <InfoCard
+              label="Subtotal bruto"
+              value={formatCurrency(sale.totalAmount)}
+            />
+            <InfoCard
+              label="Desconto dos itens"
+              value={formatCurrency(totalItemDiscount)}
+            />
+            <InfoCard
+              label="Saldo em aberto"
+              value={formatCurrency(sale.receivable?.openAmount || 0)}
+            />
+            <InfoCard
+              label="Parcelas previstas"
+              value={String(sale.installmentCount || 1)}
+            />
+            <InfoCard
+              label="Criada em"
+              value={formatDateTime(sale.createdAt)}
+            />
+            <InfoCard
+              label="Atualizada em"
+              value={formatDateTime(sale.updatedAt)}
+            />
+            <InfoCard
+              label="Vencimento base"
+              value={formatDate(sale.dueDate)}
+            />
           </div>
         </section>
 
@@ -635,31 +736,57 @@ export default function SaleDetailsPage() {
             <table className="min-w-full border-separate border-spacing-y-2 text-sm">
               <thead>
                 <tr className="text-left">
-                  <th className="px-4 py-2 font-semibold text-primary">Descricao</th>
+                  <th className="px-4 py-2 font-semibold text-primary">
+                    Descricao
+                  </th>
                   <th className="px-4 py-2 font-semibold text-primary">Tipo</th>
                   <th className="px-4 py-2 font-semibold text-primary">Qtd.</th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">Unitario</th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">Bruto</th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">Desconto</th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">Final</th>
-                  <th className="px-4 py-2 font-semibold text-primary">Costureira</th>
-                  <th className="px-4 py-2 font-semibold text-primary">Data Prova</th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">Acoes</th>
+                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                    Unitario
+                  </th>
+                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                    Bruto
+                  </th>
+                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                    Desconto
+                  </th>
+                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                    Final
+                  </th>
+                  <th className="px-4 py-2 font-semibold text-primary">
+                    Costureira
+                  </th>
+                  <th className="px-4 py-2 font-semibold text-primary">
+                    Data Prova
+                  </th>
+                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                    Acoes
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {sale.items.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="bg-surface-lowest px-4 py-6 text-center text-neutral-700">
+                    <td
+                      colSpan={10}
+                      className="bg-surface-lowest px-4 py-6 text-center text-neutral-700"
+                    >
                       Nenhum item encontrado para esta venda.
                     </td>
                   </tr>
                 ) : (
                   sale.items.map((item) => (
-                    <tr key={item.id} className={item.isCancelled ? "bg-[#f8eeee]" : "bg-surface-lowest"}>
+                    <tr
+                      key={item.id}
+                      className={
+                        item.isCancelled ? "bg-[#f8eeee]" : "bg-surface-lowest"
+                      }
+                    >
                       <td className="px-4 py-3 text-neutral-800">
                         <div className="flex flex-col gap-1">
-                          <span className={`font-medium ${item.isCancelled ? "text-[#7a1717]" : "text-primary"}`}>
+                          <span
+                            className={`font-medium ${item.isCancelled ? "text-[#7a1717]" : "text-primary"}`}
+                          >
                             {item.description}
                           </span>
                           {item.isCancelled ? (
@@ -668,33 +795,57 @@ export default function SaleDetailsPage() {
                             </span>
                           ) : null}
                           <span className="text-xs text-neutral-600">
-                            {isProductionItem(item) ? `Pedido #${item.productId}` : "Sem producao vinculada"}
+                            {isProductionItem(item)
+                              ? `Pedido #${item.productId}`
+                              : "Sem producao vinculada"}
                           </span>
                           {item.cancellation?.reason ? (
-                            <span className="text-xs text-neutral-600">Motivo: {item.cancellation.reason}</span>
+                            <span className="text-xs text-neutral-600">
+                              Motivo: {item.cancellation.reason}
+                            </span>
                           ) : null}
                           {item.cancellation?.refundAmount ? (
                             <span className="text-xs text-neutral-600">
-                              Devolucao: {formatCurrency(item.cancellation.refundAmount)}
+                              Devolucao:{" "}
+                              {formatCurrency(item.cancellation.refundAmount)}
                             </span>
                           ) : null}
                           {item.cancellation?.creditAmount ? (
                             <span className="text-xs text-neutral-600">
-                              Credito: {formatCurrency(item.cancellation.creditAmount)}
+                              Credito:{" "}
+                              {formatCurrency(item.cancellation.creditAmount)}
                             </span>
                           ) : null}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-neutral-800">{formatSaleItemType(item.itemType)}</td>
-                      <td className="px-4 py-3 text-neutral-800">{item.quantity}</td>
-                      <td className="px-4 py-3 text-right text-neutral-800">{formatCurrency(item.unitPrice)}</td>
-                      <td className="px-4 py-3 text-right text-neutral-800">{formatCurrency(item.grossAmount)}</td>
-                      <td className="px-4 py-3 text-right text-neutral-800">{formatItemDiscount(item)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(item.subtotal)}</td>
-                      <td className="px-4 py-3 text-neutral-800">{item.seamstress || "-"}</td>
-                      <td className="px-4 py-3 text-neutral-800">{formatDate(item.fittingDate)}</td>
+                      <td className="px-4 py-3 text-neutral-800">
+                        {formatSaleItemType(item.itemType)}
+                      </td>
+                      <td className="px-4 py-3 text-neutral-800">
+                        {item.quantity}
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-800">
+                        {formatCurrency(item.unitPrice)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-800">
+                        {formatCurrency(item.grossAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-800">
+                        {formatItemDiscount(item)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-primary">
+                        {formatCurrency(item.subtotal)}
+                      </td>
+                      <td className="px-4 py-3 text-neutral-800">
+                        {item.seamstress || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-neutral-800">
+                        {formatDate(item.fittingDate)}
+                      </td>
                       <td className="px-4 py-3 text-right">
-                        {sale.status !== "CANCELLED" && !item.isCancelled && activeItemsCount > 1 ? (
+                        {sale.status !== "CANCELLED" &&
+                        !item.isCancelled &&
+                        activeItemsCount > 1 ? (
                           <Button
                             type="button"
                             variant="secondary"
@@ -722,7 +873,9 @@ export default function SaleDetailsPage() {
 
         <div className="grid gap-6 xl:grid-cols-2">
           <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-            <h2 className="font-editorial text-3xl text-primary">Recebimentos</h2>
+            <h2 className="font-editorial text-3xl text-primary">
+              Recebimentos
+            </h2>
 
             <div className="mt-5 space-y-3">
               {sale.receipts.length === 0 ? (
@@ -737,12 +890,17 @@ export default function SaleDetailsPage() {
                   >
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <p className="text-sm font-semibold text-primary">{formatReceiptType(receipt.receiptType)}</p>
+                        <p className="text-sm font-semibold text-primary">
+                          {formatReceiptType(receipt.receiptType)}
+                        </p>
                         <p className="text-sm text-neutral-700">
-                          {receipt.paymentType?.name || "Forma nao identificada"}
+                          {receipt.paymentType?.name ||
+                            "Forma nao identificada"}
                         </p>
                       </div>
-                      <p className="text-sm font-semibold text-primary">{formatCurrency(receipt.amount)}</p>
+                      <p className="text-sm font-semibold text-primary">
+                        {formatCurrency(receipt.amount)}
+                      </p>
                     </div>
                     <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                       <p>Data: {formatDateTime(receipt.paidAt)}</p>
@@ -755,14 +913,27 @@ export default function SaleDetailsPage() {
 
             {sale.cardTransaction ? (
               <div className="mt-5 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4">
-                <p className="text-sm font-semibold text-primary">Transacao de cartao</p>
+                <p className="text-sm font-semibold text-primary">
+                  Transacao de cartao
+                </p>
                 <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                   <p>Operadora: {sale.cardTransaction.operatorLabel || "-"}</p>
                   <p>Bandeira: {sale.cardTransaction.cardBrand || "-"}</p>
-                  <p>Autorizacao: {sale.cardTransaction.authorizationCode || "-"}</p>
-                  <p>Parcelas no cartao: {sale.cardTransaction.clientInstallmentCount}</p>
-                  <p>Taxa prevista: {formatCurrency(sale.cardTransaction.feeAmount)}</p>
-                  <p>Repasse previsto: {formatDate(sale.cardTransaction.expectedSettlementDate)}</p>
+                  <p>
+                    Autorizacao: {sale.cardTransaction.authorizationCode || "-"}
+                  </p>
+                  <p>
+                    Parcelas no cartao:{" "}
+                    {sale.cardTransaction.clientInstallmentCount}
+                  </p>
+                  <p>
+                    Taxa prevista:{" "}
+                    {formatCurrency(sale.cardTransaction.feeAmount)}
+                  </p>
+                  <p>
+                    Repasse previsto:{" "}
+                    {formatDate(sale.cardTransaction.expectedSettlementDate)}
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -778,11 +949,20 @@ export default function SaleDetailsPage() {
             ) : (
               <>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  <InfoCard label="Perfil" value={sale.receivable.originLabel} />
+                  <InfoCard
+                    label="Perfil"
+                    value={sale.receivable.originLabel}
+                  />
                   <InfoCard label="Origem" value={sale.receivable.originName} />
                   <InfoCard label="Status" value={sale.receivable.status} />
-                  <InfoCard label="Valor original" value={formatCurrency(sale.receivable.originalAmount)} />
-                  <InfoCard label="Saldo aberto" value={formatCurrency(sale.receivable.openAmount)} />
+                  <InfoCard
+                    label="Valor original"
+                    value={formatCurrency(sale.receivable.originalAmount)}
+                  />
+                  <InfoCard
+                    label="Saldo aberto"
+                    value={formatCurrency(sale.receivable.openAmount)}
+                  />
                 </div>
 
                 <div className="mt-5 space-y-3">
@@ -799,10 +979,12 @@ export default function SaleDetailsPage() {
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                           <div>
                             <p className="text-sm font-semibold text-primary">
-                              Parcela {installment.installmentNumber}/{installment.totalInstallments}
+                              Parcela {installment.installmentNumber}/
+                              {installment.totalInstallments}
                             </p>
                             <p className="text-sm text-neutral-700">
-                              {installment.paymentType?.name || "Forma nao identificada"}
+                              {installment.paymentType?.name ||
+                                "Forma nao identificada"}
                             </p>
                           </div>
                           <p className="text-sm font-semibold text-primary">
@@ -813,7 +995,9 @@ export default function SaleDetailsPage() {
                           <p>Vencimento: {formatDate(installment.dueDate)}</p>
                           <p>Status: {installment.status}</p>
                           <p>Pago: {formatCurrency(installment.paidAmount)}</p>
-                          <p>Em aberto: {formatCurrency(installment.openAmount)}</p>
+                          <p>
+                            Em aberto: {formatCurrency(installment.openAmount)}
+                          </p>
                         </div>
                       </div>
                     ))
@@ -831,11 +1015,12 @@ export default function SaleDetailsPage() {
           setDiscardModalOpen(false);
         }}
         title="Descartar orçamento"
-        subtitle="Confirme a exclusao deste orçamento em aberto."
+        subtitle="Confirme a exclusão deste orçamento em aberto."
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-700">
-            Essa acao remove o orçamento e os itens vinculados que ainda nao possuem financeiro gerado.
+            Essa acao remove o orçamento e os itens vinculados que ainda nao
+            possuem financeiro gerado.
           </p>
 
           <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
@@ -879,8 +1064,9 @@ export default function SaleDetailsPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-700">
-            Ao cancelar a venda, o sistema vai cancelar a venda, marcar a producao vinculada como cancelada,
-            cancelar o saldo em aberto no A Receber e gerar os estornos financeiros vinculados na data de hoje.
+            Ao cancelar a venda, o sistema vai cancelar a venda, marcar a
+            producao vinculada como cancelada, cancelar o saldo em aberto no A
+            Receber e gerar os estornos financeiros vinculados na data de hoje.
           </p>
 
           <div className="grid gap-3 md:grid-cols-2">
@@ -894,16 +1080,24 @@ export default function SaleDetailsPage() {
 
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
               <p className="font-medium text-primary">Impactos</p>
-              <p className="mt-2">Producao vinculada: {productionItemsCount} item(ns)</p>
+              <p className="mt-2">
+                Producao vinculada: {productionItemsCount} item(ns)
+              </p>
               <p>Recebimentos ja registrados: {sale.receipts.length}</p>
               <p>Parcelas cadastradas: {receivableInstallmentsCount}</p>
               <p>Valor ja recebido: {formatCurrency(totalReceived)}</p>
-              <p>Saldo em aberto: {formatCurrency(sale.receivable?.openAmount || 0)}</p>
+              <p>
+                Saldo em aberto:{" "}
+                {formatCurrency(sale.receivable?.openAmount || 0)}
+              </p>
             </div>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="cancel-sale-reason">
+            <label
+              className="mb-2 block text-sm font-medium text-primary"
+              htmlFor="cancel-sale-reason"
+            >
               Motivo do cancelamento
             </label>
             <textarea
@@ -953,29 +1147,47 @@ export default function SaleDetailsPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-700">
-            Esse fluxo cancela apenas a peca selecionada, recalcula a venda e ajusta o A Receber.
-            Vendas com parcelas ja baixadas continuam exigindo ajuste financeiro separado.
+            Esse fluxo cancela apenas a peca selecionada, recalcula a venda e
+            ajusta o A Receber. Vendas com parcelas ja baixadas continuam
+            exigindo ajuste financeiro separado.
           </p>
 
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
               <p className="font-medium text-primary">Peca</p>
-              <p className="mt-2">Descricao: {selectedSaleItem?.description || "-"}</p>
-              <p>Valor da peca: {formatCurrency(selectedSaleItem?.subtotal || 0)}</p>
+              <p className="mt-2">
+                Descricao: {selectedSaleItem?.description || "-"}
+              </p>
+              <p>
+                Valor da peca: {formatCurrency(selectedSaleItem?.subtotal || 0)}
+              </p>
               <p>Venda atual: {formatCurrency(sale.finalAmount)}</p>
-              <p>Venda apos cancelamento: {formatCurrency(projectedFinalAmountAfterItemCancellation)}</p>
+              <p>
+                Venda apos cancelamento:{" "}
+                {formatCurrency(projectedFinalAmountAfterItemCancellation)}
+              </p>
             </div>
 
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
               <p className="font-medium text-primary">Impacto financeiro</p>
-              <p className="mt-2">Recebido ate agora: {formatCurrency(totalReceived)}</p>
-              <p>Possivel sobra: {formatCurrency(projectedOverpaymentAmount)}</p>
-              <p>Saldo atual em aberto: {formatCurrency(sale.receivable?.openAmount || 0)}</p>
+              <p className="mt-2">
+                Recebido ate agora: {formatCurrency(totalReceived)}
+              </p>
+              <p>
+                Possivel sobra: {formatCurrency(projectedOverpaymentAmount)}
+              </p>
+              <p>
+                Saldo atual em aberto:{" "}
+                {formatCurrency(sale.receivable?.openAmount || 0)}
+              </p>
             </div>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="cancel-item-reason">
+            <label
+              className="mb-2 block text-sm font-medium text-primary"
+              htmlFor="cancel-item-reason"
+            >
               Motivo do cancelamento
             </label>
             <textarea
@@ -989,7 +1201,10 @@ export default function SaleDetailsPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="cancel-item-resolution">
+            <label
+              className="mb-2 block text-sm font-medium text-primary"
+              htmlFor="cancel-item-resolution"
+            >
               Tratamento financeiro
             </label>
             <select
@@ -1046,7 +1261,10 @@ export default function SaleDetailsPage() {
               <p className="mt-2">Venda: #{sale.id}</p>
               <p>Cliente: {sale.customer?.name || "Sem cliente"}</p>
               <p>Recebido liquido: {formatCurrency(totalReceived)}</p>
-              <p>Saldo em aberto: {formatCurrency(sale.receivable?.openAmount || 0)}</p>
+              <p>
+                Saldo em aberto:{" "}
+                {formatCurrency(sale.receivable?.openAmount || 0)}
+              </p>
             </div>
 
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
@@ -1059,13 +1277,18 @@ export default function SaleDetailsPage() {
 
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-payment-type">
+              <label
+                className="mb-2 block text-sm font-medium text-primary"
+                htmlFor="renegotiate-payment-type"
+              >
                 Forma de pagamento
               </label>
               <select
                 id="renegotiate-payment-type"
                 value={renegotiatePaymentTypeId}
-                onChange={(event) => setRenegotiatePaymentTypeId(event.target.value)}
+                onChange={(event) =>
+                  setRenegotiatePaymentTypeId(event.target.value)
+                }
                 className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
               >
                 <option value="">Selecione...</option>
@@ -1078,7 +1301,10 @@ export default function SaleDetailsPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-due-date">
+              <label
+                className="mb-2 block text-sm font-medium text-primary"
+                htmlFor="renegotiate-due-date"
+              >
                 Primeiro vencimento
               </label>
               <input
@@ -1091,7 +1317,10 @@ export default function SaleDetailsPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-installment-count">
+              <label
+                className="mb-2 block text-sm font-medium text-primary"
+                htmlFor="renegotiate-installment-count"
+              >
                 Parcelas
               </label>
               <input
@@ -1099,13 +1328,18 @@ export default function SaleDetailsPage() {
                 type="number"
                 min="1"
                 value={renegotiateInstallmentCount}
-                onChange={(event) => setRenegotiateInstallmentCount(event.target.value)}
+                onChange={(event) =>
+                  setRenegotiateInstallmentCount(event.target.value)
+                }
                 className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-interval">
+              <label
+                className="mb-2 block text-sm font-medium text-primary"
+                htmlFor="renegotiate-interval"
+              >
                 Intervalo entre parcelas (dias)
               </label>
               <input
@@ -1113,14 +1347,19 @@ export default function SaleDetailsPage() {
                 type="number"
                 min="1"
                 value={renegotiateIntervalDays}
-                onChange={(event) => setRenegotiateIntervalDays(event.target.value)}
+                onChange={(event) =>
+                  setRenegotiateIntervalDays(event.target.value)
+                }
                 className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-primary" htmlFor="renegotiate-reason">
+            <label
+              className="mb-2 block text-sm font-medium text-primary"
+              htmlFor="renegotiate-reason"
+            >
               Motivo da renegociacao
             </label>
             <textarea

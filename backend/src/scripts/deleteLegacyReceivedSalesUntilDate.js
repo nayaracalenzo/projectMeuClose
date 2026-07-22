@@ -147,8 +147,8 @@ async function deleteLegacyReceivedSalesUntilDate({ cutoffDate = DEFAULT_CUTOFF,
     const receivablesWithoutLinkedSales = eligibleReceivables.length - receivablesWithLinkedSales;
 
     console.log(`Data de corte: ${normalizedCutoffDate}`);
-    console.log(`Titulos elegiveis para exclusao: ${receivableIds.length}`);
-    console.log(`Vendas elegiveis para exclusao: ${saleIds.length}`);
+    console.log(`Titulos elegiveis para exclusão: ${receivableIds.length}`);
+    console.log(`Vendas elegiveis para exclusão: ${saleIds.length}`);
     console.log(`Titulos elegiveis sem vinculo de venda: ${receivablesWithoutLinkedSales}`);
     console.log(`Titulos elegiveis com vinculo de venda: ${receivablesWithLinkedSales}`);
     console.log(`Vendas com parcelas antes e depois do corte (serao ignoradas): ${mixedDateSales.length}`);
@@ -190,7 +190,7 @@ async function deleteLegacyReceivedSalesUntilDate({ cutoffDate = DEFAULT_CUTOFF,
     }
 
     if (!receivableIds.length && !saleIds.length) {
-      console.log("\nNenhum registro elegivel para exclusao.");
+      console.log("\nNenhum registro elegivel para exclusão.");
       return {
         receivableIds,
         saleIds,

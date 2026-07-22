@@ -95,9 +95,8 @@ function buildAuditHistory(kind, scope, entry, occurredAt) {
   const amount = Number(entry.amount || 0).toFixed(2);
   const dateLabel = new Intl.DateTimeFormat("pt-BR").format(new Date(occurredAt));
 
-  return `${kind} de ${scope === "LOJA" ? "BANCO" : "BANCO PESSOAL"} do lancamento ${
-    entry.idBankEntry
-  } em ${dateLabel}, valor ${amount}, descricao ${entry.description}.`;
+  return `${kind} de ${scope === "LOJA" ? "BANCO" : "BANCO PESSOAL"} do lancamento ${entry.idBankEntry
+    } em ${dateLabel}, valor ${amount}, descricao ${entry.description}.`;
 }
 
 function isCancelledSaleEntry(entry) {
@@ -369,13 +368,12 @@ async function reverseEntry(idBankEntry, user, body = {}) {
               auditTypeId: 3,
               userId,
               occurredAt,
-              history: `EXTORNO de ${
-                relatedCashEntry.scope === "LOJA" ? "CAIXA" : "CAIXA PESSOAL"
-              } do lancamento ${relatedCashEntry.idCashEntry} em ${new Intl.DateTimeFormat(
-                "pt-BR",
-              ).format(occurredAt)}, valor ${Number(relatedCashEntry.amount || 0).toFixed(
-                2,
-              )}, descricao ${relatedCashEntry.description}.`,
+              history: `EXTORNO de ${relatedCashEntry.scope === "LOJA" ? "CAIXA" : "CAIXA PESSOAL"
+                } do lancamento ${relatedCashEntry.idCashEntry} em ${new Intl.DateTimeFormat(
+                  "pt-BR",
+                ).format(occurredAt)}, valor ${Number(relatedCashEntry.amount || 0).toFixed(
+                  2,
+                )}, descricao ${relatedCashEntry.description}.`,
               reason,
             },
             transaction,
@@ -438,7 +436,7 @@ async function deleteEntry(idBankEntry, user, body = {}) {
         auditTypeId: 4,
         userId,
         occurredAt,
-        history: buildAuditHistory("EXCLUSAO", entry.scope, entry, occurredAt),
+        history: buildAuditHistory("Exclusão", entry.scope, entry, occurredAt),
         reason,
       },
       transaction,

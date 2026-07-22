@@ -147,6 +147,7 @@ export default function ReceivablesPage() {
   const [message, setMessage] = useState("");
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [receivableFormOpen, setReceivableFormOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [receivableFormMode, setReceivableFormMode] = useState<
     "create" | "edit"
   >("create");
@@ -402,13 +403,11 @@ export default function ReceivablesPage() {
   const handleDeleteReceivable = async () => {
     if (!selectedRow || !canManageSelectedRow) return;
 
-    const confirmed = window.confirm(
-      "Deseja realmente excluir esta conta a receber?",
-    );
-    if (!confirmed) return;
+    setDeleteConfirmOpen(true);
+    return;
 
     try {
-      await deleteRequest(`/receivables/${selectedRow.id}`, {});
+      await deleteRequest(`/receivables/${selectedRow!.id}`, {});
       setMessage("Conta a receber excluÃ­da com sucesso.");
       setReceivableFormOpen(false);
       setSelectedRowId(null);
@@ -419,6 +418,27 @@ export default function ReceivablesPage() {
         getUserFacingApiErrorMessage(
           error,
           "Não foi possÃ­vel excluir a conta a receber.",
+        ),
+      );
+    }
+  };
+
+  const handleConfirmDeleteReceivable = async () => {
+    if (!selectedRow || !canManageSelectedRow) return;
+
+    try {
+      await deleteRequest(`/receivables/${selectedRow.id}`, {});
+      setMessage("Conta a receber excluÃƒÂ­da com sucesso.");
+      setDeleteConfirmOpen(false);
+      setReceivableFormOpen(false);
+      setSelectedRowId(null);
+      resetReceivableForm();
+      await fetchRows();
+    } catch (error: unknown) {
+      setMessage(
+        getUserFacingApiErrorMessage(
+          error,
+          "NÃ£o foi possÃƒÂ­vel excluir a conta a receber.",
         ),
       );
     }
@@ -1226,6 +1246,42 @@ export default function ReceivablesPage() {
                   setReverseReceiptId("");
                   setReverseReceiptOptions([]);
                 }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </CustomerModal>
+
+      <CustomerModal
+        open={deleteConfirmOpen && Boolean(selectedRow)}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Confirmar exclusão"
+        size="sm"
+        subtitle="Confirme a exclusão da conta a receber selecionada."
+      >
+        {selectedRow ? (
+          <div className="space-y-5">
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4">
+              <p className="text-sm text-primary">
+                Deseja realmente excluir a conta a receber de{" "}
+                {getReceivableOriginName(selectedRow)} com parcela{" "}
+                {selectedRow.parcela}?
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleConfirmDeleteReceivable}
+              >
+                Confirmar
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setDeleteConfirmOpen(false)}
               >
                 Cancelar
               </Button>

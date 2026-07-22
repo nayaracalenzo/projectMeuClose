@@ -3,13 +3,13 @@ module.exports = {
     await queryInterface.bulkInsert("audit_types", [
       {
         idAuditType: 3,
-        description: "EXCLUSAO DE CAIXA",
+        description: "EXCLUSÃO DE CAIXA",
         createdAt: new Date(),
         updatedAt: new Date(),
       },
       {
         idAuditType: 4,
-        description: "EXCLUSAO DE BANCO",
+        description: "EXCLUSÃO DE BANCO",
         createdAt: new Date(),
         updatedAt: new Date(),
       },
