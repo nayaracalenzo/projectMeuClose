@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getStoredToken, isTokenExpired, logoutAndRedirect } from "../utils/auth";
+import { getStoredToken } from "../utils/auth";
 
 export const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
@@ -9,7 +9,7 @@ API.interceptors.request.use(
   (config) => {
     const normalizedToken = getStoredToken();
 
-    if (normalizedToken && !isTokenExpired(normalizedToken)) {
+    if (normalizedToken) {
       config.headers.Authorization = normalizedToken.startsWith("Bearer ")
         ? normalizedToken
         : `Bearer ${normalizedToken}`;
@@ -17,21 +17,6 @@ API.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error),
-);
-
-API.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (
-      axios.isAxiosError(error) &&
-      error.response?.status === 401 &&
-      error.config?.url !== "/auth/login"
-    ) {
-      logoutAndRedirect("expired");
-    }
-
-    return Promise.reject(error);
-  },
 );
 
 export const getRequest = async (url: string) => {
