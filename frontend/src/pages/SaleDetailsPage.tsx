@@ -374,12 +374,12 @@ export default function SaleDetailsPage() {
       paymentTypes.filter((item) => item.financialFlow === "FUTURE_CUSTOMER"),
     [paymentTypes],
   );
-  const canRenegotiatePayment = Boolean(
-    sale?.receivable &&
-    sale.receivable.openAmount > 0 &&
-    sale.receivable.originType === "CUSTOMER" &&
-    sale.status !== "CANCELLED",
-  );
+  // const canRenegotiatePayment = Boolean(
+  //   sale?.receivable &&
+  //   sale.receivable.openAmount > 0 &&
+  //   sale.receivable.originType === "CUSTOMER" &&
+  //   sale.status !== "CANCELLED",
+  // );
   const isBudgetSale = sale?.status === "BUDGET";
 
   async function refreshSale() {
@@ -627,7 +627,7 @@ export default function SaleDetailsPage() {
                 Finalizar venda
               </Button>
             ) : null}
-            {canRenegotiatePayment ? (
+            {/* {canRenegotiatePayment ? (
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -654,7 +654,7 @@ export default function SaleDetailsPage() {
               >
                 Renegociar pagamento
               </Button>
-            ) : null}
+            ) : null} */}
             {!isBudgetSale && firstProductionItem?.productId ? (
               <Button
                 variant="secondary"

@@ -497,29 +497,29 @@ export default function ReceivablesPage() {
     setDiscardInterest(false);
   };
 
-  const handleOpenReverseReceiptModal = async () => {
-    if (!selectedRow || !canReverseSelectedReceipt) return;
+  // const handleOpenReverseReceiptModal = async () => {
+  //   if (!selectedRow || !canReverseSelectedReceipt) return;
 
-    try {
-      const data = (await getRequest(
-        `/receivables/${selectedRow.id}/receipts`,
-      )) as {
-        receipts?: InstallmentReceiptOption[];
-      };
-      const receipts = Array.isArray(data?.receipts) ? data.receipts : [];
-      setReverseReceiptOptions(receipts);
-      setReverseReceiptId(receipts[0]?.id ? String(receipts[0].id) : "");
-      setReverseReceiptReason("");
-      setReverseReceiptModalOpen(true);
-    } catch (error: unknown) {
-      setMessage(
-        getUserFacingApiErrorMessage(
-          error,
-          "Nao foi possivel carregar os recebimentos da parcela.",
-        ),
-      );
-    }
-  };
+  //   try {
+  //     const data = (await getRequest(
+  //       `/receivables/${selectedRow.id}/receipts`,
+  //     )) as {
+  //       receipts?: InstallmentReceiptOption[];
+  //     };
+  //     const receipts = Array.isArray(data?.receipts) ? data.receipts : [];
+  //     setReverseReceiptOptions(receipts);
+  //     setReverseReceiptId(receipts[0]?.id ? String(receipts[0].id) : "");
+  //     setReverseReceiptReason("");
+  //     setReverseReceiptModalOpen(true);
+  //   } catch (error: unknown) {
+  //     setMessage(
+  //       getUserFacingApiErrorMessage(
+  //         error,
+  //         "Nao foi possivel carregar os recebimentos da parcela.",
+  //       ),
+  //     );
+  //   }
+  // };
 
   const handleRegisterReceipt = async () => {
     if (!selectedRow) return;
@@ -765,14 +765,14 @@ export default function ReceivablesPage() {
           >
             Quitar
           </Button>
-          <Button
+          {/* <Button
             variant="secondary"
             size="sm"
             onClick={handleOpenReverseReceiptModal}
             disabled={!canReverseSelectedReceipt}
           >
             Ajustar baixa
-          </Button>
+          </Button> */}
         </div>
       </div>
 

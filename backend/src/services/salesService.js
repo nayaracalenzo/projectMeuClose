@@ -914,6 +914,10 @@ function buildIncomingFinancialMovement({ paymentType, amount, paidAt, reference
     return null;
   }
 
+  if (isImmediateCheckPaymentType(paymentType)) {
+    return null;
+  }
+
   return {
     target: isImmediateCashPaymentType(paymentType) ? "CASH" : "BANK",
     scope: "LOJA",
