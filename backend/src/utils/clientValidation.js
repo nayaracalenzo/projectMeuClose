@@ -41,8 +41,8 @@ function normalizeClientInput(body = {}) {
     blocked: typeof body.blocked === "boolean" ? body.blocked : body.blocked,
     professionId:
       body.professionId === undefined ||
-        body.professionId === null ||
-        body.professionId === ""
+      body.professionId === null ||
+      body.professionId === ""
         ? null
         : Number(body.professionId),
     comment: normalizeText(body.comment),
@@ -53,7 +53,7 @@ function getClientValidationIssues(payload) {
   const issues = [];
 
   if (!payload.typeCustomer) {
-    issues.push("Tipo do cliente é obrigatório.");
+    issues.push("Tipo do cliente e obrigatorio.");
     return issues;
   }
 
@@ -61,28 +61,22 @@ function getClientValidationIssues(payload) {
     issues.push("Tipo do cliente invalido.");
   }
 
-  if (!payload.phone) {
-    issues.push("Telefone é obrigatório.");
-  }
-
-  if (!payload.document) {
-    issues.push(
-      payload.typeCustomer === "COMPANY"
-        ? "CNPJ é obrigatório."
-        : "CPF é obrigatório.",
-    );
-  } else if (payload.typeCustomer === "INDIVIDUAL" && payload.document.length !== 11) {
+  if (payload.document && payload.typeCustomer === "INDIVIDUAL" && payload.document.length !== 11) {
     issues.push("CPF deve conter 11 digitos.");
-  } else if (payload.typeCustomer === "COMPANY" && payload.document.length !== 14) {
+  } else if (
+    payload.document &&
+    payload.typeCustomer === "COMPANY" &&
+    payload.document.length !== 14
+  ) {
     issues.push("CNPJ deve conter 14 digitos.");
   }
 
   if (payload.typeCustomer === "INDIVIDUAL" && !payload.fullName) {
-    issues.push("Nome completo é obrigatório para pessoa fisica.");
+    issues.push("Nome completo e obrigatorio para pessoa fisica.");
   }
 
   if (payload.typeCustomer === "COMPANY" && !payload.companyName) {
-    issues.push("Razão social é obrigatória para pessoa jurídica.");
+    issues.push("Razao social e obrigatoria para pessoa juridica.");
   }
 
   return issues;

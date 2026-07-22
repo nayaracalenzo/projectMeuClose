@@ -208,6 +208,56 @@ const getClientValidationIssues = (
   return issues;
 };
 
+const getOptionalClientValidationIssues = (
+  form: Partial<ClientDetails>,
+): ValidationIssue[] => {
+  const issues: ValidationIssue[] = [];
+  const typeCustomer = form.typeCustomer;
+  const documentDigits = onlyDigits(form.document);
+  const fullName = String(form.fullName || "").trim();
+  const companyName = String(form.companyName || "").trim();
+
+  if (typeCustomer === "INDIVIDUAL") {
+    if (documentDigits && documentDigits.length !== 11) {
+      issues.push({
+        key: "document",
+        label: "CPF",
+        message: "CPF deve conter 11 digitos.",
+      });
+    }
+
+    if (!fullName) {
+      issues.push({
+        key: "fullName",
+        label: "Nome",
+        message: "Nome completo e obrigatorio para pessoa fisica.",
+      });
+    }
+  }
+
+  if (typeCustomer === "COMPANY") {
+    if (documentDigits && documentDigits.length !== 14) {
+      issues.push({
+        key: "document",
+        label: "CNPJ",
+        message: "CNPJ deve conter 14 digitos.",
+      });
+    }
+
+    if (!companyName) {
+      issues.push({
+        key: "companyName",
+        label: "Razao social",
+        message: "Razao social e obrigatoria para pessoa juridica.",
+      });
+    }
+  }
+
+  return issues;
+};
+
+void getClientValidationIssues;
+
 export default function CustomerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -413,7 +463,7 @@ export default function CustomerDetails() {
   };
 
   const validationIssues = useMemo(
-    () => getClientValidationIssues(form),
+    () => getOptionalClientValidationIssues(form),
     [form],
   );
 

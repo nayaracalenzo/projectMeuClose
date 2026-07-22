@@ -219,6 +219,19 @@ function formatPhone(value: Primitive) {
   return value;
 }
 
+function onlyDigits(value: Primitive) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function getOptionalDocumentValidationMessage(value: Primitive) {
+  const digits = onlyDigits(value);
+
+  if (!digits) return "";
+  if (digits.length === 11 || digits.length === 14) return "";
+
+  return "CPF/CNPJ deve conter 11 ou 14 digitos quando informado.";
+}
+
 export default function AdminPage() {
   const [selectedResource, setSelectedResource] =
     useState<AdminResourceKey>("employees");
@@ -500,6 +513,24 @@ export default function AdminPage() {
     try {
       setSubmitting(true);
       setError("");
+
+      if (selectedResource === "employees") {
+        const message = getOptionalDocumentValidationMessage(employeeForm.document);
+
+        if (message) {
+          setError(message);
+          return;
+        }
+      }
+
+      if (selectedResource === "suppliers") {
+        const message = getOptionalDocumentValidationMessage(supplierForm.document);
+
+        if (message) {
+          setError(message);
+          return;
+        }
+      }
 
       const payload =
         selectedResource === "employees"

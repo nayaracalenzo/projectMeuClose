@@ -47,24 +47,9 @@ const getCustomerValidationIssues = (
 ): ValidationIssue[] => {
   const issues: ValidationIssue[] = [];
   const documentDigits = onlyDigits(form.document);
-  const phoneDigits = onlyDigits(form.phone);
-
-  if (!phoneDigits) {
-    issues.push({
-      key: "phone",
-      label: "Telefone",
-      message: "Telefone é obrigatório.",
-    });
-  }
 
   if (form.typeCustomer === "INDIVIDUAL") {
-    if (!documentDigits) {
-      issues.push({
-        key: "document",
-        label: "CPF",
-        message: "CPF é obrigatório.",
-      });
-    } else if (documentDigits.length !== 11) {
+    if (documentDigits && documentDigits.length !== 11) {
       issues.push({
         key: "document",
         label: "CPF",
@@ -76,19 +61,13 @@ const getCustomerValidationIssues = (
       issues.push({
         key: "fullName",
         label: "Nome",
-        message: "Nome completo é obrigatório para pessoa fisica.",
+        message: "Nome completo e obrigatorio para pessoa fisica.",
       });
     }
   }
 
   if (form.typeCustomer === "COMPANY") {
-    if (!documentDigits) {
-      issues.push({
-        key: "document",
-        label: "CNPJ",
-        message: "CNPJ é obrigatório.",
-      });
-    } else if (documentDigits.length !== 14) {
+    if (documentDigits && documentDigits.length !== 14) {
       issues.push({
         key: "document",
         label: "CNPJ",
@@ -99,8 +78,8 @@ const getCustomerValidationIssues = (
     if (!form.companyName.trim()) {
       issues.push({
         key: "companyName",
-        label: "Razão social",
-        message: "Razão social é obrigatória para pessoa jurídica.",
+        label: "Razao social",
+        message: "Razao social e obrigatoria para pessoa juridica.",
       });
     }
   }
@@ -167,7 +146,7 @@ export default function NewCustomer() {
       setZipLookupMessage("Buscando endereco pelo CEP...");
       const address = await fetchAddressByZipCode(digits);
       if (!address) {
-        setZipLookupMessage("CEP não encontrado.");
+        setZipLookupMessage("CEP nao encontrado.");
         return;
       }
 
@@ -221,7 +200,7 @@ export default function NewCustomer() {
     const normalizedName = professionName.trim().replace(/\s+/g, " ");
 
     if (!normalizedName) {
-      setProfessionError("Informe o nome da profissão.");
+      setProfessionError("Informe o nome da profissao.");
       return;
     }
 
@@ -244,7 +223,7 @@ export default function NewCustomer() {
       setProfessionError(
         getUserFacingApiErrorMessage(
           error,
-          "Nao foi possivel cadastrar a profissão.",
+          "Nao foi possivel cadastrar a profissao.",
         ),
       );
     } finally {
@@ -260,7 +239,7 @@ export default function NewCustomer() {
       setNotice({
         open: true,
         tone: "warning",
-        title: "Campos obrigatórios",
+        title: "Campos obrigatorios",
         message: validationIssues.map((issue) => issue.message).join(" "),
       });
       return;
@@ -344,52 +323,28 @@ export default function NewCustomer() {
       <CustomerModal
         open={professionModalOpen}
         onClose={closeProfessionModal}
-        title="Nova profissão"
-        subtitle="Cadastre uma nova profissão sem sair do cliente."
+        title="Nova profissao"
+        subtitle="Cadastre uma profissao para continuar o atendimento."
       >
-        <div className="mx-auto max-w-xl">
+        <form onSubmit={handleCreateProfession} className="space-y-4">
+          <input
+            value={professionName}
+            onChange={(event) => setProfessionName(event.target.value)}
+            placeholder="Nome da profissao"
+            className="h-11 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-sm text-[#2a2526] outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
+          />
           {professionError ? (
-            <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-3 py-2 text-sm text-[#7a1717]">
-              {professionError}
-            </div>
+            <p className="text-sm text-[#8f1515]">{professionError}</p>
           ) : null}
-
-          <form className="space-y-4" onSubmit={handleCreateProfession}>
-            <div>
-              <label
-                className="mb-1 block text-sm text-primary"
-                htmlFor="profession-name-create"
-              >
-                Nome da profissão
-              </label>
-              <input
-                id="profession-name-create"
-                value={professionName}
-                onChange={(event) => setProfessionName(event.target.value)}
-                className="h-10 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526] shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
-                autoFocus
-                required
-              />
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={closeProfessionModal}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                disabled={professionSaving}
-              >
-                {professionSaving ? "Salvando..." : "Salvar profissão"}
-              </Button>
-            </div>
-          </form>
-        </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={closeProfessionModal}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" disabled={professionSaving}>
+              {professionSaving ? "Salvando..." : "Salvar profissao"}
+            </Button>
+          </div>
+        </form>
       </CustomerModal>
 
       <NoticeToast
