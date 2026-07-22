@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
 import {
@@ -25,6 +25,26 @@ interface UpcomingFitting {
 interface DashboardSummary {
   pendingOrders: number;
   upcomingFittings: UpcomingFitting[];
+  monthlyReceivables: {
+    totalAmount: number;
+    totalOpen: number;
+    totalReceived: number;
+    totalCardOpen: number;
+    totalOverdue: number;
+    referenceMonth: string;
+    referenceStartDate: string;
+    referenceEndDate: string;
+  };
+  monthlyPayables: {
+    totalAmount: number;
+    totalOpen: number;
+    totalPaid: number;
+    totalCardOpen: number;
+    totalOverdue: number;
+    referenceMonth: string;
+    referenceStartDate: string;
+    referenceEndDate: string;
+  };
 }
 
 interface PurchasePending {
@@ -61,12 +81,44 @@ const getDateOnlyTimestamp = (value?: string | null) => {
   return new Date(year, month - 1, day, 0, 0, 0, 0).getTime();
 };
 
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+
+const formatReferenceMonth = (value?: string) => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "-";
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [clients, setClients] = useState<BirthdayClient[]>([]);
   const [summary, setSummary] = useState<DashboardSummary>({
     pendingOrders: 0,
     upcomingFittings: [],
+    monthlyReceivables: {
+      totalAmount: 0,
+      totalOpen: 0,
+      totalReceived: 0,
+      totalCardOpen: 0,
+      totalOverdue: 0,
+      referenceMonth: "",
+      referenceStartDate: "",
+      referenceEndDate: "",
+    },
+    monthlyPayables: {
+      totalAmount: 0,
+      totalOpen: 0,
+      totalPaid: 0,
+      totalCardOpen: 0,
+      totalOverdue: 0,
+      referenceMonth: "",
+      referenceStartDate: "",
+      referenceEndDate: "",
+    },
   });
   const [purchasePendings, setPurchasePendings] = useState<PurchasePending[]>([]);
   const [newPendingTitle, setNewPendingTitle] = useState("");
@@ -136,7 +188,30 @@ export default function Dashboard() {
         setSummary(
           summaryData && typeof summaryData === "object"
             ? (summaryData as DashboardSummary)
-            : { pendingOrders: 0, upcomingFittings: [] },
+            : {
+                pendingOrders: 0,
+                upcomingFittings: [],
+                monthlyReceivables: {
+                  totalAmount: 0,
+                  totalOpen: 0,
+                  totalReceived: 0,
+                  totalCardOpen: 0,
+                  totalOverdue: 0,
+                  referenceMonth: "",
+                  referenceStartDate: "",
+                  referenceEndDate: "",
+                },
+                monthlyPayables: {
+                  totalAmount: 0,
+                  totalOpen: 0,
+                  totalPaid: 0,
+                  totalCardOpen: 0,
+                  totalOverdue: 0,
+                  referenceMonth: "",
+                  referenceStartDate: "",
+                  referenceEndDate: "",
+                },
+              },
         );
         setPurchasePendings(Array.isArray(purchasePendingsData) ? purchasePendingsData : []);
       } catch (err: unknown) {
@@ -254,25 +329,31 @@ export default function Dashboard() {
 
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">
-              Pendências de Compras
+              Contas a Receber
             </h2>
             <p className="font-editorial text-[2rem] leading-none text-primary">
-              {loading ? "-" : pendingPurchasesCount}
+              {loading ? "-" : formatCurrency(summary.monthlyReceivables.totalCardOpen)}
             </p>
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
-              Itens em aberto
+              Inclui atrasados + mês atual
+            </p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-500">
+              {loading ? "-" : formatReferenceMonth(summary.monthlyReceivables.referenceMonth)}
             </p>
           </div>
 
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">
-              Próximas Provas
+              Contas a Pagar
             </h2>
-            <p className="font-editorial text-[2.5rem] leading-none text-primary">
-              {loading ? "-" : visibleUpcomingFittings.length}
+            <p className="font-editorial text-[2rem] leading-none text-primary">
+              {loading ? "-" : formatCurrency(summary.monthlyPayables.totalCardOpen)}
             </p>
             <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
-              Dias com prova agendada
+              Inclui atrasados + mês atual
+            </p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-500">
+              {loading ? "-" : formatReferenceMonth(summary.monthlyPayables.referenceMonth)}
             </p>
           </div>
 
@@ -514,3 +595,5 @@ export default function Dashboard() {
     </div>
   );
 }
+
+

@@ -8,10 +8,18 @@ function normalizeText(value) {
 }
 
 async function getDashboardSummary() {
-  const [pendingOrders, upcomingFittings] = await Promise.all([
+  const [pendingOrders, upcomingFittings, monthlyReceivables, monthlyPayables] = await Promise.all([
     repository.getPendingProductionCount(),
     repository.listUpcomingFittings(5),
+    repository.summarizeMonthlyReceivables(),
+    repository.summarizeMonthlyPayables(),
   ]);
+
+  const referenceDate = monthlyReceivables.startDate || monthlyPayables.startDate || new Date();
+  const referenceMonth = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(referenceDate);
 
   return {
     pendingOrders,
@@ -20,6 +28,26 @@ async function getDashboardSummary() {
       piecesCount: Number(item.piecesCount || 0),
       testDate: item.testDate,
     })),
+    monthlyReceivables: {
+      totalAmount: Number(monthlyReceivables.totalAmount || 0),
+      totalOpen: Number(monthlyReceivables.totalOpen || 0),
+      totalReceived: Number(monthlyReceivables.totalReceived || 0),
+      totalCardOpen: Number(monthlyReceivables.totalCardOpen || 0),
+      totalOverdue: Number(monthlyReceivables.totalOverdue || 0),
+      referenceMonth,
+      referenceStartDate: monthlyReceivables.startDate,
+      referenceEndDate: monthlyReceivables.endDate,
+    },
+    monthlyPayables: {
+      totalAmount: Number(monthlyPayables.totalAmount || 0),
+      totalOpen: Number(monthlyPayables.totalOpen || 0),
+      totalPaid: Number(monthlyPayables.totalPaid || 0),
+      totalCardOpen: Number(monthlyPayables.totalCardOpen || 0),
+      totalOverdue: Number(monthlyPayables.totalOverdue || 0),
+      referenceMonth,
+      referenceStartDate: monthlyPayables.startDate,
+      referenceEndDate: monthlyPayables.endDate,
+    },
   };
 }
 

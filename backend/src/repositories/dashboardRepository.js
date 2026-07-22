@@ -1,4 +1,15 @@
-const { sequelize, Products, Customers, PurchasePendings } = require("../models");
+const { sequelize, Products, PurchasePendings } = require("../models");
+
+function getCurrentMonthRange() {
+  const now = new Date();
+  const startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  return {
+    startDate,
+    endDate,
+  };
+}
 
 async function getPendingProductionCount() {
   const total = await Products.sum("qtyStock", {
@@ -46,6 +57,125 @@ async function listUpcomingFittings(limit = 8) {
   return rows;
 }
 
+async function summarizeMonthlyReceivables() {
+  const { startDate, endDate } = getCurrentMonthRange();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [rows] = await sequelize.query(
+    `
+      SELECT
+        COALESCE(SUM(ri."amount"), 0) AS "totalAmount",
+        COALESCE(SUM(ri."paidAmount"), 0) AS "totalReceived",
+        COALESCE(
+          SUM(
+            CASE
+              WHEN ri."status" IN ('PAID', 'CANCELLED') THEN 0
+              ELSE ri."amount" - ri."paidAmount"
+            END
+          ),
+          0
+        ) AS "totalOpen",
+        COALESCE(
+          SUM(
+            CASE
+              WHEN ri."status" IN ('PAID', 'CANCELLED') THEN 0
+              WHEN ri."dueDate" >= :startDate AND ri."dueDate" <= :endDate THEN ri."amount" - ri."paidAmount"
+              WHEN ri."dueDate" < :startDate THEN ri."amount" - ri."paidAmount"
+              ELSE 0
+            END
+          ),
+          0
+        ) AS "totalCardOpen",
+        COALESCE(
+          SUM(
+            CASE
+              WHEN ri."status" IN ('PAID', 'CANCELLED') THEN 0
+              WHEN ri."dueDate" < :today THEN ri."amount" - ri."paidAmount"
+              ELSE 0
+            END
+          ),
+          0
+        ) AS "totalOverdue"
+      FROM "receivable_installments" ri
+      INNER JOIN "receivables" r
+        ON r."idReceivable" = ri."receivableId"
+      WHERE
+        ri."dueDate" >= :startDate
+        AND ri."dueDate" <= :endDate
+        AND ri."status" != 'CANCELLED'
+        AND r."status" != 'CANCELLED';
+    `,
+    {
+      replacements: { startDate, endDate, today },
+    },
+  );
+
+  return {
+    totalAmount: Number(rows?.[0]?.totalAmount || 0),
+    totalOpen: Number(rows?.[0]?.totalOpen || 0),
+    totalReceived: Number(rows?.[0]?.totalReceived || 0),
+    totalCardOpen: Number(rows?.[0]?.totalCardOpen || 0),
+    totalOverdue: Number(rows?.[0]?.totalOverdue || 0),
+    startDate,
+    endDate,
+  };
+}
+
+async function summarizeMonthlyPayables() {
+  const { startDate, endDate } = getCurrentMonthRange();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [rows] = await sequelize.query(
+    `
+      SELECT
+        COALESCE(SUM(p."amount"), 0) AS "totalAmount",
+        COALESCE(SUM(p."openAmount"), 0) AS "totalOpen",
+        COALESCE(
+          SUM(
+            CASE
+              WHEN p."status" = 'PAID' THEN 0
+              WHEN p."dueDate" >= :startDate AND p."dueDate" <= :endDate THEN p."openAmount"
+              WHEN p."dueDate" < :startDate THEN p."openAmount"
+              ELSE 0
+            END
+          ),
+          0
+        ) AS "totalCardOpen",
+        COALESCE(
+          SUM(
+            CASE
+              WHEN p."status" = 'PAID' THEN 0
+              WHEN p."dueDate" < :today THEN p."openAmount"
+              ELSE 0
+            END
+          ),
+          0
+        ) AS "totalOverdue"
+      FROM "payables" p
+      WHERE
+        p."status" IN ('OPEN', 'PARTIAL', 'PAID', 'OVERDUE');
+    `,
+    {
+      replacements: { startDate, endDate, today },
+    },
+  );
+
+  const totalAmount = Number(rows?.[0]?.totalAmount || 0);
+  const totalOpen = Number(rows?.[0]?.totalOpen || 0);
+
+  return {
+    totalAmount,
+    totalOpen,
+    totalPaid: Number((totalAmount - totalOpen).toFixed(2)),
+    totalCardOpen: Number(rows?.[0]?.totalCardOpen || 0),
+    totalOverdue: Number(rows?.[0]?.totalOverdue || 0),
+    startDate,
+    endDate,
+  };
+}
+
 async function listPurchasePendings() {
   return PurchasePendings.findAll({
     order: [
@@ -78,6 +208,8 @@ async function deletePurchasePending(id) {
 module.exports = {
   getPendingProductionCount,
   listUpcomingFittings,
+  summarizeMonthlyReceivables,
+  summarizeMonthlyPayables,
   listPurchasePendings,
   createPurchasePending,
   updatePurchasePending,
