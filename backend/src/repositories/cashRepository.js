@@ -249,6 +249,13 @@ async function listEntries(filters = {}) {
 async function summarizeEntries(filters = {}) {
   const [summary] = await CashEntries.findAll({
     where: buildWhere(filters),
+    include: [
+      {
+        model: FinancialCategories,
+        required: false,
+        attributes: [],
+      },
+    ],
     attributes: [
       [
         sequelize.fn(
