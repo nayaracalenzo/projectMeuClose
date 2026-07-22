@@ -112,7 +112,7 @@ function resolveEntryInstallmentLabel(item) {
     return installmentLabel;
   }
 
-  return item.referenceCode ? String(item.referenceCode) : "-";
+  return "-";
 }
 
 function buildAuditHistory(kind, scope, entry, occurredAt) {

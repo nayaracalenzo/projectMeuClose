@@ -164,7 +164,7 @@ function resolveEntryInstallmentLabel(item) {
     return installmentLabel;
   }
 
-  return item.referenceCode ? String(item.referenceCode) : "-";
+  return "-";
 }
 
 async function listEntries(query = {}) {

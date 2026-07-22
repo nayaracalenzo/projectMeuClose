@@ -666,7 +666,7 @@ export default function CustomerDetails() {
           >
             Voltar
           </Button>
-          <Button
+          {/* <Button
             variant="secondary"
             size="md"
             onClick={() => setIsSalesModalOpen(true)}
@@ -679,7 +679,7 @@ export default function CustomerDetails() {
             onClick={() => setIsReceivablesModalOpen(true)}
           >
             A Receber
-          </Button>
+          </Button> */}
           <Button
             variant="primary"
             size="md"

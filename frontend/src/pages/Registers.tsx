@@ -741,7 +741,7 @@ export default function Registers() {
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.parcela || "-"}
                   </td>
-                  <td className="w-[240px] px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="w-60 px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
                         row.category,
