@@ -53,6 +53,21 @@ export default function Sidebar() {
     (item) => item.path !== "/home" && item.path !== "/clientes",
   );
 
+  const requestNavigation = (path: string) => {
+    const navigationEvent = new CustomEvent("app:navigate-intent", {
+      cancelable: true,
+      detail: { path },
+    });
+
+    const canNavigate = window.dispatchEvent(navigationEvent);
+
+    if (canNavigate) {
+      navigate(path);
+    }
+
+    return canNavigate;
+  };
+
   return (
     <>
       <aside className="hidden h-screen max-h-screen w-60 shrink-0 border-r border-outline-variant/35 bg-surface-lowest/95 backdrop-blur-sm md:block">
@@ -75,6 +90,11 @@ export default function Sidebar() {
                 <li key={item.path} className="w-full">
                   <NavLink
                     to={item.path}
+                    onClick={(event) => {
+                      if (!requestNavigation(item.path)) {
+                        event.preventDefault();
+                      }
+                    }}
                     className={({ isActive }) =>
                       ` flex items-center gap-3 px-4 py-3.5 transition-colors ${
                         isActive
@@ -121,7 +141,7 @@ export default function Sidebar() {
               type="button"
               onClick={() => {
                 setIsQuickCreateOpen(false);
-                navigate(primaryMobileItems.clients.path);
+                requestNavigation(primaryMobileItems.clients.path);
               }}
               className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
             >
@@ -131,7 +151,7 @@ export default function Sidebar() {
               type="button"
               onClick={() => {
                 setIsQuickCreateOpen(false);
-                navigate("/nova-venda");
+                requestNavigation("/nova-venda");
               }}
               className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
             >
@@ -148,7 +168,7 @@ export default function Sidebar() {
                 type="button"
                 onClick={() => {
                   setIsMoreMenuOpen(false);
-                  navigate(item.path);
+                  requestNavigation(item.path);
                 }}
                 className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
               >
@@ -174,7 +194,7 @@ export default function Sidebar() {
             onClick={() => {
               setIsQuickCreateOpen(false);
               setIsMoreMenuOpen(false);
-              navigate(primaryMobileItems.home.path);
+              requestNavigation(primaryMobileItems.home.path);
             }}
             className={`flex flex-col items-center justify-center gap-1 ${
               location.pathname === primaryMobileItems.home.path

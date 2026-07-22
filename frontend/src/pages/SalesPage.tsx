@@ -124,17 +124,12 @@ export default function SalesPage() {
   const effectiveStatus =
     statusFilter === "DEFAULT"
       ? viewMode === "budgets"
-        ? undefined
-        : undefined
+        ? "BUDGET"
+        : "NON_BUDGET"
       : statusFilter;
-
   const statusOptions =
     viewMode === "budgets"
-      ? [
-          { value: "DEFAULT", label: "Todos os orçamentos" },
-          { value: "BUDGET", label: "Orçamento" },
-          { value: "CANCELLED", label: "Cancelado" },
-        ]
+      ? []
       : [
           { value: "DEFAULT", label: "Todos os pedidos" },
           { value: "COMPLETED", label: "Concluído" },
@@ -282,24 +277,26 @@ export default function SalesPage() {
         </div>
       </div>
 
-      <div className="mb-5 flex w-full justify-end">
-        <label className="flex w-full max-w-[260px] flex-col gap-2 text-sm text-neutral-700">
-          <span>Status</span>
-          <select
-            value={statusFilter}
-            onChange={(event) =>
-              setStatusFilter(event.target.value as SalesStatusFilter)
-            }
-            className="h-11 rounded border border-outline-variant bg-white px-3 text-sm text-primary outline-none transition-colors focus:border-primary"
-          >
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      {viewMode === "orders" ? (
+        <div className="mb-5 flex w-full justify-end">
+          <label className="flex w-full max-w-[260px] flex-col gap-2 text-sm text-neutral-700">
+            <span>Status</span>
+            <select
+              value={statusFilter}
+              onChange={(event) =>
+                setStatusFilter(event.target.value as SalesStatusFilter)
+              }
+              className="h-11 rounded border border-outline-variant bg-white px-3 text-sm text-primary outline-none transition-colors focus:border-primary"
+            >
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
 
       {error ? (
         <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">

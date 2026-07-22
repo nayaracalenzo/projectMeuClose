@@ -1,6 +1,11 @@
 const { notFoundError, validationError } = require("../errors/AppError");
+const { sequelize } = require("../models");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const repository = require("../repositories/receivablesRepository");
+const cashRepository = require("../repositories/cashRepository");
+const bankRepository = require("../repositories/bankRepository");
+const auditsRepository = require("../repositories/auditsRepository");
+const { createCashEntry, createBankEntry } = require("./financialEntriesService");
 const {
   buildPaymentTypeResponse,
   isImmediateCashPaymentType,
@@ -244,6 +249,161 @@ function normalizeBoolean(value) {
 function getReceivableUserId(user) {
   const normalized = Number(user?.id ?? user?.idUser);
   return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
+}
+
+function normalizeRequiredText(value, fieldName) {
+  const normalized = String(value || "").trim();
+
+  if (!normalized) {
+    throw createReceivablesValidationError(`${fieldName} obrigatorio.`);
+  }
+
+  return normalized;
+}
+
+function buildFinancialAuditHistory(kind, scope, entryId, amount, description, occurredAt) {
+  const placeLabel =
+    kind === "CASH"
+      ? scope === "LOJA"
+        ? "CAIXA"
+        : "CAIXA PESSOAL"
+      : scope === "LOJA"
+        ? "BANCO"
+        : "BANCO PESSOAL";
+
+  return `EXTORNO de ${placeLabel} do lancamento ${entryId} em ${new Intl.DateTimeFormat(
+    "pt-BR",
+  ).format(occurredAt)}, valor ${Number(amount || 0).toFixed(2)}, descricao ${description}.`;
+}
+
+function resolveInstallmentStatus(installment) {
+  const paidAmount = Number(installment.paidAmount || 0);
+  const amount = Number(installment.amount || 0);
+
+  if (paidAmount >= amount) {
+    return "PAID";
+  }
+
+  if (paidAmount > 0) {
+    return "PARTIAL";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const dueDate = new Date(installment.dueDate);
+  dueDate.setHours(0, 0, 0, 0);
+
+  return dueDate.getTime() < today.getTime() ? "OVERDUE" : "OPEN";
+}
+
+async function reverseReceiptFinancialEntries(paymentReceiptId, reason, userId, transaction) {
+  const occurredAt = new Date();
+  const [cashEntries, bankEntries] = await Promise.all([
+    cashRepository.listEntriesByPaymentReceiptId(paymentReceiptId, transaction),
+    bankRepository.listEntriesByPaymentReceiptId(paymentReceiptId, transaction),
+  ]);
+
+  let reversedCashEntries = 0;
+  let reversedBankEntries = 0;
+
+  for (const entry of cashEntries) {
+    if (entry.reversalOfCashEntryId) continue;
+
+    const existingReversal = await cashRepository.findReversalByOriginId(entry.idCashEntry, transaction);
+    if (existingReversal) continue;
+
+    await createCashEntry(
+      {
+        scope: entry.scope,
+        movementType: entry.movementType === "IN" ? "OUT" : "IN",
+        financialCategoryId: entry.financialCategoryId || null,
+        category: entry.FinancialCategory?.description || entry.category,
+        description: `ESTORNO - ${entry.description}`,
+        amount: Number(entry.amount),
+        occurredAt,
+        sourceType: "MANUAL",
+        saleId: entry.saleId || null,
+        paymentReceiptId,
+        paymentTypeId: entry.paymentTypeId || null,
+        referenceCode: entry.referenceCode || null,
+        reversalOfCashEntryId: entry.idCashEntry,
+      },
+      transaction,
+    );
+
+    await auditsRepository.createAudit(
+      {
+        auditTypeId: 3,
+        userId,
+        occurredAt,
+        history: buildFinancialAuditHistory(
+          "CASH",
+          entry.scope,
+          entry.idCashEntry,
+          entry.amount,
+          entry.description,
+          occurredAt,
+        ),
+        reason,
+      },
+      transaction,
+    );
+
+    reversedCashEntries += 1;
+  }
+
+  for (const entry of bankEntries) {
+    if (entry.reversalOfBankEntryId) continue;
+
+    const existingReversal = await bankRepository.findReversalByOriginId(entry.idBankEntry, transaction);
+    if (existingReversal) continue;
+
+    await createBankEntry(
+      {
+        scope: entry.scope,
+        movementType: entry.movementType === "IN" ? "OUT" : "IN",
+        financialCategoryId: entry.financialCategoryId || null,
+        category: entry.FinancialCategory?.description || entry.category,
+        description: `ESTORNO - ${entry.description}`,
+        accountLabel: entry.accountLabel || "Banco da Loja",
+        amount: Number(entry.amount),
+        occurredAt,
+        sourceType: "MANUAL",
+        saleId: entry.saleId || null,
+        paymentReceiptId,
+        paymentTypeId: entry.paymentTypeId || null,
+        referenceCode: entry.referenceCode || null,
+        reversalOfBankEntryId: entry.idBankEntry,
+      },
+      transaction,
+    );
+
+    await auditsRepository.createAudit(
+      {
+        auditTypeId: 4,
+        userId,
+        occurredAt,
+        history: buildFinancialAuditHistory(
+          "BANK",
+          entry.scope,
+          entry.idBankEntry,
+          entry.amount,
+          entry.description,
+          occurredAt,
+        ),
+        reason,
+      },
+      transaction,
+    );
+
+    reversedBankEntries += 1;
+  }
+
+  return {
+    reversedCashEntries,
+    reversedBankEntries,
+  };
 }
 
 function ensureReceivableCanBeManaged(installment) {
@@ -582,6 +742,119 @@ async function deleteReceivable(installmentId, user) {
   };
 }
 
+async function reverseLatestReceipt(installmentId, user, body = {}) {
+  const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
+  const reason = normalizeRequiredText(body.reason, "Motivo");
+  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+
+  if (!installment || !installment.Receivable) {
+    throw notFoundError("Parcela nao encontrada.");
+  }
+
+  const receipts = Array.isArray(installment.PaymentReceipts) ? installment.PaymentReceipts : [];
+
+  if (!receipts.length) {
+    throw createReceivablesValidationError("Esta parcela nao possui recebimentos para ajustar.");
+  }
+
+  const selectedReceiptId =
+    body.paymentReceiptId === null || body.paymentReceiptId === undefined || body.paymentReceiptId === ""
+      ? null
+      : normalizePositiveInteger(body.paymentReceiptId, "Recebimento");
+
+  const latestReceipt = [...receipts].sort((left, right) => {
+    const rightTime = new Date(right.paidAt).getTime();
+    const leftTime = new Date(left.paidAt).getTime();
+
+    if (rightTime !== leftTime) {
+      return rightTime - leftTime;
+    }
+
+    return Number(right.idPaymentReceipt) - Number(left.idPaymentReceipt);
+  })[0];
+
+  const targetReceipt = selectedReceiptId
+    ? receipts.find((item) => Number(item.idPaymentReceipt) === selectedReceiptId)
+    : latestReceipt;
+
+  if (!targetReceipt) {
+    throw createReceivablesValidationError("Recebimento nao encontrado para esta parcela.");
+  }
+
+  const userId = getReceivableUserId(user);
+
+  return sequelize.transaction(async (transaction) => {
+    const financialResult = await reverseReceiptFinancialEntries(
+      targetReceipt.idPaymentReceipt,
+      reason,
+      userId,
+      transaction,
+    );
+
+    const nextPaidAmount = Math.max(0, Number(installment.paidAmount || 0) - Number(targetReceipt.amount || 0));
+    const nextInstallment = {
+      ...installment.get({ plain: true }),
+      paidAmount: nextPaidAmount,
+    };
+    const nextInstallmentStatus = resolveInstallmentStatus(nextInstallment);
+    const receivable = installment.Receivable;
+    const nextOpenAmount = Number(receivable.openAmount || 0) + Number(targetReceipt.amount || 0);
+    const receivableStatus =
+      nextOpenAmount <= 0
+        ? "PAID"
+        : nextOpenAmount < Number(receivable.originalAmount || 0)
+          ? "PARTIAL"
+          : "OPEN";
+
+    await repository.updateInstallment(normalizedInstallmentId, {
+      paidAmount: nextPaidAmount,
+      status: nextInstallmentStatus,
+    }, transaction);
+
+    await repository.updateReceivable(receivable.idReceivable, {
+      openAmount: nextOpenAmount,
+      status: receivableStatus,
+    }, transaction);
+
+    await repository.deletePaymentReceipt(targetReceipt.idPaymentReceipt, transaction);
+
+    return {
+      message: "Baixa ajustada com sucesso.",
+      paymentReceiptId: targetReceipt.idPaymentReceipt,
+      reversedCashEntries: financialResult.reversedCashEntries,
+      reversedBankEntries: financialResult.reversedBankEntries,
+    };
+  });
+}
+
+async function listInstallmentReceipts(installmentId) {
+  const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
+  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+
+  if (!installment || !installment.Receivable) {
+    throw notFoundError("Parcela nao encontrada.");
+  }
+
+  const receipts = await repository.listInstallmentReceipts(normalizedInstallmentId);
+
+  return {
+    installmentId: normalizedInstallmentId,
+    receipts: receipts.map((item) => ({
+      id: item.idPaymentReceipt,
+      amount: Number(item.amount || 0),
+      paidAt: item.paidAt,
+      referenceCode: item.referenceCode || null,
+      receiptType: item.receiptType,
+      paymentType: item.PaymentType
+        ? {
+            id: item.PaymentType.idPaymentType,
+            name: item.PaymentType.desc,
+          }
+        : null,
+    })),
+  };
+}
+
 module.exports = {
   createReceivablesValidationError,
   listInstallments,
@@ -589,4 +862,6 @@ module.exports = {
   updateReceivable,
   deleteReceivable,
   registerReceipt,
+  listInstallmentReceipts,
+  reverseLatestReceipt,
 };

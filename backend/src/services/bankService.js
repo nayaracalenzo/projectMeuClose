@@ -312,7 +312,7 @@ async function reverseEntry(idBankEntry, user, body = {}) {
       {
         scope: entry.scope,
         movementType: entry.movementType === "IN" ? "OUT" : "IN",
-        financialCategoryId: entry.financialCategoryId || 3,
+        financialCategoryId: entry.financialCategoryId || null,
         category: categoryDescription,
         description: reversalDescription,
         accountLabel: entry.accountLabel || "Banco da Loja",
@@ -351,7 +351,7 @@ async function reverseEntry(idBankEntry, user, body = {}) {
             {
               scope: relatedCashEntry.scope,
               movementType: relatedCashEntry.movementType === "IN" ? "OUT" : "IN",
-              financialCategoryId: relatedCashEntry.financialCategoryId || 3,
+              financialCategoryId: relatedCashEntry.financialCategoryId || null,
               category: relatedCashEntry.category || categoryDescription,
               description: reversalDescription,
               amount: Number(relatedCashEntry.amount),

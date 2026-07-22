@@ -114,6 +114,7 @@ export interface CustomMadeSummaryItem {
 }
 
 interface CustomMadeClothingProps {
+  initialProducts?: CustomMadeProductDraft[];
   onSummaryChange?: (items: CustomMadeSummaryItem[]) => void;
   onProductsChange?: (items: CustomMadeProductDraft[]) => void;
 }
@@ -161,6 +162,7 @@ function buildCustomMadeDescription(product: {
 }
 
 export default function CustomMadeClothing({
+  initialProducts,
   onSummaryChange,
   onProductsChange,
 }: CustomMadeClothingProps) {
@@ -176,24 +178,32 @@ export default function CustomMadeClothing({
   const [quickCreateSubmitting, setQuickCreateSubmitting] = useState(false);
   const [quickCreateError, setQuickCreateError] = useState("");
   const [notice, setNotice] = useState<QuickCreateNotice | null>(null);
-  const [products, setProducts] = useState<CustomMadeProduct[]>([
-    {
-      id: 1,
-      type: "",
-      fabric: "",
-      color: "",
-      measurements: emptyMeasurements(),
-      selectedMeasurements: [],
-      description: "",
-      price: "",
-      discountPercent: "",
-      details: "",
-      status: "A PRODUZIR",
-      seamstress: "",
-      fittingDate: "",
-      seamstressCost: "",
-    },
-  ]);
+  const buildEmptyProduct = (id: number): CustomMadeProduct => ({
+    id,
+    type: "",
+    fabric: "",
+    color: "",
+    measurements: emptyMeasurements(),
+    selectedMeasurements: [],
+    description: "",
+    price: "",
+    discountPercent: "",
+    details: "",
+    status: "A PRODUZIR",
+    seamstress: "",
+    fittingDate: "",
+    seamstressCost: "",
+  });
+  const [products, setProducts] = useState<CustomMadeProduct[]>(
+    initialProducts?.length
+      ? initialProducts.map((product, index) => ({
+          ...product,
+          id: product.id || index + 1,
+          measurements: { ...product.measurements },
+          selectedMeasurements: [...product.selectedMeasurements],
+        }))
+      : [buildEmptyProduct(1)],
+  );
 
   const fieldClassName =
     "h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";

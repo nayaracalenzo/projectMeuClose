@@ -65,9 +65,13 @@ async function buildSessionSummary(session) {
 async function getStoreSessionStatus() {
   const openSession = await repository.findOpenStoreSession();
   const currentSession = await buildSessionSummary(openSession);
+  const lastClosedSession = currentSession
+    ? null
+    : await buildSessionSummary(await repository.findLatestClosedSession());
 
   return {
     currentSession,
+    lastClosedSession,
     hasOpenSession: Boolean(currentSession),
     pendingPreviousDay: Boolean(currentSession?.pendingPreviousDay),
   };

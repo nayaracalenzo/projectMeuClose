@@ -93,6 +93,62 @@ async function findByTransferKey(transferKey, transaction) {
   });
 }
 
+async function listEntriesBySaleId(saleId, transaction) {
+  return CashEntries.findAll({
+    where: {
+      saleId,
+    },
+    include: [
+      {
+        model: FinancialCategories,
+        required: false,
+        attributes: ["idFinancialCategory", "description"],
+      },
+      {
+        model: Sales,
+        required: false,
+        attributes: ["idSale", "status"],
+      },
+    ],
+    order: [["occurredAt", "ASC"], ["idCashEntry", "ASC"]],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: CashEntries,
+        }
+      : undefined,
+  });
+}
+
+async function listEntriesByPaymentReceiptId(paymentReceiptId, transaction) {
+  return CashEntries.findAll({
+    where: {
+      paymentReceiptId,
+    },
+    include: [
+      {
+        model: FinancialCategories,
+        required: false,
+        attributes: ["idFinancialCategory", "description"],
+      },
+      {
+        model: Sales,
+        required: false,
+        attributes: ["idSale", "status"],
+      },
+    ],
+    order: [["occurredAt", "ASC"], ["idCashEntry", "ASC"]],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: CashEntries,
+        }
+      : undefined,
+  });
+}
+
 async function listEntries(filters = {}) {
   return CashEntries.findAndCountAll({
     where: buildWhere(filters),
@@ -231,6 +287,8 @@ module.exports = {
   getEntryById,
   findReversalByOriginId,
   findByTransferKey,
+  listEntriesBySaleId,
+  listEntriesByPaymentReceiptId,
   listEntries,
   summarizeEntries,
 };

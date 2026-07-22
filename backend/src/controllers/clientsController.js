@@ -1,5 +1,6 @@
 const { notFoundError } = require("../errors/AppError");
 const service = require("../services/clientsService.js");
+const customerCreditsService = require("../services/customerCreditsService");
 
 async function getBirthdaysOfMonthController(req, res, next) {
   try {
@@ -58,10 +59,20 @@ async function createClient(req, res, next) {
   }
 }
 
+async function getClientCreditsController(req, res, next) {
+  try {
+    const data = await customerCreditsService.listCustomerCreditsByCustomerId(req.params.id);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   getBirthdaysOfMonthController,
   getAllClients,
   getClientById,
+  getClientCreditsController,
   updateClientById,
   createClient,
 };
