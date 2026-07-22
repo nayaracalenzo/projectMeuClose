@@ -521,19 +521,19 @@ async function listInstallments({
   annotateLegacyMixedPaymentLabels(installmentItems);
   const standaloneReceipts = includeStandaloneReceipts
     ? await repository.listStandaloneReceipts({
-        startDate,
-        endDate,
-        search,
-        customerId,
-      })
+      startDate,
+      endDate,
+      search,
+      customerId,
+    })
     : [];
   const standaloneSummary = includeStandaloneReceipts
     ? await repository.summarizeStandaloneReceipts({
-        startDate,
-        endDate,
-        search,
-        customerId,
-      })
+      startDate,
+      endDate,
+      search,
+      customerId,
+    })
     : { totalReceived: 0 };
 
   const standaloneItems = standaloneReceipts.map((receipt) => {
@@ -569,8 +569,8 @@ async function listInstallments({
 
   const items = includeStandaloneReceipts
     ? [...installmentItems, ...standaloneItems]
-        .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())
-        .slice((page - 1) * pageSize, page * pageSize)
+      .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())
+      .slice((page - 1) * pageSize, page * pageSize)
     : installmentItems;
 
   const total = includeStandaloneReceipts
@@ -733,7 +733,7 @@ async function deleteReceivable(installmentId, user) {
     auditTypeId: 1,
     userId: getReceivableUserId(user),
     occurredAt: new Date(),
-    history: `Exclusao de conta a receber ${normalizedInstallmentId} do cliente ${customerName} no valor de ${amount} com vencimento em ${dueDate}.`,
+    history: `Exclusão de conta a receber ${normalizedInstallmentId} do cliente ${customerName} no valor de ${amount} com vencimento em ${dueDate}.`,
     reason: null,
   });
 
@@ -847,9 +847,9 @@ async function listInstallmentReceipts(installmentId) {
       receiptType: item.receiptType,
       paymentType: item.PaymentType
         ? {
-            id: item.PaymentType.idPaymentType,
-            name: item.PaymentType.desc,
-          }
+          id: item.PaymentType.idPaymentType,
+          name: item.PaymentType.desc,
+        }
         : null,
     })),
   };
