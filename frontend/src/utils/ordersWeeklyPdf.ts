@@ -68,8 +68,8 @@ const drawTableHeader = (doc: jsPDF, startY: number, includeValues: boolean) => 
   doc.line(38, startY, 38, startY + 10);
   doc.line(96, startY, 96, startY + 10);
   doc.line(138, startY, 138, startY + 10);
-  doc.line(includeValues ? 188 : 252, startY, includeValues ? 188 : 252, startY + 10);
   if (includeValues) {
+    doc.line(188, startY, 188, startY + 10);
     doc.line(252, startY, 252, startY + 10);
   }
   doc.setTextColor(43, 36, 37);
@@ -78,10 +78,12 @@ const drawTableHeader = (doc: jsPDF, startY: number, includeValues: boolean) => 
   doc.text("Data prova", 16, startY + 6.5);
   doc.text("Cliente", 42, startY + 6.5);
   doc.text("Costureira", 100, startY + 6.5);
-  doc.text("Roupa", 142, startY + 6.5);
-  doc.text("Detalhes", 192, startY + 6.5);
   if (includeValues) {
+    doc.text("Roupa", 142, startY + 6.5);
+    doc.text("Detalhes", 192, startY + 6.5);
     doc.text("Valor", 282, startY + 6.5, { align: "right" });
+  } else {
+    doc.text("Descricao", 142, startY + 6.5);
   }
 };
 
@@ -156,8 +158,10 @@ export const downloadWeeklyOrdersPdf = async ({
       const dateLabel = index === 0 ? formatDate(order.date) : "";
       const customerLabel = index === 0 ? order.customer : "";
       const seamstressLabel = item.seamstress || "-";
-      const detailsLines = doc.splitTextToSize(details, includeValues ? 60 : 124);
+      const mergedDescription = [item.name, details].filter(Boolean).join(" | ");
+      const detailsLines = doc.splitTextToSize(details, 60);
       const clothingLines = doc.splitTextToSize(item.name, 44);
+      const mergedDescriptionLines = doc.splitTextToSize(mergedDescription, 138);
       const seamstressLines = doc.splitTextToSize(seamstressLabel, 38);
       const customerLines = doc.splitTextToSize(customerLabel, 50);
       const dateLines = doc.splitTextToSize(dateLabel, 18);
@@ -165,8 +169,8 @@ export const downloadWeeklyOrdersPdf = async ({
         dateLines.length,
         customerLines.length,
         seamstressLines.length,
-        clothingLines.length,
-        detailsLines.length,
+        includeValues ? clothingLines.length : mergedDescriptionLines.length,
+        includeValues ? detailsLines.length : 1,
         1,
       );
       const rowHeight = Math.max(14, baseHeight * 5.2);
@@ -183,8 +187,8 @@ export const downloadWeeklyOrdersPdf = async ({
       doc.line(38, currentY - 4, 38, currentY - 4 + rowHeight);
       doc.line(96, currentY - 4, 96, currentY - 4 + rowHeight);
       doc.line(138, currentY - 4, 138, currentY - 4 + rowHeight);
-      doc.line(includeValues ? 188 : 252, currentY - 4, includeValues ? 188 : 252, currentY - 4 + rowHeight);
       if (includeValues) {
+        doc.line(188, currentY - 4, 188, currentY - 4 + rowHeight);
         doc.line(252, currentY - 4, 252, currentY - 4 + rowHeight);
       }
 
@@ -198,8 +202,12 @@ export const downloadWeeklyOrdersPdf = async ({
       doc.setFont("helvetica", "normal");
       doc.text(customerLines, 42, textStartY);
       doc.text(seamstressLines, 100, textStartY);
-      doc.text(clothingLines, 142, textStartY);
-      doc.text(detailsLines, 192, textStartY);
+      if (includeValues) {
+        doc.text(clothingLines, 142, textStartY);
+        doc.text(detailsLines, 192, textStartY);
+      } else {
+        doc.text(mergedDescriptionLines, 142, textStartY);
+      }
 
       if (includeValues && index === 0) {
         doc.setFont("helvetica", "bold");
