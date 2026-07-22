@@ -54,6 +54,11 @@ function normalizeOptionalDate(value, fieldName, options = {}) {
   );
 }
 
+function normalizeOptionalText(value) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
 function deriveFilter(status, dueDate, openAmount, amount) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -188,6 +193,102 @@ async function createPayable(body = {}) {
   };
 }
 
+function ensurePayableCanBeManaged(payable) {
+  if (!payable) {
+    throw notFoundError("Conta a pagar nao encontrada.");
+  }
+
+  const hasPayments = Array.isArray(payable.PayablePayments) && payable.PayablePayments.length > 0;
+  const openAmount = Number(payable.openAmount || 0);
+  const amount = Number(payable.amount || 0);
+
+  if (hasPayments || openAmount !== amount) {
+    throw createPayablesValidationError(
+      "Somente contas a pagar manuais sem pagamentos podem ser alteradas ou excluidas.",
+    );
+  }
+}
+
+async function updatePayable(payableId, body = {}) {
+  const normalizedPayableId = Number(payableId);
+  if (!Number.isInteger(normalizedPayableId) || normalizedPayableId <= 0) {
+    throw createPayablesValidationError("Conta a pagar invalida.");
+  }
+
+  const payable = await repository.getPayableForManagement(normalizedPayableId);
+  ensurePayableCanBeManaged(payable);
+
+  const scope = String(body.scope || "").trim();
+  if (scope !== "LOJA" && scope !== "PESSOAL") {
+    throw createPayablesValidationError("Escopo invalido.");
+  }
+
+  const settlementTarget = String(body.settlementTarget || "").trim();
+  if (settlementTarget !== "BANCO" && settlementTarget !== "CAIXA") {
+    throw createPayablesValidationError("Destino previsto invalido.");
+  }
+
+  const description = String(body.description || "").trim();
+  const category = String(body.category || "").trim();
+  const rawBeneficiary = String(body.beneficiary || "").trim();
+  const supplierId = body.supplierId ? Number(body.supplierId) : null;
+  const supplier =
+    Number.isInteger(supplierId) && supplierId > 0
+      ? await repository.getSupplierById(supplierId)
+      : null;
+  const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
+
+  if (!description || !category || !beneficiary) {
+    throw createPayablesValidationError("Descricao, categoria e favorecido sao obrigatorios.");
+  }
+
+  const amount = normalizeAmount(body.amount, "Valor");
+
+  await repository.updatePayable(normalizedPayableId, {
+    scope,
+    description,
+    category,
+    beneficiary,
+    supplierId: supplier?.idSupplier || null,
+    amount,
+    openAmount: amount,
+    dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
+    settlementTarget,
+    accountLabel: normalizeOptionalText(body.accountLabel),
+    plannedPaymentTypeId: body.plannedPaymentTypeId ? Number(body.plannedPaymentTypeId) : null,
+  });
+
+  return {
+    message: "Conta a pagar alterada com sucesso.",
+  };
+}
+
+async function deletePayable(payableId, user) {
+  const normalizedPayableId = Number(payableId);
+  if (!Number.isInteger(normalizedPayableId) || normalizedPayableId <= 0) {
+    throw createPayablesValidationError("Conta a pagar invalida.");
+  }
+
+  const payable = await repository.getPayableForManagement(normalizedPayableId);
+  ensurePayableCanBeManaged(payable);
+
+  await repository.deleteManualPayable(normalizedPayableId, {
+    auditTypeId: 2,
+    userId: Number(user?.id || user?.idUser) || null,
+    occurredAt: new Date(),
+    history: `Exclusao de conta a pagar ${normalizedPayableId} para ${
+      payable.Supplier?.tradeName || payable.Supplier?.fullName || payable.beneficiary
+    } no valor de ${Number(payable.amount || 0).toFixed(2)} com vencimento em ${
+      payable.dueDate ? new Date(payable.dueDate).toISOString().slice(0, 10) : "-"
+    }.`,
+    reason: null,
+  });
+
+  return {
+    message: "Conta a pagar excluida com sucesso.",
+  };
+}
+
 async function registerPayment(payableId, body = {}) {
   const normalizedPayableId = Number(payableId);
   if (!Number.isInteger(normalizedPayableId) || normalizedPayableId <= 0) {
@@ -246,5 +347,7 @@ module.exports = {
   createPayablesValidationError,
   listPayables,
   createPayable,
+  updatePayable,
+  deletePayable,
   registerPayment,
 };

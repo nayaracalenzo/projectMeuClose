@@ -1,6 +1,7 @@
 const { Op, Sequelize } = require("sequelize");
 const { PayablePayments, Payables, PaymentTypes, Suppliers, sequelize } = require("../models");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
+const auditsRepository = require("./auditsRepository");
 
 function buildWhere({ scope, status, startDate, endDate, search } = {}) {
   const where = {};
@@ -162,6 +163,41 @@ async function getPayableById(payableId) {
   return Payables.findByPk(payableId);
 }
 
+async function getPayableForManagement(payableId, transaction) {
+  return Payables.findByPk(payableId, {
+    include: [
+      {
+        model: PayablePayments,
+        attributes: ["idPayablePayment"],
+        required: false,
+      },
+      {
+        model: Suppliers,
+        attributes: ["idSupplier", "fullName", "tradeName"],
+        required: false,
+      },
+    ],
+    transaction,
+    lock: transaction
+      ? {
+          level: transaction.LOCK.UPDATE,
+          of: Payables,
+        }
+      : undefined,
+  });
+}
+
+async function updatePayable(payableId, payload) {
+  const payable = await Payables.findByPk(payableId);
+
+  if (!payable) {
+    return undefined;
+  }
+
+  await payable.update(payload);
+  return payable;
+}
+
 async function registerPayment(payableId, payload) {
   return sequelize.transaction(async (transaction) => {
     const payable = await Payables.findByPk(payableId, {
@@ -218,11 +254,29 @@ async function registerPayment(payableId, payload) {
   });
 }
 
+async function deleteManualPayable(payableId, auditPayload) {
+  return sequelize.transaction(async (transaction) => {
+    const payable = await getPayableForManagement(payableId, transaction);
+
+    if (!payable) {
+      return undefined;
+    }
+
+    await auditsRepository.createAudit(auditPayload, transaction);
+    await payable.destroy({ transaction });
+
+    return { payableId };
+  });
+}
+
 module.exports = {
   listPayables,
   summarizePayables,
   createPayable,
   getSupplierById,
   getPayableById,
+  getPayableForManagement,
+  updatePayable,
   registerPayment,
+  deleteManualPayable,
 };

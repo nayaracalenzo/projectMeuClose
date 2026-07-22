@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
-import { getRequest, postRequest } from "../services/request";
+import NoticeToast from "../components/NoticeToast";
+import {
+  deleteRequest,
+  getRequest,
+  postRequest,
+  updateRequest,
+} from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { getCategoryBadgeClassName } from "../utils/categoryBadge";
 import { formatCurrency } from "../utils/currency";
@@ -63,7 +69,19 @@ interface RegisterPaymentResponse {
   paymentId: number;
 }
 
+type ToastState = {
+  open: boolean;
+  tone: "success" | "warning" | "error";
+  title?: string;
+  message: string;
+};
+
 const PAGE_SIZE = 10;
+const EMPTY_TOAST: ToastState = {
+  open: false,
+  tone: "success",
+  message: "",
+};
 
 const filterOptions: Array<{ value: PayableFilter; label: string }> = [
   { value: "EM_ABERTO", label: "Em Aberto" },
@@ -80,7 +98,6 @@ const formatDate = (value: string) =>
 export default function PayablesPage() {
   const [scope, setScope] = useState<Scope>("LOJA");
   const [filter, setFilter] = useState<PayableFilter>("EM_ABERTO");
-  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -95,22 +112,33 @@ export default function PayablesPage() {
   const [summary, setSummary] = useState({ totalAmount: 0, totalOpen: 0 });
   const [selectedPayableId, setSelectedPayableId] = useState<number | null>(null);
   const [activePayableId, setActivePayableId] = useState<number | null>(null);
+  const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
+  const [payableFormMode, setPayableFormMode] = useState<"create" | "edit">(
+    "create",
+  );
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [amount, setAmount] = useState("");
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [settlementTarget, setSettlementTarget] = useState<SettlementTarget>("BANCO");
+  const [dueDate, setDueDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [settlementTarget, setSettlementTarget] =
+    useState<SettlementTarget>("BANCO");
   const [accountLabel, setAccountLabel] = useState("");
   const [plannedPaymentTypeId, setPlannedPaymentTypeId] = useState("");
 
   const [paymentTypeId, setPaymentTypeId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paidAt, setPaidAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [paidAt, setPaidAt] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
   const [referenceCode, setReferenceCode] = useState("");
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
+  const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   useEffect(() => {
     setPage(1);
@@ -132,7 +160,9 @@ export default function PayablesPage() {
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
 
-      const data = (await getRequest(`/payables?${params.toString()}`)) as PayablesResponse;
+      const data = (await getRequest(
+        `/payables?${params.toString()}`,
+      )) as PayablesResponse;
       setRows(Array.isArray(data.items) ? data.items : []);
       setTotalRows(Number(data.total) || 0);
       setTotalPages(Number(data.totalPages) || 1);
@@ -159,6 +189,7 @@ export default function PayablesPage() {
   useEffect(() => {
     if (selectedPayableId && !rows.some((row) => row.id === selectedPayableId)) {
       setSelectedPayableId(null);
+      setDeleteConfirmOpen(false);
     }
 
     if (activePayableId && !rows.some((row) => row.id === activePayableId)) {
@@ -202,9 +233,53 @@ export default function PayablesPage() {
     fetchSuppliers();
   }, []);
 
-  const handleCreatePayable = async () => {
+  const selectedRow = rows.find((row) => row.id === selectedPayableId) || null;
+  const canManageSelectedPayable = Boolean(
+    selectedRow &&
+      selectedRow.id > 0 &&
+      selectedRow.paidAmount <= 0 &&
+      selectedRow.openAmount === selectedRow.amount,
+  );
+
+  const resetPayableForm = () => {
+    setDescription("");
+    setCategory("");
+    setBeneficiary("");
+    setSupplierId("");
+    setAmount("");
+    setDueDate(new Date().toISOString().slice(0, 10));
+    setSettlementTarget("BANCO");
+    setAccountLabel("");
+    setPlannedPaymentTypeId("");
+    setPayableFormMode("create");
+  };
+
+  const handleOpenCreatePayable = () => {
+    resetPayableForm();
+    setIsCreateFormOpen(true);
+  };
+
+  const handleOpenEditPayable = () => {
+    if (!selectedRow || !canManageSelectedPayable) return;
+
+    setPayableFormMode("edit");
+    setDescription(selectedRow.description);
+    setCategory(selectedRow.category);
+    setBeneficiary(selectedRow.supplierName ? "" : selectedRow.beneficiary);
+    setSupplierId(selectedRow.supplierId ? String(selectedRow.supplierId) : "");
+    setAmount(String(selectedRow.amount.toFixed(2)));
+    setDueDate(selectedRow.dueDate.slice(0, 10));
+    setSettlementTarget(selectedRow.settlementTarget);
+    setAccountLabel(selectedRow.accountLabel || "");
+    setPlannedPaymentTypeId(
+      selectedRow.plannedPaymentTypeId ? String(selectedRow.plannedPaymentTypeId) : "",
+    );
+    setIsCreateFormOpen(true);
+  };
+
+  const handleSubmitPayable = async () => {
     try {
-      await postRequest("/payables", {
+      const payload = {
         scope,
         description,
         category,
@@ -214,27 +289,88 @@ export default function PayablesPage() {
         dueDate,
         settlementTarget,
         accountLabel: accountLabel || null,
-        plannedPaymentTypeId: plannedPaymentTypeId ? Number(plannedPaymentTypeId) : null,
-      });
+        plannedPaymentTypeId: plannedPaymentTypeId
+          ? Number(plannedPaymentTypeId)
+          : null,
+      };
 
-      setDescription("");
-      setCategory("");
-      setBeneficiary("");
-      setSupplierId("");
-      setAmount("");
-      setAccountLabel("");
-      setPlannedPaymentTypeId("");
+      if (payableFormMode === "create") {
+        await postRequest("/payables", payload);
+        setToast({
+          open: true,
+          tone: "success",
+          title: "Conta a pagar",
+          message: "Conta a pagar criada com sucesso.",
+        });
+      } else {
+        if (!selectedRow) return;
+        await updateRequest(`/payables/${selectedRow.id}`, payload);
+        setToast({
+          open: true,
+          tone: "success",
+          title: "Conta a pagar",
+          message: "Conta a pagar alterada com sucesso.",
+        });
+      }
+
+      resetPayableForm();
       setIsCreateFormOpen(false);
-      setMessage("Conta a pagar criada com sucesso.");
+      setSelectedPayableId(null);
       await fetchRows();
     } catch (error: unknown) {
-      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível criar a conta a pagar."));
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Conta a pagar",
+        message: getUserFacingApiErrorMessage(
+          error,
+          payableFormMode === "create"
+            ? "Não foi possível criar a conta a pagar."
+            : "Não foi possível alterar a conta a pagar.",
+        ),
+      });
+    }
+  };
+
+  const handleDeletePayable = () => {
+    if (!selectedRow || !canManageSelectedPayable) return;
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleConfirmDeletePayable = async () => {
+    if (!selectedRow || !canManageSelectedPayable) return;
+
+    try {
+      await deleteRequest(`/payables/${selectedRow.id}`, {});
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Conta a pagar",
+        message: "Conta a pagar excluída com sucesso.",
+      });
+      setDeleteConfirmOpen(false);
+      setSelectedPayableId(null);
+      setIsCreateFormOpen(false);
+      resetPayableForm();
+      await fetchRows();
+    } catch (error: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Conta a pagar",
+        message: getUserFacingApiErrorMessage(
+          error,
+          "Não foi possível excluir a conta a pagar.",
+        ),
+      });
     }
   };
 
   const handleOpenPayment = (row: PayableRow) => {
     setActivePayableId(row.id);
-    setPaymentTypeId(row.plannedPaymentTypeId ? String(row.plannedPaymentTypeId) : "");
+    setPaymentTypeId(
+      row.plannedPaymentTypeId ? String(row.plannedPaymentTypeId) : "",
+    );
     setPaymentAmount(String(row.openAmount.toFixed(2)));
     setPaidAt(new Date().toISOString().slice(0, 10));
     setReferenceCode("");
@@ -252,38 +388,50 @@ export default function PayablesPage() {
   const handleOpenPaymentForm = () => {
     if (!selectedPayableId) return;
 
-    const selectedRow = rows.find((row) => row.id === selectedPayableId) || null;
-    if (!selectedRow || selectedRow.filter === "PAGAS" || selectedRow.openAmount <= 0) {
+    const row = rows.find((item) => item.id === selectedPayableId) || null;
+    if (!row || row.filter === "PAGAS" || row.openAmount <= 0) {
       return;
     }
 
-    handleOpenPayment(selectedRow);
+    handleOpenPayment(row);
   };
 
-  const handleRegisterPayment = async () => {
+  const handleRegisterPayment = () => {
     if (!activePayableId) return;
     setPaymentConfirmOpen(true);
   };
 
   const handleConfirmRegisterPayment = async () => {
     if (!activePayableId) return;
-    const normalizedPaymentAmount = Number(paymentAmount);
 
     try {
       const data = (await postRequest(`/payables/${activePayableId}/payments`, {
         paymentTypeId: Number(paymentTypeId),
-        amount: normalizedPaymentAmount,
+        amount: Number(paymentAmount),
         paidAt,
         referenceCode: referenceCode || null,
       })) as RegisterPaymentResponse;
 
-      setMessage(data?.message || "Pagamento registrado com sucesso.");
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Conta a pagar",
+        message: data?.message || "Pagamento registrado com sucesso.",
+      });
       setPaymentConfirmOpen(false);
       setActivePayableId(null);
       setSelectedPayableId(null);
       await fetchRows();
     } catch (error: unknown) {
-      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível registrar o pagamento."));
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Conta a pagar",
+        message: getUserFacingApiErrorMessage(
+          error,
+          "Não foi possível registrar o pagamento.",
+        ),
+      });
     }
   };
 
@@ -320,29 +468,37 @@ export default function PayablesPage() {
         </div>
       </div>
 
-      <div className="mb-5">
-        <button
-          type="button"
-          onClick={() => setIsCreateFormOpen((current) => !current)}
-          className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
-        >
-          {isCreateFormOpen ? "Fechar novo registro" : "Novo registro"}
-        </button>
-      </div>
-
       {isCreateFormOpen && (
         <div className="mb-5 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Descrição</label>
-            <input value={description} onChange={(e) => setDescription(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Descrição
+            </label>
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Categoria</label>
-            <input value={category} onChange={(e) => setCategory(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Categoria
+            </label>
+            <input
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Fornecedor</label>
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary">
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Fornecedor
+            </label>
+            <select
+              value={supplierId}
+              onChange={(e) => setSupplierId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
               <option value="">Selecione...</option>
               {suppliers.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -352,31 +508,73 @@ export default function PayablesPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Favorecido livre</label>
-            <input value={beneficiary} onChange={(e) => setBeneficiary(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Favorecido livre
+            </label>
+            <input
+              value={beneficiary}
+              onChange={(e) => setBeneficiary(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Valor</label>
-            <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Valor
+            </label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Vencimento</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Vencimento
+            </label>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Destino previsto</label>
-            <select value={settlementTarget} onChange={(e) => setSettlementTarget(e.target.value as SettlementTarget)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary">
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Destino previsto
+            </label>
+            <select
+              value={settlementTarget}
+              onChange={(e) =>
+                setSettlementTarget(e.target.value as SettlementTarget)
+              }
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
               <option value="BANCO">Banco</option>
               <option value="CAIXA">Caixa</option>
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Conta vinculada</label>
-            <input value={accountLabel} onChange={(e) => setAccountLabel(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Conta vinculada
+            </label>
+            <input
+              value={accountLabel}
+              onChange={(e) => setAccountLabel(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Forma prevista</label>
-            <select value={plannedPaymentTypeId} onChange={(e) => setPlannedPaymentTypeId(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary">
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Forma prevista
+            </label>
+            <select
+              value={plannedPaymentTypeId}
+              onChange={(e) => setPlannedPaymentTypeId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
               <option value="">Selecione...</option>
               {paymentTypes.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -386,12 +584,21 @@ export default function PayablesPage() {
             </select>
           </div>
           <div className="flex gap-2 md:col-span-4">
-            <button type="button" onClick={handleCreatePayable} className="rounded bg-primary px-4 py-2 text-sm font-medium text-white">
-              Adicionar conta a pagar
+            <button
+              type="button"
+              onClick={handleSubmitPayable}
+              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+            >
+              {payableFormMode === "create"
+                ? "Adicionar conta a pagar"
+                : "Salvar alterações"}
             </button>
             <button
               type="button"
-              onClick={() => setIsCreateFormOpen(false)}
+              onClick={() => {
+                setIsCreateFormOpen(false);
+                resetPayableForm();
+              }}
               className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
             >
               Cancelar
@@ -402,8 +609,14 @@ export default function PayablesPage() {
 
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
-          <label className="mb-1 block text-sm font-semibold text-primary">Visão</label>
-          <select value={filter} onChange={(e) => setFilter(e.target.value as PayableFilter)} className="h-11 min-w-52 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary">
+          <label className="mb-1 block text-sm font-semibold text-primary">
+            Visão
+          </label>
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as PayableFilter)}
+            className="h-11 min-w-52 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+          >
             {filterOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
@@ -413,7 +626,9 @@ export default function PayablesPage() {
         </div>
 
         <div className="w-full md:max-w-md">
-          <label className="mb-1 block text-sm font-semibold text-primary">Buscar</label>
+          <label className="mb-1 block text-sm font-semibold text-primary">
+            Buscar
+          </label>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -424,7 +639,9 @@ export default function PayablesPage() {
 
         <div className="flex flex-col gap-3 md:flex-row">
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">De</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              De
+            </label>
             <input
               type="date"
               value={startDate}
@@ -434,7 +651,9 @@ export default function PayablesPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Até</label>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Até
+            </label>
             <input
               type="date"
               value={endDate}
@@ -448,11 +667,15 @@ export default function PayablesPage() {
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Valor total</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalAmount)}</p>
+          <p className="text-lg font-semibold text-primary">
+            {formatCurrency(summary.totalAmount)}
+          </p>
         </div>
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
-          <p className="text-lg font-semibold text-primary">{formatCurrency(summary.totalOpen)}</p>
+          <p className="text-lg font-semibold text-primary">
+            {formatCurrency(summary.totalOpen)}
+          </p>
         </div>
         <div className="bg-surface-lowest p-4">
           <p className="text-xs uppercase text-neutral-700">Lançamentos</p>
@@ -462,22 +685,47 @@ export default function PayablesPage() {
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
-          {loading ? "Carregando contas a pagar..." : `${totalRows} conta(s) a pagar encontrada(s).`}
+          {loading
+            ? "Carregando contas a pagar..."
+            : `${totalRows} conta(s) a pagar encontrada(s).`}
         </p>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={handleOpenPaymentForm}
-          disabled={
-            !selectedPayableId ||
-            !rows.some(
-              (row) =>
-                row.id === selectedPayableId && row.filter !== "PAGAS" && row.openAmount > 0,
-            )
-          }
-        >
-          Quitar
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="primary" size="sm" onClick={handleOpenCreatePayable}>
+            Incluir
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleOpenEditPayable}
+            disabled={!canManageSelectedPayable}
+          >
+            Alterar
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleDeletePayable}
+            disabled={!canManageSelectedPayable}
+          >
+            Excluir
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleOpenPaymentForm}
+            disabled={
+              !selectedPayableId ||
+              !rows.some(
+                (row) =>
+                  row.id === selectedPayableId &&
+                  row.filter !== "PAGAS" &&
+                  row.openAmount > 0,
+              )
+            }
+          >
+            Quitar
+          </Button>
+        </div>
       </div>
 
       {message && <p className="mb-4 text-sm text-neutral-700">{message}</p>}
@@ -485,8 +733,14 @@ export default function PayablesPage() {
       {activePayableId && (
         <div className="mb-4 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Forma paga</label>
-            <select value={paymentTypeId} onChange={(e) => setPaymentTypeId(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary">
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Forma paga
+            </label>
+            <select
+              value={paymentTypeId}
+              onChange={(e) => setPaymentTypeId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
               <option value="">Selecione...</option>
               {paymentTypes.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -496,22 +750,52 @@ export default function PayablesPage() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Valor</label>
-            <input type="number" min="0.01" step="0.01" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Valor
+            </label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={paymentAmount}
+              onChange={(e) => setPaymentAmount(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Data</label>
-            <input type="date" value={paidAt} onChange={(e) => setPaidAt(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Data
+            </label>
+            <input
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">Referência</label>
-            <input value={referenceCode} onChange={(e) => setReferenceCode(e.target.value)} className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary" />
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Referência
+            </label>
+            <input
+              value={referenceCode}
+              onChange={(e) => setReferenceCode(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
           </div>
           <div className="flex gap-2 md:col-span-4">
-            <button type="button" onClick={handleRegisterPayment} className="rounded bg-primary px-4 py-2 text-sm font-medium text-white">
+            <button
+              type="button"
+              onClick={handleRegisterPayment}
+              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+            >
               Confirmar pagamento
             </button>
-            <button type="button" onClick={() => setActivePayableId(null)} className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary">
+            <button
+              type="button"
+              onClick={() => setActivePayableId(null)}
+              className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
+            >
               Cancelar
             </button>
           </div>
@@ -523,24 +807,44 @@ export default function PayablesPage() {
           <thead>
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Descrição</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Fornecedor</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Categoria</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Vencimento</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Forma</th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Valor</th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Pago</th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">Saldo</th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Descrição
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Fornecedor
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Categoria
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Vencimento
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                Forma
+              </th>
+              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+                Valor
+              </th>
+              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+                Pago
+              </th>
+              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+                Saldo
+              </th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">Carregando...</td>
+                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
+                  Carregando...
+                </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">Nenhuma conta a pagar encontrada.</td>
+                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
+                  Nenhuma conta a pagar encontrada.
+                </td>
               </tr>
             ) : (
               rows.map((row) => (
@@ -563,7 +867,9 @@ export default function PayablesPage() {
                       className="h-4 w-4 cursor-pointer rounded border border-outline-variant/60 accent-primary"
                     />
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.description}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.description}
+                  </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {row.supplierName || row.beneficiary}
                   </td>
@@ -576,11 +882,21 @@ export default function PayablesPage() {
                       {row.category}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{formatDate(row.dueDate)}</td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">{row.plannedPaymentTypeName || "-"}</td>
-                  <td className="px-4 py-3 text-right text-[14px] text-neutral-700">{formatCurrency(row.amount)}</td>
-                  <td className="px-4 py-3 text-right text-[14px] text-neutral-700">{formatCurrency(row.paidAmount)}</td>
-                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">{formatCurrency(row.openAmount)}</td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {formatDate(row.dueDate)}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.plannedPaymentTypeName || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-right text-[14px] text-neutral-700">
+                    {formatCurrency(row.amount)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-[14px] text-neutral-700">
+                    {formatCurrency(row.paidAmount)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
+                    {formatCurrency(row.openAmount)}
+                  </td>
                 </tr>
               ))
             )}
@@ -611,6 +927,7 @@ export default function PayablesPage() {
           </Button>
         </div>
       </div>
+
       <CustomerModal
         open={paymentConfirmOpen && Boolean(activePayableId)}
         onClose={() => setPaymentConfirmOpen(false)}
@@ -620,18 +937,60 @@ export default function PayablesPage() {
       >
         <div className="space-y-5">
           <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4">
-            <p className="text-sm text-primary">Deseja confirmar o pagamento informado?</p>
+            <p className="text-sm text-primary">
+              Deseja confirmar o pagamento informado?
+            </p>
           </div>
           <div className="flex gap-2">
             <Button variant="primary" size="sm" onClick={handleConfirmRegisterPayment}>
               Confirmar
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => setPaymentConfirmOpen(false)}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPaymentConfirmOpen(false)}
+            >
               Cancelar
             </Button>
           </div>
         </div>
       </CustomerModal>
+
+      <CustomerModal
+        open={deleteConfirmOpen && Boolean(selectedRow)}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Confirmar exclusão"
+        subtitle="Confirme a exclusão da conta a pagar."
+        size="sm"
+      >
+        <div className="space-y-5">
+          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4">
+            <p className="text-sm text-primary">
+              Deseja excluir a conta a pagar selecionada?
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="primary" size="sm" onClick={handleConfirmDeletePayable}>
+              Confirmar
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setDeleteConfirmOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <NoticeToast
+        open={toast.open}
+        tone={toast.tone}
+        title={toast.title}
+        message={toast.message}
+        onClose={() => setToast(EMPTY_TOAST)}
+      />
     </div>
   );
 }

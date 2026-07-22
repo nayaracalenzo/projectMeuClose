@@ -8,6 +8,8 @@ router.use(authMiddleware);
 
 router.get("/", controller.listPayablesController);
 router.post("/", controller.createPayableController);
+router.put("/:payableId", controller.updatePayableController);
+router.delete("/:payableId", controller.deletePayableController);
 router.post("/:payableId/payments", controller.registerPayablePaymentController);
 
 module.exports = router;
