@@ -18,6 +18,24 @@ async function createPayableController(req, res, next) {
   }
 }
 
+async function updatePayableController(req, res, next) {
+  try {
+    const data = await service.updatePayable(req.params.payableId, req.body);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function deletePayableController(req, res, next) {
+  try {
+    const data = await service.deletePayable(req.params.payableId, req.user);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function registerPayablePaymentController(req, res, next) {
   try {
     const data = await service.registerPayment(req.params.payableId, req.body);
@@ -30,5 +48,7 @@ async function registerPayablePaymentController(req, res, next) {
 module.exports = {
   listPayablesController,
   createPayableController,
+  updatePayableController,
+  deletePayableController,
   registerPayablePaymentController,
 };
