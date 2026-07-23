@@ -2777,7 +2777,7 @@ export default function NewSalePage() {
                     </div>
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
-                        ReferÃªncia
+                        Referência
                       </label>
                       <input
                         value={entryReferenceCode}
