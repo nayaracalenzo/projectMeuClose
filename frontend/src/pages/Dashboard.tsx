@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import {
   deleteRequest,
@@ -93,6 +94,8 @@ const formatReferenceMonth = (value?: string) => {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 };
 
+const HIDDEN_VALUE = "R$ •••••";
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [clients, setClients] = useState<BirthdayClient[]>([]);
@@ -127,6 +130,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showFinancialValues, setShowFinancialValues] = useState(false);
 
   const monthName = new Date().toLocaleString("pt-BR", {
     month: "long",
@@ -328,30 +332,58 @@ export default function Dashboard() {
           </div>
 
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
-            <h2 className="text-[1.1rem] font-semibold text-neutral-700">
-              Contas a Receber
-            </h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-[1.1rem] font-semibold text-neutral-700">
+                Contas a Receber
+              </h2>
+              <button
+                type="button"
+                aria-label={
+                  showFinancialValues ? "Ocultar valores" : "Mostrar valores"
+                }
+                onClick={() => setShowFinancialValues((current) => !current)}
+                className="text-neutral-600 transition hover:text-primary"
+              >
+                {showFinancialValues ? <Eye size={18} /> : <EyeClosed size={18} />}
+              </button>
+            </div>
             <p className="font-editorial text-[2rem] leading-none text-primary">
-              {loading ? "-" : formatCurrency(summary.monthlyReceivables.totalCardOpen)}
+              {loading
+                ? "-"
+                : showFinancialValues
+                  ? formatCurrency(summary.monthlyReceivables.totalCardOpen)
+                  : HIDDEN_VALUE}
             </p>
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
-              Inclui atrasados + mês atual
-            </p>
+          
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-500">
               {loading ? "-" : formatReferenceMonth(summary.monthlyReceivables.referenceMonth)}
             </p>
           </div>
 
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
-            <h2 className="text-[1.1rem] font-semibold text-neutral-700">
-              Contas a Pagar
-            </h2>
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-[1.1rem] font-semibold text-neutral-700">
+                Contas a Pagar
+              </h2>
+              <button
+                type="button"
+                aria-label={
+                  showFinancialValues ? "Ocultar valores" : "Mostrar valores"
+                }
+                onClick={() => setShowFinancialValues((current) => !current)}
+                className="text-neutral-600 transition hover:text-primary"
+              >
+                {showFinancialValues ? <Eye size={18} /> : <EyeClosed size={18} />}
+              </button>
+            </div>
             <p className="font-editorial text-[2rem] leading-none text-primary">
-              {loading ? "-" : formatCurrency(summary.monthlyPayables.totalCardOpen)}
+              {loading
+                ? "-"
+                : showFinancialValues
+                  ? formatCurrency(summary.monthlyPayables.totalCardOpen)
+                  : HIDDEN_VALUE}
             </p>
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
-              Inclui atrasados + mês atual
-            </p>
+            
             <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-500">
               {loading ? "-" : formatReferenceMonth(summary.monthlyPayables.referenceMonth)}
             </p>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
@@ -77,6 +78,7 @@ type ToastState = {
 };
 
 const PAGE_SIZE = 10;
+const HIDDEN_VALUE = "R$ •••••";
 const EMPTY_TOAST: ToastState = {
   open: false,
   tone: "success",
@@ -106,6 +108,7 @@ export default function PayablesPage() {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showSummaryValues, setShowSummaryValues] = useState(false);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -664,22 +667,34 @@ export default function PayablesPage() {
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-        <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Valor total</p>
-          <p className="text-lg font-semibold text-primary">
-            {formatCurrency(summary.totalAmount)}
-          </p>
+      <div className="mb-4">
+        <div className="mb-2 flex justify-end">
+          <button
+            type="button"
+            aria-label={showSummaryValues ? "Ocultar valores" : "Mostrar valores"}
+            onClick={() => setShowSummaryValues((current) => !current)}
+            className="text-neutral-600 transition hover:text-primary"
+          >
+            {showSummaryValues ? <Eye size={18} /> : <EyeClosed size={18} />}
+          </button>
         </div>
-        <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
-          <p className="text-lg font-semibold text-primary">
-            {formatCurrency(summary.totalOpen)}
-          </p>
-        </div>
-        <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Lançamentos</p>
-          <p className="text-lg font-semibold text-primary">{totalRows}</p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="bg-surface-lowest p-4">
+            <p className="text-xs uppercase text-neutral-700">Valor total</p>
+            <p className="text-lg font-semibold text-primary">
+              {showSummaryValues ? formatCurrency(summary.totalAmount) : HIDDEN_VALUE}
+            </p>
+          </div>
+          <div className="bg-surface-lowest p-4">
+            <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
+            <p className="text-lg font-semibold text-primary">
+              {showSummaryValues ? formatCurrency(summary.totalOpen) : HIDDEN_VALUE}
+            </p>
+          </div>
+          <div className="bg-surface-lowest p-4">
+            <p className="text-xs uppercase text-neutral-700">Lançamentos</p>
+            <p className="text-lg font-semibold text-primary">{totalRows}</p>
+          </div>
         </div>
       </div>
 

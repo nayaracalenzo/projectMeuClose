@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import {
@@ -82,6 +83,7 @@ interface InstallmentReceiptOption {
 
 const PAGE_SIZE = 10;
 const MONTHLY_INTEREST_RATE = 0.06;
+const HIDDEN_VALUE = "R$ •••••";
 
 const filterOptions: Array<{ value: ReceivableFilter; label: string }> = [
   { value: "A_RECEBER", label: "A Receber" },
@@ -145,6 +147,7 @@ export default function ReceivablesPage() {
   const [summary, setSummary] = useState({ totalOpen: 0, totalReceived: 0 });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [showSummaryValues, setShowSummaryValues] = useState(false);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [receivableFormOpen, setReceivableFormOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -712,18 +715,30 @@ export default function ReceivablesPage() {
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
-          <p className="text-lg font-semibold text-primary">
-            {formatCurrency(summary.totalOpen)}
-          </p>
+      <div className="mb-4">
+        <div className="mb-2 flex justify-end">
+          <button
+            type="button"
+            aria-label={showSummaryValues ? "Ocultar valores" : "Mostrar valores"}
+            onClick={() => setShowSummaryValues((current) => !current)}
+            className="text-neutral-600 transition hover:text-primary"
+          >
+            {showSummaryValues ? <Eye size={18} /> : <EyeClosed size={18} />}
+          </button>
         </div>
-        <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Recebido</p>
-          <p className="text-lg font-semibold text-primary">
-            {formatCurrency(summary.totalReceived)}
-          </p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="bg-surface-lowest p-4">
+            <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
+            <p className="text-lg font-semibold text-primary">
+              {showSummaryValues ? formatCurrency(summary.totalOpen) : HIDDEN_VALUE}
+            </p>
+          </div>
+          <div className="bg-surface-lowest p-4">
+            <p className="text-xs uppercase text-neutral-700">Recebido</p>
+            <p className="text-lg font-semibold text-primary">
+              {showSummaryValues ? formatCurrency(summary.totalReceived) : HIDDEN_VALUE}
+            </p>
+          </div>
         </div>
       </div>
 
