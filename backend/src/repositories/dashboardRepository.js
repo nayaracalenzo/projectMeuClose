@@ -12,14 +12,28 @@ function getCurrentMonthRange() {
 }
 
 async function getPendingProductionCount() {
-  const total = await Products.sum("qtyStock", {
-    where: {
-      dsbl: false,
-      statusId: [1, 5],
-    },
-  });
+  const [rows] = await sequelize.query(
+    `
+      SELECT
+        COALESCE(
+          SUM(
+            CASE
+              WHEN si."idSaleItem" IS NOT NULL THEN COALESCE(NULLIF(si."quantity", 0), 1)
+              ELSE 1
+            END
+          ),
+          0
+        )::int AS "total"
+      FROM "products" p
+      LEFT JOIN "sale_items" si
+        ON si."productId" = p."id"
+      WHERE
+        COALESCE(p."dsbl", false) = false
+        AND p."statusId" IN (1, 5);
+    `,
+  );
 
-  return Number(total || 0);
+  return Number(rows?.[0]?.total || 0);
 }
 
 async function listUpcomingFittings(limit = 8) {
@@ -30,8 +44,17 @@ async function listUpcomingFittings(limit = 8) {
       SELECT
         COALESCE(c."fullName", c."companyName", 'Sem cliente') AS "customer",
         DATE(p."testDate") AS "testDate",
-        CAST(SUM(COALESCE(p."qtyStock", 1)) AS INTEGER) AS "piecesCount"
+        CAST(
+          SUM(
+            CASE
+              WHEN si."idSaleItem" IS NOT NULL THEN COALESCE(NULLIF(si."quantity", 0), 1)
+              ELSE 1
+            END
+          ) AS INTEGER
+        ) AS "piecesCount"
       FROM "products" p
+      LEFT JOIN "sale_items" si
+        ON si."productId" = p."id"
       LEFT JOIN "customers" c
         ON c."idCustomer" = p."customerId"
       WHERE

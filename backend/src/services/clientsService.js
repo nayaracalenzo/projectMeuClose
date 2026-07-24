@@ -8,6 +8,9 @@ const {
 } = require("../utils/clientValidation.js");
 const {
   parseBirthdayFilters,
+  getCurrentWeekBirthdayWindow,
+  getBirthdayOccurrenceTimestamp,
+  isBirthdayInWindow,
   sortBirthdays,
 } = require("./birthdayService.js");
 
@@ -94,6 +97,53 @@ async function getBirthdaysOfMonth(query) {
       source: person.idCustomer ? "customer" : "employee",
     }))
     .sort(sortBirthdays);
+}
+
+async function getBirthdaysOfWeek() {
+  const { startDate, endDate } = getCurrentWeekBirthdayWindow();
+  const months = new Set([startDate.getMonth() + 1, endDate.getMonth() + 1]);
+
+  const monthlyResults = await Promise.all(
+    [...months].map(async (month) => {
+      const filters = { month, year: null };
+      const [customers, employees] = await Promise.all([
+        repository.findBirthdays(filters),
+        employeesRepository.findBirthdays(filters),
+      ]);
+
+      return [...customers, ...employees];
+    }),
+  );
+
+  const referenceYears = [startDate.getFullYear(), endDate.getFullYear()];
+
+  return monthlyResults
+    .flat()
+    .map((person) => ({
+      id: person.idCustomer ?? person.idEmployee,
+      fullName: person.fullName,
+      birthDate: person.birthDate,
+      source: person.idCustomer ? "customer" : "employee",
+    }))
+    .filter((person) => isBirthdayInWindow(person.birthDate, startDate, endDate))
+    .sort((left, right) => {
+      const leftTimestamp = Math.min(
+        ...referenceYears.map((year) =>
+          getBirthdayOccurrenceTimestamp(left.birthDate, year),
+        ),
+      );
+      const rightTimestamp = Math.min(
+        ...referenceYears.map((year) =>
+          getBirthdayOccurrenceTimestamp(right.birthDate, year),
+        ),
+      );
+
+      if (leftTimestamp !== rightTimestamp) {
+        return leftTimestamp - rightTimestamp;
+      }
+
+      return left.fullName.localeCompare(right.fullName, "pt-BR");
+    });
 }
 
 async function getAllClients(query = {}) {
@@ -247,6 +297,7 @@ async function createClient(body) {
 
 module.exports = {
   getBirthdaysOfMonth,
+  getBirthdaysOfWeek,
   getAllClients,
   getClientById,
   updateClientById,

@@ -63,6 +63,7 @@ const resourceConfig = {
   colors: {
     modelName: "Colors",
     primaryKey: "id",
+    softDelete: true,
     defaultOrder: [["desc", "ASC"]],
     editableFields: ["desc"],
   },
@@ -75,12 +76,14 @@ const resourceConfig = {
   sizes: {
     modelName: "Sizes",
     primaryKey: "id",
+    softDelete: true,
     defaultOrder: [["desc", "ASC"]],
     editableFields: ["desc"],
   },
   "clothings-types": {
     modelName: "ClothingsType",
     primaryKey: "id",
+    softDelete: true,
     defaultOrder: [["desc", "ASC"]],
     editableFields: ["desc"],
   },
@@ -93,8 +96,16 @@ const resourceConfig = {
   fabrics: {
     modelName: "Fabrics",
     primaryKey: "id",
+    softDelete: true,
     defaultOrder: [["desc", "ASC"]],
     editableFields: ["desc"],
+  },
+  "financial-categories": {
+    modelName: "FinancialCategories",
+    primaryKey: "idFinancialCategory",
+    softDelete: true,
+    defaultOrder: [["description", "ASC"]],
+    editableFields: ["description"],
   },
   "payment-types": {
     modelName: "PaymentTypes",

@@ -1,10 +1,14 @@
 require("dotenv").config();
-const fs = require("fs");
-const path = require("path");
-const csv = require("csv-parser");
-const { Payables, PayablePayments, PaymentTypes, Suppliers } = require("../models");
+const {
+  FinancialCategories,
+  Payables,
+  PayablePayments,
+  PaymentTypes,
+  Suppliers,
+} = require("../models");
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const { normalizeLegacyDateTime } = require("../utils/normalizeLegacyDateTime");
+const { readLegacyCsvRows } = require("./legacyImportSource");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -25,10 +29,7 @@ function normalizeLegacyPaymentTypeId(value) {
 }
 
 function deriveSettlementTarget(paymentTypeDesc) {
-  const normalized = String(paymentTypeDesc || "")
-    .trim()
-    .toUpperCase();
-
+  const normalized = String(paymentTypeDesc || "").trim().toUpperCase();
   return normalized === "DINHEIRO" ? "CAIXA" : "BANCO";
 }
 
@@ -59,25 +60,13 @@ function deriveStatus({ amount, paidAmount, dueDate }) {
   };
 }
 
-async function readCsvRows(fileName) {
-  const filePath = path.join(__dirname, fileName);
-  const rows = [];
-
-  await new Promise((resolve, reject) => {
-    fs.createReadStream(filePath)
-      .pipe(csv({ separator: ";" }))
-      .on("data", (row) => rows.push(row))
-      .on("end", resolve)
-      .on("error", reject);
-  });
-
-  return rows;
-}
-
 function buildCategoryMap(rows) {
   return new Map(
     rows
-      .map((row) => [normalizeInteger(row.id), normalizeText(row.des)])
+      .map((row) => [
+        normalizeInteger(row.idFinancialCategory),
+        normalizeText(row.description),
+      ])
       .filter(([id, desc]) => id && desc),
   );
 }
@@ -86,8 +75,8 @@ function buildSupplierMap(rows) {
   return new Map(
     rows
       .map((row) => {
-        const id = normalizeInteger(row.id);
-        const preferredName = normalizeText(row.nomFan) || normalizeText(row.nom);
+        const id = normalizeInteger(row.idSupplier);
+        const preferredName = normalizeText(row.tradeName) || normalizeText(row.fullName);
         return [id, preferredName];
       })
       .filter(([id, name]) => id && name),
@@ -97,22 +86,27 @@ function buildSupplierMap(rows) {
 async function importPayables() {
   console.log("Iniciando leitura dos CSVs de contas a pagar...");
 
-  const [payableRows, accountRows, supplierRows, paymentTypes, suppliers] = await Promise.all([
-    readCsvRows("contaPag.csv"),
-    readCsvRows("conta.csv"),
-    readCsvRows("fornecedor.csv"),
+  const [payableRows, categoryRows, supplierRows, paymentTypes] = await Promise.all([
+    readLegacyCsvRows("contaPag.csv"),
+    FinancialCategories.findAll({
+      attributes: ["idFinancialCategory", "description"],
+      raw: true,
+    }),
+    Suppliers.findAll({
+      attributes: ["idSupplier", "fullName", "tradeName"],
+      raw: true,
+    }),
     PaymentTypes.findAll({ attributes: ["idPaymentType", "desc"], raw: true }),
-    Suppliers.findAll({ attributes: ["idSupplier"], raw: true }),
   ]);
 
   console.log(`Total encontrados em contaPag.csv: ${payableRows.length}`);
 
-  const categoryMap = buildCategoryMap(accountRows);
+  const categoryMap = buildCategoryMap(categoryRows);
   const supplierMap = buildSupplierMap(supplierRows);
   const paymentTypeMap = new Map(
     paymentTypes.map((item) => [Number(item.idPaymentType), item.desc]),
   );
-  const validSupplierIds = new Set(suppliers.map((item) => Number(item.idSupplier)));
+  const validSupplierIds = new Set(supplierRows.map((item) => Number(item.idSupplier)));
 
   const payablesToInsert = [];
   const paymentsToInsert = [];
@@ -153,15 +147,22 @@ async function importPayables() {
       });
 
       const categoryId = normalizeInteger(row.idCon);
+      const category = categoryMap.get(categoryId);
+
+      if (!categoryId || !category) {
+        console.warn(
+          `Ignorando contaPag legado ${legacyId}: categoria financeira invalida ou ausente.`,
+        );
+        skipped += 1;
+        continue;
+      }
+
       const supplierId = normalizeInteger(row.idFor);
       const safeSupplierId =
         supplierId && validSupplierIds.has(supplierId) ? supplierId : null;
-      const category =
-        categoryMap.get(categoryId) ||
-        (categoryId ? `CONTA ${categoryId}` : "DIVERSOS");
       const beneficiary =
         supplierMap.get(safeSupplierId || supplierId) ||
-        (supplierId ? `FORNECEDOR ${supplierId}` : "Fornecedor não informado");
+        (supplierId ? `FORNECEDOR ${supplierId}` : "Fornecedor nao informado");
       const description = normalizeText(row.his) || category;
       const referenceCode = normalizeText(row.numDoc);
 
@@ -244,7 +245,14 @@ async function importPayables() {
 
       await PayablePayments.bulkCreate(paymentsToInsert, {
         validate: true,
-        updateOnDuplicate: ["paymentTypeId", "amount", "paidAt", "referenceCode", "updatedAt"],
+        updateOnDuplicate: [
+          "payableId",
+          "paymentTypeId",
+          "amount",
+          "paidAt",
+          "referenceCode",
+          "updatedAt",
+        ],
         transaction,
       });
     });
@@ -277,4 +285,8 @@ async function importPayables() {
   }
 }
 
-importPayables();
+if (require.main === module) {
+  importPayables();
+}
+
+module.exports = importPayables;

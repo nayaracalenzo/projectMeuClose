@@ -1,9 +1,9 @@
 require("dotenv").config();
 const fs = require("fs");
-const path = require("path");
 const csv = require("csv-parser");
 const {
   Customers,
+  FinancialCategories,
   PaymentReceipts,
   PaymentTypes,
   ReceivableInstallments,
@@ -14,6 +14,7 @@ const {
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const { normalizeLegacyDateTime } = require("../utils/normalizeLegacyDateTime");
 const { parseLegacyInstallmentInfo } = require("../utils/parseLegacyInstallmentInfo");
+const { readLegacyCsvRows } = require("./legacyImportSource");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -110,25 +111,13 @@ function deriveStatus({ amount, paidAmount, dueDate }) {
   };
 }
 
-async function readCsvRows(fileName) {
-  const filePath = path.join(__dirname, fileName);
-  const rows = [];
-
-  await new Promise((resolve, reject) => {
-    fs.createReadStream(filePath)
-      .pipe(csv({ separator: ";" }))
-      .on("data", (row) => rows.push(row))
-      .on("end", resolve)
-      .on("error", reject);
-  });
-
-  return rows;
-}
-
 function buildAccountMap(rows) {
   return new Map(
     rows
-      .map((row) => [normalizeInteger(row.id), normalizeText(row.des)])
+      .map((row) => [
+        normalizeInteger(row.idFinancialCategory),
+        normalizeText(row.description),
+      ])
       .filter(([id, desc]) => id && desc),
   );
 }
@@ -159,8 +148,11 @@ async function importReceivables() {
   console.log("Iniciando leitura dos CSVs de contas a receber...");
 
   const [receivableRows, accountRows, customers, paymentTypes, suppliers] = await Promise.all([
-    readCsvRows("contaRec.csv"),
-    readCsvRows("conta.csv"),
+    readLegacyCsvRows("contaRec.csv"),
+    FinancialCategories.findAll({
+      attributes: ["idFinancialCategory", "description"],
+      raw: true,
+    }),
     Customers.findAll({ attributes: ["idCustomer"], raw: true }),
     PaymentTypes.findAll({ attributes: ["idPaymentType"], raw: true }),
     Suppliers.findAll({ attributes: ["idSupplier"], raw: true }),
@@ -206,7 +198,17 @@ async function importReceivables() {
       const paymentTypeId = normalizeLegacyPaymentTypeId(baseRow.idTipDoc);
       const customerId = normalizeInteger(baseRow.idCli);
       const supplierId = normalizeInteger(baseRow.idPor);
-      const accountDesc = accountMap.get(normalizeInteger(baseRow.idCon)) || "VENDA";
+      const financialCategoryId = normalizeInteger(baseRow.idCon);
+      const accountDesc = accountMap.get(financialCategoryId);
+
+      if (!financialCategoryId || !accountDesc) {
+        console.warn(
+          `Ignorando contaRec legado ${representativeId}: categoria financeira invalida ou ausente.`,
+        );
+        skipped += 1;
+        continue;
+      }
+
       const debtorProfile = inferDebtorProfile(accountDesc);
       const installmentInfo = parseLegacyInstallmentInfo(baseRow.numDoc, baseRow.his);
       const paidAmount = Number(
@@ -378,4 +380,8 @@ async function importReceivables() {
   }
 }
 
-importReceivables();
+if (require.main === module) {
+  importReceivables();
+}
+
+module.exports = importReceivables;

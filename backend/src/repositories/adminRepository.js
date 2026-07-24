@@ -28,6 +28,10 @@ async function listResource(resource, filters = {}) {
     query.where = { dsbl: false };
   }
 
+  if (!query.where && model?.rawAttributes?.dsbl) {
+    query.where = { dsbl: false };
+  }
+
   if (resource === "audits") {
     const where = {};
 
