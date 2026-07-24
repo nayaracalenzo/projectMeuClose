@@ -132,11 +132,6 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [showFinancialValues, setShowFinancialValues] = useState(false);
 
-  const monthName = new Date().toLocaleString("pt-BR", {
-    month: "long",
-  });
-  const formattedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-
   const getBirthDay = (birthDate?: string) => {
     const base = String(birthDate || "").slice(0, 10);
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
@@ -183,7 +178,7 @@ export default function Dashboard() {
         setError("");
 
         const [birthdaysData, summaryData, purchasePendingsData] = await Promise.all([
-          getRequest("/clients/birthdays/month"),
+          getRequest("/clients/birthdays/week"),
           getRequest("/dashboard/summary"),
           getRequest("/dashboard/purchase-pendings"),
         ]);
@@ -461,7 +456,7 @@ export default function Dashboard() {
             <aside className="min-h-0 border border-[#fee9ef] bg-surface-low p-5 shadow-md">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="font-editorial text-3xl font-semibold text-primary">
-                  Aniversariantes de {formattedMonth}
+                  Aniversariantes da Semana
                 </h2>
                 <span className="rounded-full bg-background px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-600">
                   {clients.length}
@@ -470,7 +465,7 @@ export default function Dashboard() {
 
               {clients.length === 0 ? (
                 <p className="text-sm font-medium text-neutral-700">
-                  Nenhum aniversariante este mês.
+                  Nenhum aniversariante nesta semana.
                 </p>
               ) : (
                 <div className="flex max-h-[16rem] flex-col gap-3 overflow-auto pr-1">
@@ -627,5 +622,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-

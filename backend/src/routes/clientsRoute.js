@@ -7,6 +7,7 @@ const authMiddleware = require("../middlewars/authMiddleware.js");
 router.use(authMiddleware);
 
 router.get("/", controller.getAllClients);
+router.get("/birthdays/week", controller.getBirthdaysOfWeekController);
 router.get("/birthdays/month", controller.getBirthdaysOfMonthController);
 router.get("/:id/credits", controller.getClientCreditsController);
 router.get("/:id", controller.getClientById);

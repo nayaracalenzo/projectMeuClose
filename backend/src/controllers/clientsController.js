@@ -11,6 +11,15 @@ async function getBirthdaysOfMonthController(req, res, next) {
   }
 }
 
+async function getBirthdaysOfWeekController(req, res, next) {
+  try {
+    const clients = await service.getBirthdaysOfWeek();
+    return res.status(200).json(clients);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function getAllClients(req, res, next) {
   try {
     const clients = await service.getAllClients(req.query);
@@ -70,6 +79,7 @@ async function getClientCreditsController(req, res, next) {
 
 module.exports = {
   getBirthdaysOfMonthController,
+  getBirthdaysOfWeekController,
   getAllClients,
   getClientById,
   getClientCreditsController,

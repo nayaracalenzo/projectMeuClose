@@ -26,6 +26,54 @@ function parseBirthdayFilters(query = {}) {
   };
 }
 
+function getCurrentWeekBirthdayWindow(referenceDate = new Date()) {
+  const current = new Date(referenceDate);
+  current.setHours(0, 0, 0, 0);
+
+  const dayOfWeek = current.getDay();
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+  const startDate = new Date(current);
+  startDate.setDate(current.getDate() - daysSinceMonday);
+  startDate.setHours(0, 0, 0, 0);
+
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 6);
+  endDate.setHours(23, 59, 59, 999);
+
+  return {
+    startDate,
+    endDate,
+  };
+}
+
+function getBirthdayOccurrenceTimestamp(birthDate, referenceYear) {
+  if (!birthDate) return Number.POSITIVE_INFINITY;
+
+  const base = String(birthDate).slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  if (!match) return Number.POSITIVE_INFINITY;
+
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  return new Date(referenceYear, month - 1, day, 0, 0, 0, 0).getTime();
+}
+
+function isBirthdayInWindow(birthDate, startDate, endDate) {
+  if (!birthDate) return false;
+
+  const startYear = startDate.getFullYear();
+  const endYear = endDate.getFullYear();
+  const yearsToCheck =
+    startYear === endYear ? [startYear] : [startYear, endYear];
+
+  return yearsToCheck.some((year) => {
+    const timestamp = getBirthdayOccurrenceTimestamp(birthDate, year);
+    return timestamp >= startDate.getTime() && timestamp <= endDate.getTime();
+  });
+}
+
 function sortBirthdays(left, right) {
   const leftDate = left.birthDate ? new Date(left.birthDate).getTime() : 0;
   const rightDate = right.birthDate ? new Date(right.birthDate).getTime() : 0;
@@ -39,5 +87,8 @@ function sortBirthdays(left, right) {
 
 module.exports = {
   parseBirthdayFilters,
+  getCurrentWeekBirthdayWindow,
+  getBirthdayOccurrenceTimestamp,
+  isBirthdayInWindow,
   sortBirthdays,
 };
