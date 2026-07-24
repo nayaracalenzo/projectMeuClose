@@ -594,8 +594,8 @@ export default function NewSalePage() {
       try {
         const data = await getRequest("/payment-types");
         setPaymentTypes(
-          data
-            .map((item: PaymentTypeOption) => ({
+          ((Array.isArray(data) ? data : []) as PaymentTypeOption[])
+            .map((item) => ({
               id: Number(item.id),
               name: item.name,
               kind: item.kind,

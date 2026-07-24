@@ -1233,7 +1233,7 @@ function renderPaymentTypesTable() {
                     key={resource.key}
                     type="button"
                     onClick={() => setSelectedResource(resource.key)}
-                    className={`px-4 py-3 text-sm uppercase tracking-[0.1em] transition-colors ${
+                    className={`px-4 py-3 text-sm uppercase tracking-widest transition-colors ${
                       selectedResource === resource.key
                         ? "border-b-2 border-primary font-semibold text-primary"
                         : "text-neutral-700 hover:text-primary"
@@ -1313,7 +1313,7 @@ function renderPaymentTypesTable() {
                         de {visibleRows.length}
                       </p>
                       <div className="flex items-center gap-2">
-                        <FormControl size="medium" className="min-w-[120px]">
+                        <FormControl size="medium" className="min-w-30">
                           <Select
                             value={String(pageSize)}
                             onChange={(e) => {
