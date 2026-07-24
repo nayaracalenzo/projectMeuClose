@@ -1,58 +1,106 @@
 const repository = require("../repositories/productsRepository");
 const { notFoundError, validationError } = require("../errors/AppError");
 
-const MEASUREMENT_LABELS = [
-  ["busto", "Busto"],
-  ["alturaBusto", "Altura do busto"],
-  ["cintura", "Cintura"],
-  ["cinturaBaixa", "Abaixo da cintura"],
-  ["quadril", "Quadril"],
-  ["costas", "Costas"],
-  ["colete", "Colete"],
-  ["cos", "Cos"],
-  ["coice", "Coice"],
-  ["gancho", "Gancho"],
-  ["braco", "Braco"],
-  ["perna", "Perna"],
-  ["comprimentoManga", "Comp. manga"],
-  ["comprimentoBlusa", "Comp. blusa"],
-  ["comprimentoSaia", "Comp. saia"],
-  ["comprimentoCalca", "Comp. calca"],
-  ["comprimentoVestido", "Comp. vestido"],
-  ["comprimentoBermuda", "Comp. bermuda"],
-];
-
-function extractSaleMeasurement(product) {
-  const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
-  const sale = saleItem?.Sale || saleItem?.Sales || null;
-  const measurements = Array.isArray(sale?.CustomerMeasurements) ? sale.CustomerMeasurements : [];
-
-  if (!measurements.length) {
-    return null;
+function normalizeMeasurementRows(rows = []) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return [];
   }
 
-  return [...measurements].sort((left, right) => Number(right.idMeasurement || 0) - Number(left.idMeasurement || 0))[0];
+  return rows
+    .map((row) => {
+      const definition = row.MeasurementDefinition || row.MeasurementDefinitions || null;
+      const value = row?.value;
+
+      if (!definition || value === null || value === undefined || value === "") {
+        return null;
+      }
+
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue)) {
+        return null;
+      }
+
+      return {
+        idCustomerMeasurementValue: Number(row.idCustomerMeasurementValue || 0) || null,
+        idMeasurementDefinition:
+          Number(definition.idMeasurementDefinition || row.measurementDefinitionId || 0) || null,
+        key: definition.key || null,
+        label: definition.label || definition.key || null,
+        sortOrder: Number(definition.sortOrder || 0),
+        value: numericValue,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => {
+      if (left.sortOrder !== right.sortOrder) {
+        return left.sortOrder - right.sortOrder;
+      }
+
+      return Number(left.idCustomerMeasurementValue || 0) - Number(right.idCustomerMeasurementValue || 0);
+    });
 }
 
-function formatMeasurementsSummary(measurement) {
-  if (!measurement) {
+async function buildMeasurementsBySaleId(products = []) {
+  const saleIds = Array.from(
+    new Set(
+      products
+        .map((product) => {
+          const saleItem = Array.isArray(product?.SaleItems) ? product.SaleItems[0] : null;
+          return Number(saleItem?.saleId || 0);
+        })
+        .filter((saleId) => Number.isInteger(saleId) && saleId > 0),
+    ),
+  );
+
+  if (!saleIds.length) {
+    return new Map();
+  }
+
+  const rows = await repository.listMeasurementValuesBySaleIds(saleIds);
+  const measurementsBySaleId = new Map();
+
+  rows.forEach((row) => {
+    const saleId = Number(row.saleId || 0);
+    if (!Number.isInteger(saleId) || saleId <= 0) {
+      return;
+    }
+
+    const currentRows = measurementsBySaleId.get(saleId) || [];
+    currentRows.push(row);
+    measurementsBySaleId.set(saleId, currentRows);
+  });
+
+  measurementsBySaleId.forEach((currentRows, saleId) => {
+    measurementsBySaleId.set(saleId, normalizeMeasurementRows(currentRows));
+  });
+
+  return measurementsBySaleId;
+}
+
+function formatMeasurementsSummary(measurements) {
+  if (!Array.isArray(measurements) || !measurements.length) {
     return "";
   }
 
-  return MEASUREMENT_LABELS.map(([field, label]) => {
-    const value = measurement[field];
+  return measurements
+    .map((measurement) => {
+      const label =
+        measurement?.label ||
+        measurement?.MeasurementDefinition?.label ||
+        measurement?.MeasurementDefinition?.key;
+      const value = measurement?.value;
 
-    if (value === null || value === undefined || value === "") {
-      return null;
-    }
+      if (!label || value === null || value === undefined || value === "") {
+        return null;
+      }
 
-    return `${label}: ${Number(value)}`;
-  })
+      return `${label}: ${Number(value)}`;
+    })
     .filter(Boolean)
     .join(" | ");
 }
 
-function mapProductRow(product) {
+function mapProductRow(product, measurementsBySaleId = new Map()) {
   const customer = product.Customer || product.Customers;
   const employee = product.Employee || product.Employees;
   const status = product.Status;
@@ -63,11 +111,12 @@ function mapProductRow(product) {
   const fabric = product.Fabric || product.Fabrics;
   const size = product.Size || product.Sizes;
   const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
-  const measurement = extractSaleMeasurement(product);
+  const saleId = Number(saleItem?.saleId || 0) || null;
+  const measurements = saleId ? measurementsBySaleId.get(saleId) || [] : [];
 
   return {
     id: product.id,
-    saleId: saleItem?.saleId || null,
+    saleId,
     description: product.desc,
     customer: customer?.fullName || customer?.companyName || "Sem cliente",
     category: category?.desc || null,
@@ -83,11 +132,11 @@ function mapProductRow(product) {
     color: color?.desc || null,
     size: size?.desc || null,
     details: product.details || "",
-    measurementsSummary: formatMeasurementsSummary(measurement),
+    measurementsSummary: formatMeasurementsSummary(measurements),
   };
 }
 
-function mapProductDetails(product) {
+function mapProductDetails(product, measurementsBySaleId = new Map()) {
   const customer = product.Customer || product.Customers;
   const employee = product.Employee || product.Employees;
   const status = product.Status;
@@ -105,10 +154,12 @@ function mapProductDetails(product) {
   const saleItemDiscountAmount = Number(
     Math.max(0, saleItemGrossValue - saleItemSubtotal).toFixed(2),
   );
+  const saleId = Number(saleItem?.saleId || 0) || null;
+  const measurements = saleId ? measurementsBySaleId.get(saleId) || [] : [];
 
   return {
     id: product.id,
-    saleId: saleItem?.saleId || null,
+    saleId,
     desc: product.desc,
     details: product.details || "",
     customerId: product.customerId || null,
@@ -146,6 +197,8 @@ function mapProductDetails(product) {
     saleItemSubtotal,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
+    measurements,
+    measurementsSummary: formatMeasurementsSummary(measurements),
   };
 }
 
@@ -321,7 +374,8 @@ async function listProducts(filters = {}) {
   const startDate = normalizeFilterDate(filters.startDate);
   const endDate = normalizeFilterDate(filters.endDate);
   const result = await repository.listProducts({ ...filters, page, pageSize, startDate, endDate });
-  const items = result.rows.map(mapProductRow);
+  const measurementsBySaleId = await buildMeasurementsBySaleId(result.rows);
+  const items = result.rows.map((product) => mapProductRow(product, measurementsBySaleId));
   const total = Number(result.count || 0);
 
   return {
@@ -353,7 +407,8 @@ async function getProductById(id) {
     throw notFoundError("Pedido não encontrado.");
   }
 
-  return mapProductDetails(product);
+  const measurementsBySaleId = await buildMeasurementsBySaleId([product]);
+  return mapProductDetails(product, measurementsBySaleId);
 }
 
 async function updateProductById(id, body) {
@@ -376,7 +431,8 @@ async function updateProductById(id, body) {
     throw notFoundError("Pedido não encontrado.");
   }
 
-  return mapProductDetails(updated);
+  const measurementsBySaleId = await buildMeasurementsBySaleId([updated]);
+  return mapProductDetails(updated, measurementsBySaleId);
 }
 
 module.exports = {

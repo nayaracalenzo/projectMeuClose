@@ -115,24 +115,10 @@ interface ExistingQuoteItem {
 }
 
 interface ExistingQuoteMeasurement {
-  costas: number | null;
-  comprimentoSaia: number | null;
-  comprimentoBlusa: number | null;
-  comprimentoCalca: number | null;
-  comprimentoManga: number | null;
-  comprimentoVestido: number | null;
-  comprimentoBermuda: number | null;
-  cos: number | null;
-  colete: number | null;
-  perna: number | null;
-  braco: number | null;
-  alturaBusto: number | null;
-  busto: number | null;
-  cintura: number | null;
-  coice: number | null;
-  cinturaBaixa: number | null;
-  quadril: number | null;
-  gancho: number | null;
+  idMeasurementDefinition: number | null;
+  key: string | null;
+  label: string;
+  value: number | null;
 }
 
 interface ExistingQuotePaymentDraft {
@@ -140,17 +126,31 @@ interface ExistingQuotePaymentDraft {
   installmentCount: number | null;
   installmentIntervalDays: number | null;
   dueDate: string | null;
+  receiptFinancialAccountId: number | null;
+  receiptFinancialAccountName: string | null;
   entryAmount: number | null;
   entryPaymentTypeId: number | null;
+  entryFinancialAccountId: number | null;
+  entryFinancialAccountName: string | null;
   entryReferenceCode: string | null;
   paymentReferenceCode: string | null;
   useCustomerCredit: boolean;
   customerCreditAmount: number | null;
 }
 
+interface FinancialAccountOption {
+  id: number;
+  label: string;
+  value: string;
+  scope: "LOJA" | "PESSOAL";
+  targetType: "CASH" | "BANK";
+}
+
 interface ExistingQuoteResponse {
   id: number;
   status: string;
+  doesNotGenerateDebt: boolean;
+  internalReason: string | null;
   customer: {
     id: number;
     name: string;
@@ -286,6 +286,35 @@ function mapSaleItemTypeToModalType(
 
 function stringifyMeasurementValue(value: number | null | undefined) {
   return value === null || value === undefined ? "" : String(value);
+}
+
+function buildMeasurementsMap(
+  measurements: ExistingQuoteMeasurement[] | null | undefined,
+) {
+  if (!Array.isArray(measurements) || !measurements.length) {
+    return {
+      measurements: {},
+      selectedMeasurements: [] as string[],
+    };
+  }
+
+  const measurementMap: Record<string, string> = {};
+  const selectedMeasurements: string[] = [];
+
+  measurements.forEach((measurement) => {
+    const key = String(measurement.key || "").trim();
+    if (!key) {
+      return;
+    }
+
+    measurementMap[key] = stringifyMeasurementValue(measurement.value);
+    selectedMeasurements.push(key);
+  });
+
+  return {
+    measurements: measurementMap,
+    selectedMeasurements,
+  };
 }
 
 function buildTableItemsFromDraftCollections(
@@ -482,12 +511,15 @@ export default function NewSalePage() {
   const [saveMessage, setSaveMessage] = useState("");
   const [draftSaleId, setDraftSaleId] = useState<number | null>(null);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
+  const [financialAccounts, setFinancialAccounts] = useState<FinancialAccountOption[]>([]);
   const [paymentTypeId, setPaymentTypeId] = useState("");
+  const [receiptFinancialAccountId, setReceiptFinancialAccountId] = useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [installmentIntervalDays, setInstallmentIntervalDays] = useState("30");
   const [dueDate, setDueDate] = useState(() => getCurrentDateInputValue());
   const [entryAmount, setEntryAmount] = useState("");
   const [entryPaymentTypeId, setEntryPaymentTypeId] = useState("");
+  const [entryFinancialAccountId, setEntryFinancialAccountId] = useState("");
   const [entryReferenceCode, setEntryReferenceCode] = useState("");
   const [paymentReferenceCode, setPaymentReferenceCode] = useState("");
   const [cashReceivedAmount, setCashReceivedAmount] = useState("");
@@ -509,6 +541,8 @@ export default function NewSalePage() {
   const [useCustomerCredit, setUseCustomerCredit] = useState(false);
   const [customerCreditAmountInput, setCustomerCreditAmountInput] =
     useState("");
+  const [doesNotGenerateDebt, setDoesNotGenerateDebt] = useState(false);
+  const [internalReason, setInternalReason] = useState("");
   const [pendingExitPath, setPendingExitPath] = useState<string | null>(null);
 
   const formatDate = (dateString: string) =>
@@ -560,23 +594,25 @@ export default function NewSalePage() {
       try {
         const data = await getRequest("/payment-types");
         setPaymentTypes(
-          data.map((item: PaymentTypeOption) => ({
-            id: Number(item.id),
-            name: item.name,
-            kind: item.kind,
-            active: Boolean(item.active),
-            requiresDueDate: Boolean(item.requiresDueDate),
-            allowsEntryAmount: Boolean(item.allowsEntryAmount),
-            allowedEntryPaymentKinds: item.allowedEntryPaymentKinds || [],
-            allowsInstallments: Boolean(item.allowsInstallments),
-            maxInstallments:
-              item.maxInstallments === null ||
-              item.maxInstallments === undefined
-                ? null
-                : Number(item.maxInstallments),
-            defaultInstallments: Number(item.defaultInstallments || 1),
-            financialFlow: item.financialFlow,
-          })),
+          ((Array.isArray(data) ? data : []) as PaymentTypeOption[])
+            .map((item) => ({
+              id: Number(item.id),
+              name: item.name,
+              kind: item.kind,
+              active: Boolean(item.active),
+              requiresDueDate: Boolean(item.requiresDueDate),
+              allowsEntryAmount: Boolean(item.allowsEntryAmount),
+              allowedEntryPaymentKinds: item.allowedEntryPaymentKinds || [],
+              allowsInstallments: Boolean(item.allowsInstallments),
+              maxInstallments:
+                item.maxInstallments === null ||
+                item.maxInstallments === undefined
+                  ? null
+                  : Number(item.maxInstallments),
+              defaultInstallments: Number(item.defaultInstallments || 1),
+              financialFlow: item.financialFlow,
+            }))
+            .filter((item) => item.active),
         );
       } catch (error) {
         console.error("Erro ao buscar formas de pagamento", error);
@@ -584,6 +620,30 @@ export default function NewSalePage() {
     };
 
     fetchPaymentTypes();
+  }, []);
+
+  useEffect(() => {
+    const fetchFinancialAccounts = async () => {
+      try {
+        const data = await getRequest("/financial-accounts/options");
+        setFinancialAccounts(
+          Array.isArray(data)
+            ? (data as FinancialAccountOption[]).map((item) => ({
+                id: Number(item.id),
+                label: item.label,
+                value: String(item.value),
+                scope: item.scope,
+                targetType: item.targetType,
+              }))
+            : [],
+        );
+      } catch (error) {
+        console.error("Erro ao buscar contas financeiras", error);
+        setFinancialAccounts([]);
+      }
+    };
+
+    void fetchFinancialAccounts();
   }, []);
 
   useEffect(() => {
@@ -730,6 +790,11 @@ export default function NewSalePage() {
               ? String(data.dueDate).slice(0, 10)
               : getCurrentDateInputValue(),
         );
+        setReceiptFinancialAccountId(
+          data.paymentDraft?.receiptFinancialAccountId
+            ? String(data.paymentDraft.receiptFinancialAccountId)
+            : "",
+        );
         setEntryAmount(
           data.paymentDraft?.entryAmount !== null &&
             data.paymentDraft?.entryAmount !== undefined
@@ -741,6 +806,11 @@ export default function NewSalePage() {
             ? String(data.paymentDraft.entryPaymentTypeId)
             : "",
         );
+        setEntryFinancialAccountId(
+          data.paymentDraft?.entryFinancialAccountId
+            ? String(data.paymentDraft.entryFinancialAccountId)
+            : "",
+        );
         setEntryReferenceCode(data.paymentDraft?.entryReferenceCode || "");
         setPaymentReferenceCode(data.paymentDraft?.paymentReferenceCode || "");
         setUseCustomerCredit(Boolean(data.paymentDraft?.useCustomerCredit));
@@ -749,6 +819,8 @@ export default function NewSalePage() {
             ? formatCurrency(data.paymentDraft.customerCreditAmount)
             : "",
         );
+        setDoesNotGenerateDebt(Boolean(data.doesNotGenerateDebt));
+        setInternalReason(data.internalReason || "");
         setStep(quoteModeParam === "edit" ? 3 : 4);
         setSaveMessage(
           "Orçamento carregado. Informe a forma de pagamento para concluir a venda.",
@@ -849,22 +921,72 @@ export default function NewSalePage() {
       selectedPaymentType.financialFlow === "IMMEDIATE_CASH",
     [selectedPaymentType],
   );
+  const selectedEntryPaymentType = useMemo(
+    () =>
+      paymentTypes.find((item) => String(item.id) === entryPaymentTypeId) || null,
+    [entryPaymentTypeId, paymentTypes],
+  );
+  const isPixPayment = useMemo(
+    () => String(selectedPaymentType?.name || "").trim().toUpperCase() === "PIX",
+    [selectedPaymentType],
+  );
+  const shouldShowInstallmentVisualization = useMemo(
+    () =>
+      !doesNotGenerateDebt &&
+      Boolean(selectedPaymentType) &&
+      !isImmediateCashPayment &&
+      !isPixPayment,
+    [doesNotGenerateDebt, isImmediateCashPayment, isPixPayment, selectedPaymentType],
+  );
+  const isDebtExemptionActive = doesNotGenerateDebt;
   const immediateReceiptDestinationLabel = useMemo(() => {
-    if (
-      !selectedPaymentType ||
-      selectedPaymentType.financialFlow !== "IMMEDIATE_CASH"
-    ) {
-      return "";
+    const selectedAccount = financialAccounts.find(
+      (item) => String(item.id) === receiptFinancialAccountId,
+    );
+    return selectedAccount?.label || "";
+  }, [financialAccounts, receiptFinancialAccountId]);
+  const saleReceiptAccountOptions = useMemo(() => {
+    if (!selectedPaymentType || selectedPaymentType.financialFlow !== "IMMEDIATE_CASH") {
+      return [];
     }
 
     if (selectedPaymentType.kind === "CASH") {
-      return "Recebimento no caixa.";
+      return financialAccounts;
     }
 
-    return "Recebimento no banco.";
-  }, [selectedPaymentType]);
+    return financialAccounts.filter((item) => item.targetType === "BANK");
+  }, [financialAccounts, selectedPaymentType]);
+  const entryReceiptAccountOptions = useMemo(() => {
+    if (!selectedEntryPaymentType) {
+      return [];
+    }
+
+    if (selectedEntryPaymentType.kind === "CASH") {
+      return financialAccounts;
+    }
+
+    return financialAccounts.filter((item) => item.targetType === "BANK");
+  }, [financialAccounts, selectedEntryPaymentType]);
+  const defaultCashAccountOption = useMemo(
+    () =>
+      financialAccounts.find(
+        (item) => item.scope === "LOJA" && item.targetType === "CASH",
+      ) || null,
+    [financialAccounts],
+  );
+  const defaultBankAccountOption = useMemo(
+    () =>
+      financialAccounts.find(
+        (item) => item.scope === "LOJA" && item.targetType === "BANK",
+      ) || null,
+    [financialAccounts],
+  );
   const entryPaymentTypeOptions = useMemo(
-    () => paymentTypes.filter((item) => item.id === 1 || item.id === 2),
+    () =>
+      paymentTypes.filter((item) => {
+        const normalizedName = String(item.name || "").trim().toUpperCase();
+        return normalizedName === "DINHEIRO" || normalizedName === "PIX";
+      }),
     [paymentTypes],
   );
   const parsedEntryAmount = useMemo(() => {
@@ -935,8 +1057,8 @@ export default function NewSalePage() {
     parsedCashReceivedAmount,
   ]);
   const requiresCashSessionForCurrentSale = useMemo(
-    () => tableItems.length > 0,
-    [tableItems.length],
+    () => !isDebtExemptionActive && tableItems.length > 0,
+    [isDebtExemptionActive, tableItems.length],
   );
   const expectedOpenCashBalance = useMemo(
     () => Number(parseCurrencyToNumber(openingBalanceInput).toFixed(2)),
@@ -972,46 +1094,68 @@ export default function NewSalePage() {
 
     return installments;
   }, [previewInstallmentCount, remainingAmount]);
-  const creditInstallmentPreview = useMemo<InstallmentPreviewRow[]>(() => {
-    if (!isCreditPayment || remainingAmount <= 0) {
+  const paymentInstallmentPreview = useMemo<InstallmentPreviewRow[]>(() => {
+    if (!shouldShowInstallmentVisualization || remainingAmount <= 0) {
       return [];
     }
 
-    const baseDate = getDateFromInputValue(getCurrentDateInputValue());
+    const baseDate =
+      selectedPaymentType?.requiresDueDate && dueDate
+        ? getDateFromInputValue(dueDate)
+        : getDateFromInputValue(getCurrentDateInputValue());
 
     return installmentPreview.map((amount, index) => ({
       installmentNumber: index + 1,
       totalInstallments: installmentPreview.length,
       amount,
-      dueDate: addDays(baseDate, parsedInstallmentIntervalDays * (index + 1))
+      dueDate: addDays(
+        baseDate,
+        parsedInstallmentIntervalDays *
+          (selectedPaymentType?.requiresDueDate ? index : index + 1),
+      )
         .toISOString()
         .slice(0, 10),
     }));
   }, [
+    dueDate,
     installmentPreview,
-    isCreditPayment,
     parsedInstallmentIntervalDays,
     remainingAmount,
+    selectedPaymentType,
+    shouldShowInstallmentVisualization,
   ]);
   const canSaveSale =
     !isSaving &&
     !!selectedCustomer &&
     tableItems.length > 0 &&
-    !!paymentTypeId &&
-    (!selectedPaymentType?.requiresDueDate || !!dueDate) &&
-    (!selectedPaymentType?.allowsEntryAmount ||
+    (isDebtExemptionActive || !!paymentTypeId) &&
+    (isDebtExemptionActive ||
+      selectedPaymentType?.financialFlow !== "IMMEDIATE_CASH" ||
+      !!receiptFinancialAccountId) &&
+    (isDebtExemptionActive ||
+      !selectedPaymentType?.requiresDueDate ||
+      !!dueDate) &&
+    (isDebtExemptionActive ||
+      !selectedPaymentType?.allowsEntryAmount ||
       parsedEntryAmount <= 0 ||
-      !!entryPaymentTypeId) &&
-    (!isImmediateCashPayment ||
+      (!!entryPaymentTypeId && !!entryFinancialAccountId)) &&
+    (isDebtExemptionActive ||
+      !isImmediateCashPayment ||
       parsedCashReceivedAmount >=
         Number((discountedTotalValue - customerCreditToApply).toFixed(2))) &&
-    (!isImmediateCheckPayment || !!paymentReferenceCode.trim()) &&
-    (!useCustomerCredit ||
+    (isDebtExemptionActive ||
+      !isImmediateCheckPayment ||
+      !!paymentReferenceCode.trim()) &&
+    (isDebtExemptionActive ||
+      !useCustomerCredit ||
       (customerCreditToApply > 0 &&
         customerCreditToApply < discountedTotalValue)) &&
-    parsedEntryAmount + customerCreditToApply < discountedTotalValue;
+    (isDebtExemptionActive ||
+      parsedEntryAmount + customerCreditToApply < discountedTotalValue);
   const canCreateQuote =
-    !isSaving && !!selectedCustomer && tableItems.length > 0;
+    !isSaving &&
+    !!selectedCustomer &&
+    tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
 
   const formatCurrency = (value: number) =>
@@ -1030,22 +1174,43 @@ export default function NewSalePage() {
   }, []);
 
   const buildPaymentDraftPayload = () => ({
-    paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
+    paymentTypeId:
+      doesNotGenerateDebt || !paymentTypeId ? null : Number(paymentTypeId),
     installmentCount: previewInstallmentCount,
     installmentIntervalDays: isCreditPayment
       ? parsedInstallmentIntervalDays
       : null,
-    dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
+    dueDate:
+      doesNotGenerateDebt || !selectedPaymentType?.requiresDueDate
+        ? null
+        : dueDate,
+    receiptFinancialAccountId: receiptFinancialAccountId
+      && !doesNotGenerateDebt
+      ? Number(receiptFinancialAccountId)
+      : null,
     entryAmount:
-      selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
+      !doesNotGenerateDebt &&
+      selectedPaymentType?.allowsEntryAmount &&
+      parsedEntryAmount > 0
         ? parsedEntryAmount
         : null,
-    entryPaymentTypeId: entryPaymentTypeId ? Number(entryPaymentTypeId) : null,
-    entryReferenceCode: entryReferenceCode || null,
-    paymentReferenceCode: paymentReferenceCode || null,
-    useCustomerCredit,
+    entryPaymentTypeId:
+      !doesNotGenerateDebt && entryPaymentTypeId
+        ? Number(entryPaymentTypeId)
+        : null,
+    entryFinancialAccountId: entryFinancialAccountId
+      && !doesNotGenerateDebt
+      ? Number(entryFinancialAccountId)
+      : null,
+    entryReferenceCode: doesNotGenerateDebt ? null : entryReferenceCode || null,
+    paymentReferenceCode: doesNotGenerateDebt
+      ? null
+      : paymentReferenceCode || null,
+    useCustomerCredit: doesNotGenerateDebt ? false : useCustomerCredit,
     customerCreditAmount:
-      customerCreditToApply > 0 ? customerCreditToApply : null,
+      !doesNotGenerateDebt && customerCreditToApply > 0
+        ? customerCreditToApply
+        : null,
   });
 
   const hydrateDraftCollectionsFromQuote = useCallback(
@@ -1055,8 +1220,6 @@ export default function NewSalePage() {
       const accessory: GeneralCatalogProductDraft[] = [];
       const service: GeneralCatalogProductDraft[] = [];
       const misc: GeneralCatalogProductDraft[] = [];
-      let customMeasurementIndex = 0;
-
       (data.items || []).forEach((item, index) => {
         const metadata = item.metadata || {};
         const unitPriceValue = Number(item.unitPrice || 0);
@@ -1084,54 +1247,19 @@ export default function NewSalePage() {
         }
 
         if (item.itemType === "CUSTOM_MADE") {
-          const measurement =
-            data.measurements?.[customMeasurementIndex] || null;
-          customMeasurementIndex += 1;
+          const measurementData = buildMeasurementsMap(data.measurements);
 
           customMade.push({
             id: item.id || index + 1,
             type: String(metadata.clothingType || ""),
             fabric: String(metadata.fabric || ""),
             color: String(metadata.color || ""),
-            measurements: {
-              costas: stringifyMeasurementValue(measurement?.costas),
-              comprimentoSaia: stringifyMeasurementValue(
-                measurement?.comprimentoSaia,
-              ),
-              comprimentoBlusa: stringifyMeasurementValue(
-                measurement?.comprimentoBlusa,
-              ),
-              comprimentoCalca: stringifyMeasurementValue(
-                measurement?.comprimentoCalca,
-              ),
-              comprimentoManga: stringifyMeasurementValue(
-                measurement?.comprimentoManga,
-              ),
-              comprimentoVestido: stringifyMeasurementValue(
-                measurement?.comprimentoVestido,
-              ),
-              comprimentoBermuda: stringifyMeasurementValue(
-                measurement?.comprimentoBermuda,
-              ),
-              cos: stringifyMeasurementValue(measurement?.cos),
-              colete: stringifyMeasurementValue(measurement?.colete),
-              perna: stringifyMeasurementValue(measurement?.perna),
-              braco: stringifyMeasurementValue(measurement?.braco),
-              alturaBusto: stringifyMeasurementValue(measurement?.alturaBusto),
-              busto: stringifyMeasurementValue(measurement?.busto),
-              cintura: stringifyMeasurementValue(measurement?.cintura),
-              coice: stringifyMeasurementValue(measurement?.coice),
-              cinturaBaixa: stringifyMeasurementValue(
-                measurement?.cinturaBaixa,
-              ),
-              quadril: stringifyMeasurementValue(measurement?.quadril),
-              gancho: stringifyMeasurementValue(measurement?.gancho),
-            },
+            measurements: measurementData.measurements,
             selectedMeasurements: Array.isArray(metadata.selectedMeasurements)
               ? (metadata.selectedMeasurements.map((value) =>
                   String(value),
                 ) as CustomMadeProductDraft["selectedMeasurements"])
-              : [],
+              : measurementData.selectedMeasurements,
             description: item.description || "",
             price: formatCurrency(unitPriceValue),
             discountPercent:
@@ -1281,6 +1409,7 @@ export default function NewSalePage() {
     setPaymentTypeId(value);
 
     if (!value) {
+      setReceiptFinancialAccountId("");
       setSaveMessage("");
       return;
     }
@@ -1301,6 +1430,9 @@ export default function NewSalePage() {
 
   const handleEntryPaymentTypeChange = async (value: string) => {
     setEntryPaymentTypeId(value);
+    if (!value) {
+      setEntryFinancialAccountId("");
+    }
 
     if (value !== "1") {
       setSaveMessage("");
@@ -1317,10 +1449,12 @@ export default function NewSalePage() {
     }
 
     if (!selectedPaymentType) {
+      setReceiptFinancialAccountId("");
       setInstallmentCount("1");
       setInstallmentIntervalDays("30");
       setEntryAmount("");
       setEntryPaymentTypeId("");
+      setEntryFinancialAccountId("");
       setEntryReferenceCode("");
       setPaymentReferenceCode("");
       setCashReceivedAmount("");
@@ -1337,6 +1471,7 @@ export default function NewSalePage() {
     if (!selectedPaymentType.allowsEntryAmount) {
       setEntryAmount("");
       setEntryPaymentTypeId("");
+      setEntryFinancialAccountId("");
       setEntryReferenceCode("");
     }
 
@@ -1348,6 +1483,72 @@ export default function NewSalePage() {
       setCashReceivedAmount("");
     }
   }, [isImmediateCashPayment, isImmediateCheckPayment, selectedPaymentType]);
+
+  useEffect(() => {
+    if (!doesNotGenerateDebt) {
+      return;
+    }
+
+    setPaymentTypeId("");
+    setReceiptFinancialAccountId("");
+    setInstallmentCount("1");
+    setInstallmentIntervalDays("30");
+    setDueDate(getCurrentDateInputValue());
+    setEntryAmount("");
+    setEntryPaymentTypeId("");
+    setEntryFinancialAccountId("");
+    setEntryReferenceCode("");
+    setPaymentReferenceCode("");
+    setCashReceivedAmount("");
+    setUseCustomerCredit(false);
+    setCustomerCreditAmountInput("");
+  }, [doesNotGenerateDebt]);
+
+  useEffect(() => {
+    if (!selectedPaymentType || selectedPaymentType.financialFlow !== "IMMEDIATE_CASH") {
+      setReceiptFinancialAccountId("");
+      return;
+    }
+
+    const availableIds = new Set(saleReceiptAccountOptions.map((item) => String(item.id)));
+    if (receiptFinancialAccountId && availableIds.has(receiptFinancialAccountId)) {
+      return;
+    }
+
+    const fallback =
+      selectedPaymentType.kind === "CASH" ? defaultCashAccountOption : defaultBankAccountOption;
+    setReceiptFinancialAccountId(fallback ? String(fallback.id) : "");
+  }, [
+    defaultBankAccountOption,
+    defaultCashAccountOption,
+    receiptFinancialAccountId,
+    saleReceiptAccountOptions,
+    selectedPaymentType,
+  ]);
+
+  useEffect(() => {
+    if (!selectedEntryPaymentType) {
+      setEntryFinancialAccountId("");
+      return;
+    }
+
+    const availableIds = new Set(entryReceiptAccountOptions.map((item) => String(item.id)));
+    if (entryFinancialAccountId && availableIds.has(entryFinancialAccountId)) {
+      return;
+    }
+
+    const fallback =
+      selectedEntryPaymentType.kind === "CASH"
+        ? defaultCashAccountOption
+        : defaultBankAccountOption;
+    setEntryFinancialAccountId(fallback ? String(fallback.id) : "");
+  }, [
+    defaultBankAccountOption,
+    defaultCashAccountOption,
+    entryFinancialAccountId,
+    entryReceiptAccountOptions,
+    selectedEntryPaymentType,
+  ]);
 
   const addModalItemsToTable = () => {
     handleSaveModalItems();
@@ -1608,9 +1809,7 @@ export default function NewSalePage() {
       );
       const miscItems = buildGenericSaleItems(miscProducts, "MISC", "Diversos");
 
-      const customerMeasurements = customMadeProducts.map((product) => ({
-        ...product.measurements,
-      }));
+      const customerMeasurements = buildCustomerMeasurementsPayload();
 
       await postRequest("/sales", {
         customerId: selectedCustomer.id,
@@ -1624,12 +1823,18 @@ export default function NewSalePage() {
           ? parsedInstallmentIntervalDays
           : null,
         dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
+        receiptFinancialAccountId: receiptFinancialAccountId
+          ? Number(receiptFinancialAccountId)
+          : null,
         entryAmount:
           selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
             ? parsedEntryAmount
             : null,
         entryPaymentTypeId: entryPaymentTypeId
           ? Number(entryPaymentTypeId)
+          : null,
+        entryFinancialAccountId: entryFinancialAccountId
+          ? Number(entryFinancialAccountId)
           : null,
         entryPaidAt: parsedEntryAmount > 0 ? getCurrentDateInputValue() : null,
         entryReferenceCode: entryReferenceCode || null,
@@ -1655,11 +1860,13 @@ export default function NewSalePage() {
       setSelectedCategoryCode("");
       setSelectedClothingSubtype("");
       setPaymentTypeId("");
+      setReceiptFinancialAccountId("");
       setInstallmentCount("1");
       setInstallmentIntervalDays("30");
       setDueDate(getCurrentDateInputValue());
       setEntryAmount("");
       setEntryPaymentTypeId("");
+      setEntryFinancialAccountId("");
       setEntryReferenceCode("");
       setPaymentReferenceCode("");
       setCashReceivedAmount("");
@@ -1839,9 +2046,14 @@ export default function NewSalePage() {
   };
 
   const buildCustomerMeasurementsPayload = () =>
-    customMadeProducts.map((product) => ({
-      ...product.measurements,
-    }));
+    customMadeProducts.flatMap((product) =>
+      product.selectedMeasurements
+        .map((key) => ({
+          key,
+          value: product.measurements[key],
+        }))
+        .filter((measurement) => String(measurement.value || "").trim() !== ""),
+    );
 
   const buildQuotePayload = () => {
     if (!selectedCustomer) {
@@ -1852,6 +2064,8 @@ export default function NewSalePage() {
       customerId: selectedCustomer.id,
       totalAmount: totalValue,
       finalAmount: discountedTotalValue,
+      doesNotGenerateDebt,
+      internalReason: doesNotGenerateDebt ? internalReason.trim() || null : null,
       discountType: saleDiscountPayload.discountType,
       discountValue: saleDiscountPayload.discountValue,
       items: buildSaleItemsPayload(),
@@ -1869,25 +2083,46 @@ export default function NewSalePage() {
 
     return {
       ...quotePayload,
-      paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
-      installmentCount: previewInstallmentCount,
+      paymentTypeId:
+        doesNotGenerateDebt || !paymentTypeId ? null : Number(paymentTypeId),
+      installmentCount: doesNotGenerateDebt ? 1 : previewInstallmentCount,
       installmentIntervalDays: isCreditPayment
         ? parsedInstallmentIntervalDays
         : null,
-      dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
+      dueDate:
+        doesNotGenerateDebt || !selectedPaymentType?.requiresDueDate
+          ? null
+          : dueDate,
+      receiptFinancialAccountId: receiptFinancialAccountId
+        && !doesNotGenerateDebt
+        ? Number(receiptFinancialAccountId)
+        : null,
       entryAmount:
-        selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
+        !doesNotGenerateDebt &&
+        selectedPaymentType?.allowsEntryAmount &&
+        parsedEntryAmount > 0
           ? parsedEntryAmount
           : null,
-      entryPaymentTypeId: entryPaymentTypeId
+      entryPaymentTypeId: !doesNotGenerateDebt && entryPaymentTypeId
         ? Number(entryPaymentTypeId)
         : null,
-      entryPaidAt: parsedEntryAmount > 0 ? getCurrentDateInputValue() : null,
-      entryReferenceCode: entryReferenceCode || null,
-      paymentReferenceCode: paymentReferenceCode || null,
-      useCustomerCredit,
+      entryFinancialAccountId: entryFinancialAccountId
+        && !doesNotGenerateDebt
+        ? Number(entryFinancialAccountId)
+        : null,
+      entryPaidAt:
+        !doesNotGenerateDebt && parsedEntryAmount > 0
+          ? getCurrentDateInputValue()
+          : null,
+      entryReferenceCode: doesNotGenerateDebt ? null : entryReferenceCode || null,
+      paymentReferenceCode: doesNotGenerateDebt
+        ? null
+        : paymentReferenceCode || null,
+      useCustomerCredit: doesNotGenerateDebt ? false : useCustomerCredit,
       customerCreditAmount:
-        customerCreditToApply > 0 ? customerCreditToApply : null,
+        !doesNotGenerateDebt && customerCreditToApply > 0
+          ? customerCreditToApply
+          : null,
     };
   };
 
@@ -1906,11 +2141,13 @@ export default function NewSalePage() {
     setSelectedCategoryCode("");
     setSelectedClothingSubtype("");
     setPaymentTypeId("");
+    setReceiptFinancialAccountId("");
     setInstallmentCount("1");
     setInstallmentIntervalDays("30");
     setDueDate(getCurrentDateInputValue());
     setEntryAmount("");
     setEntryPaymentTypeId("");
+    setEntryFinancialAccountId("");
     setEntryReferenceCode("");
     setPaymentReferenceCode("");
     setCashReceivedAmount("");
@@ -1918,6 +2155,8 @@ export default function NewSalePage() {
     setCustomerCreditAvailable(0);
     setUseCustomerCredit(false);
     setCustomerCreditAmountInput("");
+    setDoesNotGenerateDebt(false);
+    setInternalReason("");
     setStep(1);
     const updatedCashSessionStatus = await getRequest("/cash/session-status");
     setCashSessionStatus(
@@ -2092,24 +2331,12 @@ export default function NewSalePage() {
       setIsSaving(true);
       setSaveMessage("");
 
-      await updateRequest(`/sales/${draftSaleId}/finalize`, {
-        paymentTypeId: paymentTypeId ? Number(paymentTypeId) : null,
-        installmentCount: previewInstallmentCount,
-        installmentIntervalDays: isCreditPayment
-          ? parsedInstallmentIntervalDays
-          : null,
-        dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
-        entryAmount:
-          selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
-            ? parsedEntryAmount
-            : null,
-        entryPaymentTypeId: entryPaymentTypeId
-          ? Number(entryPaymentTypeId)
-          : null,
-        entryPaidAt: parsedEntryAmount > 0 ? getCurrentDateInputValue() : null,
-        entryReferenceCode: entryReferenceCode || null,
-        paymentReferenceCode: paymentReferenceCode || null,
-      });
+      const payload = buildFinalizePayload();
+      if (!payload) {
+        return;
+      }
+
+      await updateRequest(`/sales/${draftSaleId}/finalize`, payload);
 
       await resetSaleForm();
       navigate("/vendas");
@@ -2163,17 +2390,7 @@ export default function NewSalePage() {
       }
 
       if (draftSaleId !== null) {
-        await updateRequest(`/sales/${draftSaleId}/finalize`, {
-          paymentTypeId: payload.paymentTypeId,
-          installmentCount: payload.installmentCount,
-          installmentIntervalDays: payload.installmentIntervalDays,
-          dueDate: payload.dueDate,
-          entryAmount: payload.entryAmount,
-          entryPaymentTypeId: payload.entryPaymentTypeId,
-          entryPaidAt: payload.entryPaidAt,
-          entryReferenceCode: payload.entryReferenceCode,
-          paymentReferenceCode: payload.paymentReferenceCode,
-        });
+        await updateRequest(`/sales/${draftSaleId}/finalize`, payload);
       } else {
         await postRequest("/sales", payload);
       }
@@ -2583,6 +2800,41 @@ export default function NewSalePage() {
                   Passo 4: Pagamento e conclusão
                 </p>
 
+                <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
+                  <div className="grid grid-cols-1 gap-4">
+                    <label className="flex items-center gap-2 text-sm text-neutral-700">
+                      <input
+                        type="checkbox"
+                        checked={doesNotGenerateDebt}
+                        onChange={(e) => setDoesNotGenerateDebt(e.target.checked)}
+                        className="h-4 w-4 rounded border border-outline-variant/60 accent-primary"
+                      />
+                      Não gerar conta a receber
+                    </label>
+
+                    {doesNotGenerateDebt ? (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Motivo (opcional)
+                        </label>
+                        <input
+                          value={internalReason}
+                          onChange={(e) => setInternalReason(e.target.value)}
+                          className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                          placeholder="Descreva o motivo interno da permuta."
+                        />
+                      </div>
+                    ) : null}
+
+                    {doesNotGenerateDebt ? (
+                      <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest px-4 py-3 text-sm text-neutral-700">
+                        Esta venda será salva apenas para consulta, sem gerar A Receber, banco ou caixa.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                {!doesNotGenerateDebt ? (
                 <div className="grid grid-cols-1 gap-3">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-primary">
@@ -2604,8 +2856,9 @@ export default function NewSalePage() {
                     </select>
                   </div>
                 </div>
+                ) : null}
 
-                {customerCreditAvailable > 0 ? (
+                {!doesNotGenerateDebt && customerCreditAvailable > 0 ? (
                   <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-[1.2fr_1fr] md:items-end">
                       <div className="space-y-2">
@@ -2667,11 +2920,11 @@ export default function NewSalePage() {
                   </div>
                 ) : null}
 
-                {isImmediateCheckPayment && (
+                {!doesNotGenerateDebt && isImmediateCheckPayment && (
                   <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-2">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
-                        NÃºmero do cheque
+                        Número do cheque
                       </label>
                       <input
                         value={paymentReferenceCode}
@@ -2679,7 +2932,7 @@ export default function NewSalePage() {
                           setPaymentReferenceCode(e.target.value)
                         }
                         className={paymentFieldClassName}
-                        placeholder="Digite o nÃºmero do cheque"
+                        placeholder="Digite o número do cheque"
                       />
                     </div>
                     <div>
@@ -2697,7 +2950,7 @@ export default function NewSalePage() {
                   </div>
                 )}
 
-                {isImmediateCashPayment && (
+                {!doesNotGenerateDebt && isImmediateCashPayment && (
                   <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
@@ -2741,8 +2994,8 @@ export default function NewSalePage() {
                   </div>
                 )}
 
-                {selectedPaymentType?.allowsEntryAmount && (
-                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
+                {!doesNotGenerateDebt && selectedPaymentType?.allowsEntryAmount && (
+                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
                     <div>
                       <label className="mb-1 block text-sm font-medium text-primary">
                         Valor de entrada
@@ -2785,13 +3038,33 @@ export default function NewSalePage() {
                         className={paymentFieldClassName}
                       />
                     </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Recebido em
+                      </label>
+                      <select
+                        value={entryFinancialAccountId}
+                        onChange={(e) =>
+                          setEntryFinancialAccountId(e.target.value)
+                        }
+                        className={paymentFieldClassName}
+                      >
+                        <option value="">Selecione...</option>
+                        {entryReceiptAccountOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 )}
 
-                {selectedPaymentType ? (
+                {!doesNotGenerateDebt && selectedPaymentType ? (
                   <div
                     className={`grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 ${
-                      selectedPaymentType.requiresDueDate || isCreditPayment
+                      selectedPaymentType.requiresDueDate ||
+                      shouldShowInstallmentVisualization
                         ? "md:grid-cols-2"
                         : "md:grid-cols-1"
                     }`}
@@ -2835,7 +3108,7 @@ export default function NewSalePage() {
                           className={paymentFieldClassName}
                         />
                       </div>
-                    ) : isCreditPayment ? (
+                    ) : shouldShowInstallmentVisualization ? (
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
                           Intervalo entre parcelas (dias)
@@ -2849,6 +3122,26 @@ export default function NewSalePage() {
                           }
                           className={paymentFieldClassName}
                         />
+                      </div>
+                    ) : selectedPaymentType.financialFlow === "IMMEDIATE_CASH" ? (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Recebido em
+                        </label>
+                        <select
+                          value={receiptFinancialAccountId}
+                          onChange={(e) =>
+                            setReceiptFinancialAccountId(e.target.value)
+                          }
+                          className={paymentFieldClassName}
+                        >
+                          <option value="">Selecione...</option>
+                          {saleReceiptAccountOptions.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     ) : (
                       <div>
@@ -2865,7 +3158,7 @@ export default function NewSalePage() {
                   </div>
                 ) : null}
 
-                {isCreditPayment && remainingAmount > 0 && (
+                {!doesNotGenerateDebt && shouldShowInstallmentVisualization && remainingAmount > 0 && (
                   <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                       <div>
@@ -2890,10 +3183,16 @@ export default function NewSalePage() {
                       </div>
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
-                          Intervalo (dias)
+                          {selectedPaymentType?.requiresDueDate
+                            ? "Primeiro venc."
+                            : "Intervalo (dias)"}
                         </label>
                         <input
-                          value={String(parsedInstallmentIntervalDays)}
+                          value={
+                            selectedPaymentType?.requiresDueDate
+                              ? formatDate(paymentInstallmentPreview[0]?.dueDate || dueDate)
+                              : String(parsedInstallmentIntervalDays)
+                          }
                           disabled
                           className={paymentReadonlyFieldClassName}
                         />
@@ -2916,7 +3215,7 @@ export default function NewSalePage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {creditInstallmentPreview.map((installment) => (
+                          {paymentInstallmentPreview.map((installment) => (
                             <tr
                               key={installment.installmentNumber}
                               className="bg-surface-lowest"
@@ -2976,10 +3275,14 @@ export default function NewSalePage() {
                   <p>Subtotal: {formatCurrency(totalValue)}</p>
                   <p>Desconto: {formatCurrency(discountAmount)}</p>
                   <p>Valor final: {formatCurrency(discountedTotalValue)}</p>
-                  <p>
-                    Credito aplicado: {formatCurrency(customerCreditToApply)}
-                  </p>
-                  {isImmediateCashPayment && (
+                  {doesNotGenerateDebt ? (
+                    <p>Esta venda não gera débitos.</p>
+                  ) : (
+                    <p>
+                      Credito aplicado: {formatCurrency(customerCreditToApply)}
+                    </p>
+                  )}
+                  {!doesNotGenerateDebt && isImmediateCashPayment && (
                     <>
                       <p>
                         Valor recebido:{" "}
@@ -2988,25 +3291,37 @@ export default function NewSalePage() {
                       <p>Troco: {formatCurrency(changeAmount)}</p>
                     </>
                   )}
-                  {isImmediateCheckPayment && paymentReferenceCode.trim() && (
+                  {!doesNotGenerateDebt &&
+                    isImmediateCheckPayment &&
+                    paymentReferenceCode.trim() && (
                     <p>Cheque: {paymentReferenceCode.trim()}</p>
                   )}
-                  <p>Entrada: {formatCurrency(parsedEntryAmount)}</p>
-                  <p>Saldo: {formatCurrency(remainingAmount)}</p>
-                  <p>
-                    Destino do saldo:{" "}
-                    {selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER"
-                      ? "A receber"
-                      : "Caixa/Banco"}
-                  </p>
-                  <p>Parcelas previstas: {previewInstallmentCount}</p>
-                  {isCreditPayment && remainingAmount > 0 && (
+                  {!doesNotGenerateDebt ? (
+                    <>
+                      <p>Entrada: {formatCurrency(parsedEntryAmount)}</p>
+                      <p>Saldo: {formatCurrency(remainingAmount)}</p>
+                      <p>
+                        Destino do saldo:{" "}
+                        {selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER"
+                          ? "A receber"
+                          : "Caixa/Banco"}
+                      </p>
+                      <p>Parcelas previstas: {previewInstallmentCount}</p>
+                    </>
+                  ) : null}
+                  {doesNotGenerateDebt && internalReason.trim() ? (
+                    <p>Motivo interno: {internalReason.trim()}</p>
+                  ) : null}
+                  {!doesNotGenerateDebt && shouldShowInstallmentVisualization && remainingAmount > 0 && (
                     <p>
-                      Intervalo entre parcelas: {parsedInstallmentIntervalDays}{" "}
-                      dias
+                      {selectedPaymentType?.requiresDueDate
+                        ? `Primeiro vencimento: ${formatDate(
+                            paymentInstallmentPreview[0]?.dueDate || dueDate,
+                          )}`
+                        : `Intervalo entre parcelas: ${parsedInstallmentIntervalDays} dias`}
                     </p>
                   )}
-                  {installmentPreview.length > 0 && remainingAmount > 0 && (
+                  {!doesNotGenerateDebt && installmentPreview.length > 0 && remainingAmount > 0 && (
                     <p>
                       Valor presumido:{" "}
                       {installmentPreview
@@ -3047,7 +3362,7 @@ export default function NewSalePage() {
               Tipo: {selectedTypesLabel}
             </p>
             <p className="text-sm text-neutral-700">
-              Forma: {selectedPaymentType?.name || "Não definida"}
+              Forma: {doesNotGenerateDebt ? "Permuta" : selectedPaymentType?.name || "Não definida"}
             </p>
             <p className="text-sm text-neutral-700">
               Status: {hasGeneratedQuote ? "Orçamento" : "Em montagem"}
@@ -3062,14 +3377,19 @@ export default function NewSalePage() {
               Desconto aplicado: {formatCurrency(discountAmount)}
             </p>
             <p className="text-sm text-neutral-700">
-              Entrada: {formatCurrency(parsedEntryAmount)}
+              Entrada: {formatCurrency(doesNotGenerateDebt ? 0 : parsedEntryAmount)}
             </p>
             <p className="text-sm text-neutral-700">
-              Credito aplicado: {formatCurrency(customerCreditToApply)}
+              Credito aplicado: {formatCurrency(doesNotGenerateDebt ? 0 : customerCreditToApply)}
             </p>
             <p className="mb-3 text-sm text-neutral-700">
-              Saldo: {formatCurrency(remainingAmount)}
+              Saldo: {formatCurrency(doesNotGenerateDebt ? 0 : remainingAmount)}
             </p>
+            {doesNotGenerateDebt ? (
+              <p className="mb-3 text-sm font-medium text-primary">
+                Esta venda não gera débitos
+              </p>
+            ) : null}
             <p className="mt-4 border-t border-outline-variant/35 pt-3 text-sm font-semibold text-primary">
               Valor total: {formatCurrency(discountedTotalValue)}
             </p>

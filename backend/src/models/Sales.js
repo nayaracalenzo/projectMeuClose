@@ -48,6 +48,15 @@ const SalesSchema = (sequelize, DataTypes) => {
         allowNull: false,
         defaultValue: 1,
       },
+      doesNotGenerateDebt: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      internalReason: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
     },
     {
       tableName: "sales",
@@ -68,6 +77,9 @@ const SalesSchema = (sequelize, DataTypes) => {
       foreignKey: "saleId",
     });
     Sales.hasMany(models.CustomerMeasurements, {
+      foreignKey: "saleId",
+    });
+    Sales.hasMany(models.CustomerMeasurementValues, {
       foreignKey: "saleId",
     });
     Sales.hasOne(models.Receivables, {

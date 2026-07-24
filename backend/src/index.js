@@ -17,6 +17,7 @@ const paymentTypesRoute = require("./routes/paymentTypesRoute");
 const receivablesRoute = require("./routes/receivablesRoute");
 const payablesRoute = require("./routes/payablesRoute");
 const financialCategoriesRoute = require("./routes/financialCategoriesRoute");
+const financialAccountsRoute = require("./routes/financialAccountsRoute");
 const {
   scheduleOverdueProductsStatusSync,
   syncOverdueProductsStatus,
@@ -47,6 +48,7 @@ app.use("/payment-types", paymentTypesRoute);
 app.use("/receivables", receivablesRoute);
 app.use("/payables", payablesRoute);
 app.use("/financial-categories", financialCategoriesRoute);
+app.use("/financial-accounts", financialAccountsRoute);
 app.use("/products", productsRoute);
 app.use("/dashboard", dashboardRoute);
 app.use("/cash", cashRoute);

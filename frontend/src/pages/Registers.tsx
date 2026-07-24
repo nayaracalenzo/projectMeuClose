@@ -95,14 +95,6 @@ const formatDateInputValue = (date: Date) => {
 
 const getCurrentDateInputValue = () => formatDateInputValue(new Date());
 
-const getCurrentMonthDateRange = () => {
-  const now = new Date();
-  return {
-    startDate: formatDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
-    endDate: formatDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-  };
-};
-
 const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
 
@@ -114,11 +106,10 @@ const formatDateTime = (dateString: string) =>
 
 export default function Registers() {
   const pageSize = 10;
-  const currentMonthDateRange = getCurrentMonthDateRange();
   const [scope, setScope] = useState<Scope>("LOJA");
   const [search, setSearch] = useState("");
-  const [startDate, setStartDate] = useState(currentMonthDateRange.startDate);
-  const [endDate, setEndDate] = useState(currentMonthDateRange.endDate);
+  const [startDate, setStartDate] = useState(getCurrentDateInputValue());
+  const [endDate, setEndDate] = useState(getCurrentDateInputValue());
   const [rows, setRows] = useState<CashRow[]>([]);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [page, setPage] = useState(1);

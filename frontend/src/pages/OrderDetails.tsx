@@ -43,6 +43,13 @@ type ProductDetails = {
   saleItemSubtotal: number;
   createdAt: string | null;
   updatedAt: string | null;
+  measurements?: Array<{
+    idMeasurementDefinition: number | null;
+    key: string | null;
+    label: string | null;
+    value: number;
+  }>;
+  measurementsSummary?: string;
 };
 
 type SelectOption = {
@@ -149,6 +156,21 @@ function ReadonlyField({
       <div className={`${fieldClassName} mt-2 bg-surface-lowest text-neutral-700`}>{value}</div>
     </div>
   );
+}
+
+function formatMeasurementsList(
+  measurements?: Array<{ label: string | null; key: string | null; value: number }>,
+) {
+  if (!Array.isArray(measurements) || !measurements.length) {
+    return "-";
+  }
+
+  return measurements
+    .map((measurement) => {
+      const label = measurement.label || measurement.key || "Medida";
+      return `${label}: ${measurement.value}`;
+    })
+    .join(" | ");
 }
 
 export default function OrderDetails() {
@@ -338,6 +360,12 @@ export default function OrderDetails() {
                 label="Quantidade"
                 value={String(product.saleItemQuantity || product.qtyStock || 1)}
               />
+              <div className="md:col-span-2 xl:col-span-3">
+                <ReadonlyField
+                  label="Medidas"
+                  value={formatMeasurementsList(product.measurements)}
+                />
+              </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-status">

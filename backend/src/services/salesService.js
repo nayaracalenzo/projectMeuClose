@@ -6,6 +6,7 @@ const bankRepository = require("../repositories/bankRepository");
 const cashRepository = require("../repositories/cashRepository");
 const cashSessionsRepository = require("../repositories/cashSessionsRepository");
 const customerCreditsRepository = require("../repositories/customerCreditsRepository");
+const financialAccountsRepository = require("../repositories/financialAccountsRepository");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const { createBankEntry, createCashEntry } = require("./financialEntriesService");
 const {
@@ -15,27 +16,14 @@ const {
   isImmediateCheckPaymentType,
   isImmediateEntryPaymentType,
 } = require("../utils/paymentTypeRules");
+const {
+  LEGACY_MEASUREMENT_DEFINITIONS,
+} = require("../utils/measurementDefinitions");
 
-const MEASUREMENT_FIELDS = [
-  "costas",
-  "comprimentoSaia",
-  "comprimentoBlusa",
-  "comprimentoCalca",
-  "comprimentoManga",
-  "comprimentoVestido",
-  "comprimentoBermuda",
-  "cos",
-  "colete",
-  "perna",
-  "braco",
-  "alturaBusto",
-  "busto",
-  "cintura",
-  "coice",
-  "cinturaBaixa",
-  "quadril",
-  "gancho",
-];
+const MEASUREMENT_FIELDS = LEGACY_MEASUREMENT_DEFINITIONS.map((item) => item.key);
+const MEASUREMENT_DEFINITION_BY_KEY = new Map(
+  LEGACY_MEASUREMENT_DEFINITIONS.map((item) => [item.key, item]),
+);
 
 function createSalesValidationError(message, statusCode = 400) {
   const error = validationError(message, {
@@ -96,6 +84,11 @@ function normalizeRequiredText(value, fieldName) {
   }
 
   return normalized;
+}
+
+function normalizeOptionalText(value) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
 }
 
 function normalizeUserId(user) {
@@ -697,18 +690,106 @@ function buildInstallments(
 }
 
 function normalizeMeasurementRecord(record = {}) {
-  const normalized = {};
-  let hasAnyValue = false;
+  if (!record || typeof record !== "object") {
+    return [];
+  }
+
+  if (Array.isArray(record.values)) {
+    return record.values.map(normalizeSingleMeasurementValue).filter(Boolean);
+  }
+
+  if ("measurementDefinitionId" in record || "key" in record || "value" in record) {
+    const normalized = normalizeSingleMeasurementValue(record);
+    return normalized ? [normalized] : [];
+  }
+
+  const normalized = [];
 
   for (const field of MEASUREMENT_FIELDS) {
     const value = normalizeDecimal(record[field], `Medida ${field}`);
-    normalized[field] = value;
-    if (value !== null) {
-      hasAnyValue = true;
+    if (value === null) {
+      continue;
+    }
+
+    normalized.push({
+      measurementDefinitionId: null,
+      key: field,
+      value,
+    });
+  }
+
+  return normalized;
+}
+
+function normalizeSingleMeasurementValue(record = {}) {
+  const measurementDefinitionId =
+    record.measurementDefinitionId === null ||
+    record.measurementDefinitionId === undefined ||
+    record.measurementDefinitionId === ""
+      ? null
+      : normalizeInteger(record.measurementDefinitionId, "Medida");
+  const key = String(record.key || "").trim() || null;
+  const value = normalizeDecimal(
+    record.value,
+    `Medida ${key || measurementDefinitionId || ""}`.trim(),
+  );
+
+  if (value === null) {
+    return null;
+  }
+
+  if (!measurementDefinitionId && !key) {
+    throw createSalesValidationError("Medida invalida.");
+  }
+
+  return {
+    measurementDefinitionId,
+    key,
+    value,
+  };
+}
+
+async function resolveMeasurementValues(records = []) {
+  if (!Array.isArray(records) || !records.length) {
+    return [];
+  }
+
+  const definitionRows = await repository.listMeasurementDefinitions();
+  const definitionById = new Map(
+    definitionRows.map((item) => [Number(item.idMeasurementDefinition), item]),
+  );
+  const definitionByKey = new Map(
+    definitionRows.map((item) => [String(item.key), item]),
+  );
+  const normalizedByKey = new Map();
+
+  for (const record of records) {
+    const normalizedRecords = normalizeMeasurementRecord(record);
+
+    for (const measurement of normalizedRecords) {
+      const definition =
+        (measurement.measurementDefinitionId
+          ? definitionById.get(Number(measurement.measurementDefinitionId))
+          : null) ||
+        (measurement.key ? definitionByKey.get(String(measurement.key).trim()) : null);
+
+      if (!definition) {
+        const fallbackLabel =
+          measurement.key && MEASUREMENT_DEFINITION_BY_KEY.get(measurement.key)?.label;
+        throw createSalesValidationError(
+          `Medida ${fallbackLabel || measurement.key || measurement.measurementDefinitionId} invalida.`,
+        );
+      }
+
+      normalizedByKey.set(String(definition.key), {
+        measurementDefinitionId: Number(definition.idMeasurementDefinition),
+        key: String(definition.key),
+        value: measurement.value,
+      });
     }
   }
 
-  return hasAnyValue ? normalized : null;
+  return Array.from(normalizedByKey.values());
 }
 
 async function normalizeBudgetPaymentDraft(body = {}) {
@@ -717,8 +798,10 @@ async function normalizeBudgetPaymentDraft(body = {}) {
     body.installmentCount,
     body.installmentIntervalDays,
     body.dueDate,
+    body.receiptFinancialAccountId,
     body.entryAmount,
     body.entryPaymentTypeId,
+    body.entryFinancialAccountId,
     body.entryReferenceCode,
     body.paymentReferenceCode,
     body.useCustomerCredit,
@@ -739,6 +822,18 @@ async function normalizeBudgetPaymentDraft(body = {}) {
     body.entryPaymentTypeId === ""
       ? null
       : normalizeInteger(body.entryPaymentTypeId, "Forma da entrada");
+  const receiptFinancialAccountId =
+    body.receiptFinancialAccountId === null ||
+    body.receiptFinancialAccountId === undefined ||
+    body.receiptFinancialAccountId === ""
+      ? null
+      : normalizeInteger(body.receiptFinancialAccountId, "Recebido em");
+  const entryFinancialAccountId =
+    body.entryFinancialAccountId === null ||
+    body.entryFinancialAccountId === undefined ||
+    body.entryFinancialAccountId === ""
+      ? null
+      : normalizeInteger(body.entryFinancialAccountId, "Recebido em");
 
   if (paymentTypeId) {
     const paymentType = await paymentTypesRepository.getPaymentTypeById(paymentTypeId);
@@ -751,6 +846,20 @@ async function normalizeBudgetPaymentDraft(body = {}) {
     const entryPaymentType = await paymentTypesRepository.getPaymentTypeById(entryPaymentTypeId);
     if (!entryPaymentType) {
       throw createSalesValidationError("Forma da entrada invalida.");
+    }
+  }
+
+  if (receiptFinancialAccountId) {
+    const receiptAccount = await financialAccountsRepository.getById(receiptFinancialAccountId);
+    if (!receiptAccount || receiptAccount.active === false) {
+      throw createSalesValidationError("Recebido em invalido.");
+    }
+  }
+
+  if (entryFinancialAccountId) {
+    const entryAccount = await financialAccountsRepository.getById(entryFinancialAccountId);
+    if (!entryAccount || entryAccount.active === false) {
+      throw createSalesValidationError("Recebido em invalido.");
     }
   }
 
@@ -767,11 +876,13 @@ async function normalizeBudgetPaymentDraft(body = {}) {
         ? null
         : normalizeInteger(body.installmentIntervalDays, "Intervalo entre parcelas"),
     dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
+    receiptFinancialAccountId,
     entryAmount:
       body.entryAmount === null || body.entryAmount === undefined || body.entryAmount === ""
         ? null
         : roundCurrency(normalizeDecimal(body.entryAmount, "Valor da entrada")),
     entryPaymentTypeId,
+    entryFinancialAccountId,
     entryReferenceCode: body.entryReferenceCode ? String(body.entryReferenceCode).trim() : null,
     paymentReferenceCode: body.paymentReferenceCode ? String(body.paymentReferenceCode).trim() : null,
     useCustomerCredit: Boolean(body.useCustomerCredit),
@@ -781,6 +892,18 @@ async function normalizeBudgetPaymentDraft(body = {}) {
       body.customerCreditAmount === ""
         ? null
         : roundCurrency(normalizeDecimal(body.customerCreditAmount, "Valor do credito")),
+  };
+}
+
+function normalizeDebtExemption(body = {}) {
+  const doesNotGenerateDebt = Boolean(body.doesNotGenerateDebt);
+  const internalReason = doesNotGenerateDebt
+    ? normalizeOptionalText(body.internalReason)
+    : null;
+
+  return {
+    doesNotGenerateDebt,
+    internalReason,
   };
 }
 
@@ -836,6 +959,39 @@ async function getRequiredPaymentType(idPaymentType, fieldName) {
   }
 
   return buildPaymentTypeResponse(paymentType);
+}
+
+async function getFinancialAccountOrDefault({
+  idFinancialAccount,
+  fieldName,
+  defaultTargetType,
+  allowCashDestination = false,
+}) {
+  if (idFinancialAccount !== null && idFinancialAccount !== undefined && idFinancialAccount !== "") {
+    const normalizedId = normalizeInteger(idFinancialAccount, fieldName);
+    const account = await financialAccountsRepository.getById(normalizedId);
+
+    if (!account || account.active === false) {
+      throw createSalesValidationError(`${fieldName} invalido.`);
+    }
+
+    if (!allowCashDestination && account.targetType !== "BANK") {
+      throw createSalesValidationError(`${fieldName} invalido.`);
+    }
+
+    return account;
+  }
+
+  const fallback = await financialAccountsRepository.findDefaultByScopeAndTarget(
+    "LOJA",
+    defaultTargetType,
+  );
+
+  if (!fallback) {
+    throw createSalesValidationError(`${fieldName} invalido.`);
+  }
+
+  return fallback;
 }
 
 function validateInstallmentCount(paymentType, installmentCount) {
@@ -905,7 +1061,13 @@ function buildReceivablePayload({
   };
 }
 
-function buildIncomingFinancialMovement({ paymentType, amount, paidAt, referenceCode }) {
+function buildIncomingFinancialMovement({
+  paymentType,
+  amount,
+  paidAt,
+  referenceCode,
+  destinationAccount,
+}) {
   if (!paymentType || Number(amount) <= 0) {
     return null;
   }
@@ -918,13 +1080,23 @@ function buildIncomingFinancialMovement({ paymentType, amount, paidAt, reference
     return null;
   }
 
+  const target =
+    destinationAccount?.targetType === "CASH"
+      ? "CASH"
+      : destinationAccount?.targetType === "BANK"
+        ? "BANK"
+        : isImmediateCashPaymentType(paymentType)
+          ? "CASH"
+          : "BANK";
+  const scope = destinationAccount?.scope || "LOJA";
+
   return {
-    target: isImmediateCashPaymentType(paymentType) ? "CASH" : "BANK",
-    scope: "LOJA",
+    target,
+    scope,
     movementType: "IN",
     category: "VENDA",
     description: `Recebimento da venda via ${paymentType.name}`,
-    accountLabel: "Banco da Loja",
+    accountLabel: target === "BANK" ? destinationAccount?.desc || "Banco da Loja" : null,
     amount: roundCurrency(amount),
     occurredAt: paidAt || new Date(),
     paymentTypeId: paymentType.id,
@@ -978,14 +1150,20 @@ function mapSaleItem(item) {
 }
 
 function mapMeasurementRecord(record) {
-  const mapped = {};
+  const definition = record.MeasurementDefinition || record.MeasurementDefinitions || null;
+  const key = definition?.key || record.key || null;
+  const fallbackLabel =
+    (key && MEASUREMENT_DEFINITION_BY_KEY.get(String(key))?.label) ||
+    (definition?.label ? String(definition.label) : null);
 
-  for (const field of MEASUREMENT_FIELDS) {
-    mapped[field] =
-      record[field] === null || record[field] === undefined ? null : Number(record[field]);
-  }
-
-  return mapped;
+  return {
+    idCustomerMeasurementValue: Number(record.idCustomerMeasurementValue || 0),
+    idMeasurementDefinition:
+      Number(definition?.idMeasurementDefinition || record.measurementDefinitionId || 0) || null,
+    key,
+    label: fallbackLabel || key || "Medida",
+    value: record.value === null || record.value === undefined ? null : Number(record.value),
+  };
 }
 
 function mapBudgetPaymentDraft(draft) {
@@ -993,6 +1171,10 @@ function mapBudgetPaymentDraft(draft) {
 
   const paymentType = draft.PaymentType || draft.PaymentTypes || null;
   const entryPaymentType = draft.EntryPaymentType || null;
+  const receiptFinancialAccount =
+    draft.ReceiptFinancialAccount || draft.ReceiptFinancialAccounts || null;
+  const entryFinancialAccount =
+    draft.EntryFinancialAccount || draft.EntryFinancialAccounts || null;
 
   return {
     paymentTypeId: draft.paymentTypeId || null,
@@ -1006,10 +1188,14 @@ function mapBudgetPaymentDraft(draft) {
         ? null
         : Number(draft.installmentIntervalDays),
     dueDate: draft.dueDate || null,
+    receiptFinancialAccountId: draft.receiptFinancialAccountId || null,
+    receiptFinancialAccountName: receiptFinancialAccount?.desc || null,
     entryAmount:
       draft.entryAmount === null || draft.entryAmount === undefined ? null : Number(draft.entryAmount),
     entryPaymentTypeId: draft.entryPaymentTypeId || null,
     entryPaymentTypeName: entryPaymentType?.desc || null,
+    entryFinancialAccountId: draft.entryFinancialAccountId || null,
+    entryFinancialAccountName: entryFinancialAccount?.desc || null,
     entryReferenceCode: draft.entryReferenceCode || null,
     paymentReferenceCode: draft.paymentReferenceCode || null,
     useCustomerCredit: Boolean(draft.useCustomerCredit),
@@ -1148,8 +1334,21 @@ function mapSaleDetails(sale) {
   const receipts = Array.isArray(sale.PaymentReceipts)
     ? sale.PaymentReceipts.map(mapPaymentReceipt)
     : [];
-  const measurements = Array.isArray(sale.CustomerMeasurements)
-    ? sale.CustomerMeasurements.map(mapMeasurementRecord)
+  const measurements = Array.isArray(sale.CustomerMeasurementValues)
+    ? sale.CustomerMeasurementValues
+        .map(mapMeasurementRecord)
+        .sort((left, right) => {
+          const leftOrder = MEASUREMENT_FIELDS.indexOf(String(left.key || ""));
+          const rightOrder = MEASUREMENT_FIELDS.indexOf(String(right.key || ""));
+
+          if (leftOrder !== rightOrder) {
+            if (leftOrder === -1) return 1;
+            if (rightOrder === -1) return -1;
+            return leftOrder - rightOrder;
+          }
+
+          return String(left.label || "").localeCompare(String(right.label || ""), "pt-BR");
+        })
     : [];
   const measurementsCount = measurements.length;
   const budgetPaymentDraft = mapBudgetPaymentDraft(
@@ -1159,6 +1358,11 @@ function mapSaleDetails(sale) {
   return {
     id: sale.idSale,
     status: resolveSaleStatus(sale),
+    doesNotGenerateDebt: Boolean(sale.doesNotGenerateDebt),
+    internalReason: sale.internalReason || null,
+    debtExemptionLabel: sale.doesNotGenerateDebt
+      ? "Esta venda não gera débitos"
+      : null,
     customer: customer
       ? {
         id: customer.idCustomer,
@@ -1276,6 +1480,11 @@ function mapSaleListItem(sale) {
   return {
     id: sale.idSale,
     status: resolveSaleStatus(sale),
+    doesNotGenerateDebt: Boolean(sale.doesNotGenerateDebt),
+    internalReason: sale.internalReason || null,
+    debtExemptionLabel: sale.doesNotGenerateDebt
+      ? "Esta venda não gera débitos"
+      : null,
     customerName: customer?.fullName || customer?.companyName || "Sem cliente",
     paymentTypeName: buildSalePaymentSummary(sale),
     itemsCount: items.length,
@@ -1287,10 +1496,12 @@ function mapSaleListItem(sale) {
 }
 
 async function createSale(body = {}) {
+  const debtExemption = normalizeDebtExemption(body);
   const shouldCreateQuote =
-    body.paymentTypeId === null ||
-    body.paymentTypeId === undefined ||
-    body.paymentTypeId === "";
+    !debtExemption.doesNotGenerateDebt &&
+    (body.paymentTypeId === null ||
+      body.paymentTypeId === undefined ||
+      body.paymentTypeId === "");
 
   if (shouldCreateQuote) {
     return createQuote(body);
@@ -1299,7 +1510,7 @@ async function createSale(body = {}) {
   return finalizeSaleFromScratch(body);
 }
 
-function normalizeQuoteBase(body = {}) {
+async function normalizeQuoteBase(body = {}) {
   const customerId = normalizeInteger(body.customerId, "Cliente");
   const items = Array.isArray(body.items) ? body.items.map(normalizeSaleItem) : [];
 
@@ -1314,9 +1525,7 @@ function normalizeQuoteBase(body = {}) {
     throw createSalesValidationError("Valores totais sao obrigatórios.");
   }
 
-  const customerMeasurements = Array.isArray(body.customerMeasurements)
-    ? body.customerMeasurements.map(normalizeMeasurementRecord).filter(Boolean)
-    : [];
+  const customerMeasurements = await resolveMeasurementValues(body.customerMeasurements);
 
   return {
     customerId,
@@ -1380,6 +1589,8 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
   let entryReceipt = null;
   let entryPaymentType = null;
   let financialMovement = null;
+  let receiptFinancialAccount = null;
+  let entryFinancialAccount = null;
 
   if (entryAmount !== null && entryAmount > 0) {
     entryPaymentType = await getRequiredPaymentType(
@@ -1400,13 +1611,26 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
       referenceCode: body.entryReferenceCode ? String(body.entryReferenceCode).trim() : null,
     };
 
+    entryFinancialAccount = await getFinancialAccountOrDefault({
+      idFinancialAccount: body.entryFinancialAccountId,
+      fieldName: "Recebido em",
+      defaultTargetType: isImmediateCashPaymentType(entryPaymentType) ? "CASH" : "BANK",
+      allowCashDestination: isImmediateCashPaymentType(entryPaymentType),
+    });
+
     financialMovement = buildIncomingFinancialMovement({
       paymentType: entryPaymentType,
       amount: entryReceipt.amount,
       paidAt: entryReceipt.paidAt,
       referenceCode: entryReceipt.referenceCode,
+      destinationAccount: entryFinancialAccount,
     });
-  } else if (body.entryPaymentTypeId || body.entryPaidAt || body.entryReferenceCode) {
+  } else if (
+    body.entryPaymentTypeId ||
+    body.entryFinancialAccountId ||
+    body.entryPaidAt ||
+    body.entryReferenceCode
+  ) {
     throw createSalesValidationError("Informe um valor de entrada valido para registrar a entrada.");
   }
 
@@ -1427,11 +1651,19 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
       referenceCode: paymentReferenceCode,
     };
 
+    receiptFinancialAccount = await getFinancialAccountOrDefault({
+      idFinancialAccount: body.receiptFinancialAccountId,
+      fieldName: "Recebido em",
+      defaultTargetType: isImmediateCashPaymentType(mainPaymentType) ? "CASH" : "BANK",
+      allowCashDestination: isImmediateCashPaymentType(mainPaymentType),
+    });
+
     financialMovement = buildIncomingFinancialMovement({
       paymentType: mainPaymentType,
       amount: entryReceipt.amount,
       paidAt: entryReceipt.paidAt,
       referenceCode: entryReceipt.referenceCode,
+      destinationAccount: receiptFinancialAccount,
     });
   }
 
@@ -1475,6 +1707,8 @@ function buildSaleResponse(created, extra = {}) {
     totalAmount: Number(created.sale.totalAmount),
     finalAmount: Number(created.sale.finalAmount),
     status: created.sale.status,
+    doesNotGenerateDebt: Boolean(created.sale.doesNotGenerateDebt),
+    internalReason: created.sale.internalReason || null,
     productsCount: created.products?.length || 0,
     itemsCount: created.items?.length || created.sale.SaleItems?.length || 0,
     measurementsCount: created.measurements?.length || 0,
@@ -1488,8 +1722,9 @@ function buildSaleResponse(created, extra = {}) {
 }
 
 async function createQuote(body = {}) {
-  const normalized = normalizeQuoteBase(body);
+  const normalized = await normalizeQuoteBase(body);
   const budgetPaymentDraft = await normalizeBudgetPaymentDraft(body);
+  const debtExemption = normalizeDebtExemption(body);
 
   const created = await repository.createSale({
     sale: {
@@ -1503,6 +1738,8 @@ async function createQuote(body = {}) {
       dueDate: null,
       paymentTypeId: null,
       installmentCount: 1,
+      doesNotGenerateDebt: debtExemption.doesNotGenerateDebt,
+      internalReason: debtExemption.internalReason,
     },
     items: normalized.items,
     customerMeasurements: normalized.customerMeasurements,
@@ -1541,8 +1778,9 @@ async function updateQuote(id, body = {}) {
     throw createSalesValidationError("Venda invalida.");
   }
 
-  const normalized = normalizeQuoteBase(body);
+  const normalized = await normalizeQuoteBase(body);
   const budgetPaymentDraft = await normalizeBudgetPaymentDraft(body);
+  const debtExemption = normalizeDebtExemption(body);
   const sale = await repository.getSaleForFinalization(normalizedId);
   validateEditableBudgetSale(sale);
 
@@ -1552,6 +1790,8 @@ async function updateQuote(id, body = {}) {
       userId: normalized.userId,
       discountType: normalized.discountType,
       discountValue: normalized.discountValue,
+      doesNotGenerateDebt: debtExemption.doesNotGenerateDebt,
+      internalReason: debtExemption.internalReason,
       totalAmount: normalized.totalAmount,
       finalAmount: normalized.finalAmount,
     },
@@ -1596,12 +1836,30 @@ async function finalizeSale(id, body = {}) {
     throw createSalesValidationError("Este orçamento ja possui registros financeiros vinculados.");
   }
 
-  await ensureOpenStoreCashSessionForSaleFinalization();
+  const debtExemption = normalizeDebtExemption(body);
 
-  const finalization = await normalizeFinalizationPayload(body, {
-    customerId: sale.customerId,
-    finalAmount: Number(sale.finalAmount || 0),
-  });
+  if (!debtExemption.doesNotGenerateDebt) {
+    await ensureOpenStoreCashSessionForSaleFinalization();
+  }
+
+  const finalization = debtExemption.doesNotGenerateDebt
+    ? {
+        mainPaymentType: null,
+        installmentCount: 1,
+        dueDate: null,
+        installmentIntervalDays: null,
+        entryReceipt: null,
+        additionalReceipts: [],
+        customerCreditUsages: [],
+        customerCreditAmount: 0,
+        financialMovement: [],
+        receivable: null,
+        remainingAmount: 0,
+      }
+    : await normalizeFinalizationPayload(body, {
+        customerId: sale.customerId,
+        finalAmount: Number(sale.finalAmount || 0),
+      });
 
   const finalStatus = deriveSaleStatusFromItems(items);
 
@@ -1609,8 +1867,10 @@ async function finalizeSale(id, body = {}) {
     sale: {
       status: finalStatus,
       dueDate: finalization.dueDate || null,
-      paymentTypeId: finalization.mainPaymentType.id,
+      paymentTypeId: finalization.mainPaymentType?.id || null,
       installmentCount: finalization.installmentCount,
+      doesNotGenerateDebt: debtExemption.doesNotGenerateDebt,
+      internalReason: debtExemption.internalReason,
     },
     entryReceipt: finalization.entryReceipt,
     additionalReceipts: finalization.additionalReceipts,
@@ -1625,8 +1885,8 @@ async function finalizeSale(id, body = {}) {
 
   return buildSaleResponse(finalized, {
     paymentPreview: {
-      paymentTypeId: finalization.mainPaymentType.id,
-      paymentTypeName: finalization.mainPaymentType.name,
+      paymentTypeId: finalization.mainPaymentType?.id || null,
+      paymentTypeName: finalization.mainPaymentType?.name || null,
       entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
       customerCreditAmount: roundCurrency(finalization.customerCreditAmount || 0),
       remainingAmount: finalization.remainingAmount,
@@ -1644,12 +1904,29 @@ async function finalizeSale(id, body = {}) {
 }
 
 async function finalizeSaleFromScratch(body = {}) {
-  const normalized = normalizeQuoteBase(body);
-  await ensureOpenStoreCashSessionForSaleFinalization();
-  const finalization = await normalizeFinalizationPayload(body, {
-    customerId: normalized.customerId,
-    finalAmount: normalized.finalAmount,
-  });
+  const normalized = await normalizeQuoteBase(body);
+  const debtExemption = normalizeDebtExemption(body);
+  if (!debtExemption.doesNotGenerateDebt) {
+    await ensureOpenStoreCashSessionForSaleFinalization();
+  }
+  const finalization = debtExemption.doesNotGenerateDebt
+    ? {
+        mainPaymentType: null,
+        installmentCount: 1,
+        dueDate: null,
+        installmentIntervalDays: null,
+        entryReceipt: null,
+        additionalReceipts: [],
+        customerCreditUsages: [],
+        customerCreditAmount: 0,
+        financialMovement: [],
+        receivable: null,
+        remainingAmount: 0,
+      }
+    : await normalizeFinalizationPayload(body, {
+        customerId: normalized.customerId,
+        finalAmount: normalized.finalAmount,
+      });
   const finalStatus = deriveSaleStatusFromItems(normalized.items);
 
   const created = await repository.createSale({
@@ -1662,8 +1939,10 @@ async function finalizeSaleFromScratch(body = {}) {
       finalAmount: normalized.finalAmount,
       status: finalStatus,
       dueDate: finalization.dueDate || null,
-      paymentTypeId: finalization.mainPaymentType.id,
+      paymentTypeId: finalization.mainPaymentType?.id || null,
       installmentCount: finalization.installmentCount,
+      doesNotGenerateDebt: debtExemption.doesNotGenerateDebt,
+      internalReason: debtExemption.internalReason,
     },
     items: normalized.items,
     customerMeasurements: normalized.customerMeasurements,
@@ -1676,8 +1955,8 @@ async function finalizeSaleFromScratch(body = {}) {
 
   return buildSaleResponse(created, {
     paymentPreview: {
-      paymentTypeId: finalization.mainPaymentType.id,
-      paymentTypeName: finalization.mainPaymentType.name,
+      paymentTypeId: finalization.mainPaymentType?.id || null,
+      paymentTypeName: finalization.mainPaymentType?.name || null,
       entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
       customerCreditAmount: roundCurrency(finalization.customerCreditAmount || 0),
       remainingAmount: finalization.remainingAmount,

@@ -28,6 +28,13 @@ async function listResource(resource, filters = {}) {
     query.where = { dsbl: false };
   }
 
+  if (resource === "measurement-definitions") {
+    query.where = {
+      ...(query.where || {}),
+      active: true,
+    };
+  }
+
   if (!query.where && model?.rawAttributes?.dsbl) {
     query.where = { dsbl: false };
   }
@@ -137,6 +144,70 @@ async function findEmployeeByDocument(document, { excludeId } = {}) {
     where,
     order: [["idEmployee", "ASC"]],
   });
+}
+
+async function findMeasurementDefinitionByKey(key, { excludeId } = {}) {
+  if (!key) return null;
+
+  const where = {
+    key,
+  };
+
+  if (excludeId) {
+    where.idMeasurementDefinition = {
+      [Op.ne]: excludeId,
+    };
+  }
+
+  return db.MeasurementDefinitions.findOne({
+    where,
+    order: [["idMeasurementDefinition", "ASC"]],
+  });
+}
+
+async function getNextMeasurementDefinitionSortOrder() {
+  const lastRecord = await db.MeasurementDefinitions.findOne({
+    attributes: ["sortOrder"],
+    order: [["sortOrder", "DESC"], ["idMeasurementDefinition", "DESC"]],
+  });
+
+  return Number(lastRecord?.sortOrder || 0) + 1;
+}
+
+async function isFinancialAccountInUse(idFinancialAccount) {
+  const account = await db.FinancialAccounts.findByPk(idFinancialAccount);
+
+  if (!account) {
+    return false;
+  }
+
+  const accountLabel = String(account.desc || "").trim();
+  const [budgetDraftCount, bankEntryCount, payableCount] = await Promise.all([
+    db.SaleBudgetPaymentDrafts.count({
+      where: {
+        [Op.or]: [
+          { receiptFinancialAccountId: idFinancialAccount },
+          { entryFinancialAccountId: idFinancialAccount },
+        ],
+      },
+    }),
+    accountLabel
+      ? db.BankEntries.count({
+          where: {
+            accountLabel,
+          },
+        })
+      : 0,
+    accountLabel
+      ? db.Payables.count({
+          where: {
+            accountLabel,
+          },
+        })
+      : 0,
+  ]);
+
+  return budgetDraftCount > 0 || bankEntryCount > 0 || payableCount > 0;
 }
 
 async function updateResource(resource, id, payload) {
@@ -268,6 +339,9 @@ module.exports = {
   createResource,
   findSupplierByDocument,
   findEmployeeByDocument,
+  findMeasurementDefinitionByKey,
+  getNextMeasurementDefinitionSortOrder,
+  isFinancialAccountInUse,
   updateResource,
   deleteResource,
 };

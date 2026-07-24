@@ -1,6 +1,7 @@
 const { Op, Sequelize } = require("sequelize");
 const {
   BankEntries,
+  FinancialAccounts,
   FinancialCategories,
   PaymentReceipts,
   PayablePayments,
@@ -160,24 +161,22 @@ async function deleteEntry(entry, transaction) {
 
 async function listAccountOptions(scope) {
   const where = {
-    accountLabel: {
-      [Op.not]: null,
-    },
+    active: true,
+    dsbl: false,
+    targetType: "BANK",
   };
 
   if (scope) {
     where.scope = scope;
   }
 
-  const rows = await BankEntries.findAll({
+  const rows = await FinancialAccounts.findAll({
     where,
-    attributes: [[Sequelize.fn("DISTINCT", Sequelize.col("accountLabel")), "accountLabel"]],
-    order: [["accountLabel", "ASC"]],
-    raw: true,
+    order: [["desc", "ASC"]],
   });
 
   return rows
-    .map((item) => String(item.accountLabel || "").trim())
+    .map((item) => String(item.desc || "").trim())
     .filter(Boolean);
 }
 
