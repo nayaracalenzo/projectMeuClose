@@ -1,9 +1,9 @@
 require("dotenv").config();
 const fs = require("fs");
-const path = require("path");
 const csv = require("csv-parser");
 const { Products, SaleItems, Sales } = require("../models");
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
+const { resolveLegacyImportFilePath } = require("./legacyImportSource");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -36,7 +36,7 @@ function inferItemType(product) {
 
 async function importSaleItems() {
   const rows = [];
-  const filePath = path.join(__dirname, "itensVenda.csv");
+  const filePath = resolveLegacyImportFilePath("itensVenda.csv");
 
   console.log("Iniciando leitura do CSV de itens de venda...");
 
@@ -136,7 +136,19 @@ async function importSaleItems() {
 
         await SaleItems.bulkCreate(saleItemsToInsert, {
           validate: true,
-          ignoreDuplicates: true,
+          updateOnDuplicate: [
+            "saleId",
+            "productId",
+            "itemType",
+            "description",
+            "metadata",
+            "unitPrice",
+            "quantity",
+            "discountType",
+            "discountValue",
+            "subtotal",
+            "updatedAt",
+          ],
         });
 
         await SaleItems.sequelize.query(`
@@ -164,4 +176,8 @@ async function importSaleItems() {
     });
 }
 
-importSaleItems();
+if (require.main === module) {
+  importSaleItems();
+}
+
+module.exports = importSaleItems;

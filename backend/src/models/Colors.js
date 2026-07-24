@@ -13,6 +13,11 @@ const ColorsSchema = (sequelize, DataTypes) => {
         allowNull: false,
         unique: true,
       },
+      dsbl: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
     },
     {
       tableName: "colors",

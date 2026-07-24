@@ -20,6 +20,7 @@ type AdminResourceKey =
   | "sizes"
   | "clothings-types"
   | "fabrics"
+  | "financial-categories"
   | "payment-types"
   | "audits";
 
@@ -95,32 +96,45 @@ const resourceConfigList: ResourceConfig[] = [
     title: "Cores",
     endpoint: "/admin/colors",
     emptyLabel: "Nenhuma cor cadastrada.",
-    deleteLabel: "Excluir",
+    deleteLabel: "Desativar",
     primaryKey: "id",
+    isSoftDelete: true,
   },
   {
     key: "sizes",
     title: "Tamanhos",
     endpoint: "/admin/sizes",
     emptyLabel: "Nenhum tamanho cadastrado.",
-    deleteLabel: "Excluir",
+    deleteLabel: "Desativar",
     primaryKey: "id",
+    isSoftDelete: true,
   },
   {
     key: "clothings-types",
     title: "Tipos de Roupas",
     endpoint: "/admin/clothings-types",
     emptyLabel: "Nenhum tipo de roupa cadastrado.",
-    deleteLabel: "Excluir",
+    deleteLabel: "Desativar",
     primaryKey: "id",
+    isSoftDelete: true,
   },
   {
     key: "fabrics",
     title: "Tecidos",
     endpoint: "/admin/fabrics",
     emptyLabel: "Nenhum tecido cadastrado.",
-    deleteLabel: "Excluir",
+    deleteLabel: "Desativar",
     primaryKey: "id",
+    isSoftDelete: true,
+  },
+  {
+    key: "financial-categories",
+    title: "Categorias Financeiras",
+    endpoint: "/admin/financial-categories",
+    emptyLabel: "Nenhuma categoria financeira cadastrada.",
+    deleteLabel: "Desativar",
+    primaryKey: "idFinancialCategory",
+    isSoftDelete: true,
   },
   {
     key: "payment-types",
@@ -167,6 +181,7 @@ const employeeInitialForm = {
 
 const simpleInitialForm = {
   desc: "",
+  description: "",
   active: true,
 };
 
@@ -246,6 +261,7 @@ export default function AdminPage() {
     sizes: [],
     "clothings-types": [],
     fabrics: [],
+    "financial-categories": [],
     "payment-types": [],
     audits: [],
   });
@@ -472,6 +488,7 @@ export default function AdminPage() {
 
     setSimpleForm({
       desc: String(row.desc ?? ""),
+      description: String(row.description ?? ""),
       active: row.active === undefined ? true : Boolean(row.active),
     });
   }
@@ -540,7 +557,13 @@ export default function AdminPage() {
             }
           : selectedResource === "suppliers"
             ? supplierForm
-            : simpleForm;
+            : selectedResource === "financial-categories"
+              ? {
+                  description: simpleForm.description,
+                }
+              : {
+                  desc: simpleForm.desc,
+                };
 
       if (editingId) {
         await updateRequest(`${currentConfig.endpoint}/${editingId}`, payload);
@@ -573,7 +596,7 @@ export default function AdminPage() {
         ? String(row.fullName ?? row.shortName ?? id)
         : selectedResource === "suppliers"
           ? String(row.tradeName ?? row.fullName ?? id)
-          : String(row.desc ?? id);
+          : String(row.desc ?? row.description ?? id);
 
     setDeleteModal({
       open: true,
@@ -827,8 +850,10 @@ function renderPaymentTypesTable() {
     );
   }
 
-function renderSimpleTable() {
+  function renderSimpleTable() {
     const showStatusColumn = selectedResource === "roles";
+    const descriptionField =
+      selectedResource === "financial-categories" ? "description" : "desc";
 
     return (
       <div className="hidden overflow-x-auto lg:block">
@@ -853,12 +878,12 @@ function renderSimpleTable() {
           </thead>
           <tbody>
             {(paginatedRows as GenericRecord[]).map((row) => (
-              <tr key={String(row.id)} className="bg-surface-lowest">
+              <tr key={String(row[currentConfig.primaryKey])} className="bg-surface-lowest">
                 <td className="px-4 py-3 text-[14px] font-semibold text-primary">
-                  {String(row.id)}
+                  {String(row[currentConfig.primaryKey] ?? "")}
                 </td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
-                  {String(row.desc ?? "")}
+                  {String(row[descriptionField] ?? "")}
                 </td>
                 {showStatusColumn ? (
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
@@ -1088,10 +1113,14 @@ function renderSimpleTable() {
             ) : (
               <>
                 <p className="text-base font-semibold text-primary">
-                  {String(row.desc ?? "")}
+                  {String(
+                    selectedResource === "financial-categories"
+                      ? row.description ?? ""
+                      : row.desc ?? "",
+                  )}
                 </p>
                 <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
-                  ID {String(row.id ?? "")}
+                  ID {String(row[currentConfig.primaryKey] ?? "")}
                 </p>
               </>
             )}
@@ -1795,6 +1824,19 @@ function renderSimpleTable() {
                   Cargo ativo
                 </label>
               </>
+            ) : selectedResource === "financial-categories" ? (
+              <input
+                value={simpleForm.description}
+                onChange={(e) =>
+                  setSimpleForm((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
+                placeholder="DescriÃ§Ã£o"
+                className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                required
+              />
             ) : (
               <input
                 value={simpleForm.desc}

@@ -1,10 +1,8 @@
 require("dotenv").config();
-const fs = require("fs");
-const path = require("path");
-const csv = require("csv-parser");
-const { CashEntries, PaymentTypes } = require("../models");
+const { CashEntries, FinancialCategories, PaymentTypes } = require("../models");
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const { normalizeLegacyDateTime } = require("../utils/normalizeLegacyDateTime");
+const { readLegacyCsvRows } = require("./legacyImportSource");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -24,25 +22,13 @@ function normalizeLegacyPaymentTypeId(value) {
   return normalized;
 }
 
-async function readCsvRows(fileName) {
-  const filePath = path.join(__dirname, fileName);
-  const rows = [];
-
-  await new Promise((resolve, reject) => {
-    fs.createReadStream(filePath)
-      .pipe(csv({ separator: ";" }))
-      .on("data", (row) => rows.push(row))
-      .on("end", resolve)
-      .on("error", reject);
-  });
-
-  return rows;
-}
-
 function buildCategoryMap(rows) {
   return new Map(
     rows
-      .map((row) => [normalizeInteger(row.id), normalizeText(row.des)])
+      .map((row) => [
+        normalizeInteger(row.idFinancialCategory),
+        normalizeText(row.description),
+      ])
       .filter(([id, desc]) => id && desc),
   );
 }
@@ -51,8 +37,11 @@ async function importCashEntries() {
   console.log("Iniciando leitura do CSV de caixa...");
 
   const [cashRows, accountRows, paymentTypes] = await Promise.all([
-    readCsvRows("livroCaixa.csv"),
-    readCsvRows("conta.csv"),
+    readLegacyCsvRows("livroCaixa.csv"),
+    FinancialCategories.findAll({
+      attributes: ["idFinancialCategory", "description"],
+      raw: true,
+    }),
     PaymentTypes.findAll({ attributes: ["idPaymentType"], raw: true }),
   ]);
 
@@ -86,9 +75,16 @@ async function importCashEntries() {
       const movementType = amountIn > 0 ? "IN" : "OUT";
       const amount = Number((amountIn > 0 ? amountIn : amountOut).toFixed(2));
       const categoryId = normalizeInteger(row.idCon);
-      const category =
-        categoryMap.get(categoryId) ||
-        (categoryId ? `CONTA ${categoryId}` : "DIVERSOS");
+      const category = categoryMap.get(categoryId);
+
+      if (!categoryId || !category) {
+        console.warn(
+          `Ignorando livroCaixa legado ${legacyId}: categoria financeira invalida ou ausente.`,
+        );
+        skipped += 1;
+        continue;
+      }
+
       const occurredAt = normalizeLegacyDateTime(row.dt) || new Date();
       const paymentTypeId = normalizeLegacyPaymentTypeId(row.idTipDoc);
       const referenceCode = normalizeText(row.num);
@@ -99,7 +95,7 @@ async function importCashEntries() {
         scope: "LOJA",
         movementType,
         category,
-        financialCategoryId: categoryId || 3,
+        financialCategoryId: categoryId,
         description,
         amount,
         occurredAt,
@@ -159,4 +155,8 @@ async function importCashEntries() {
   }
 }
 
-importCashEntries();
+if (require.main === module) {
+  importCashEntries();
+}
+
+module.exports = importCashEntries;

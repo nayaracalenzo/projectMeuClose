@@ -2,12 +2,20 @@ const { FinancialCategories } = require("../models");
 
 async function listCategories() {
   return FinancialCategories.findAll({
+    where: {
+      dsbl: false,
+    },
     order: [["description", "ASC"]],
   });
 }
 
 async function getCategoryById(idFinancialCategory) {
-  return FinancialCategories.findByPk(idFinancialCategory);
+  return FinancialCategories.findOne({
+    where: {
+      idFinancialCategory,
+      dsbl: false,
+    },
+  });
 }
 
 async function getCategoryByDescription(description) {
@@ -17,7 +25,11 @@ async function getCategoryByDescription(description) {
     return null;
   }
 
-  const categories = await FinancialCategories.findAll();
+  const categories = await FinancialCategories.findAll({
+    where: {
+      dsbl: false,
+    },
+  });
 
   return (
     categories.find(

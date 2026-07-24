@@ -1,10 +1,10 @@
 require("dotenv").config();
 const fs = require("fs");
-const path = require("path");
 const csv = require("csv-parser");
 const { Customers, PaymentTypes, Sales, Users } = require("../models");
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const parseDate = require("../utils/parseDate");
+const { resolveLegacyImportFilePath } = require("./legacyImportSource");
 
 function normalizeInteger(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -53,7 +53,7 @@ function resolveMainPaymentTypeId(row, validPaymentTypeIds) {
 
 async function importSales() {
   const rows = [];
-  const filePath = path.join(__dirname, "venda.csv");
+  const filePath = resolveLegacyImportFilePath("venda.csv");
 
   console.log("Iniciando leitura do CSV de vendas...");
 
@@ -160,7 +160,19 @@ async function importSales() {
 
         const insertedRows = await Sales.bulkCreate(salesToInsert, {
           validate: true,
-          ignoreDuplicates: true,
+          updateOnDuplicate: [
+            "customerId",
+            "userId",
+            "discountType",
+            "discountValue",
+            "totalAmount",
+            "finalAmount",
+            "status",
+            "dueDate",
+            "paymentTypeId",
+            "installmentCount",
+            "updatedAt",
+          ],
         });
 
         const totalAfterInsert = await Sales.count();
@@ -196,5 +208,7 @@ async function importSales() {
 if (require.main === module) {
   importSales();
 }
+
+module.exports = importSales;
 
 module.exports = importSales;

@@ -30,8 +30,17 @@ async function listUpcomingFittings(limit = 8) {
       SELECT
         COALESCE(c."fullName", c."companyName", 'Sem cliente') AS "customer",
         DATE(p."testDate") AS "testDate",
-        CAST(SUM(COALESCE(p."qtyStock", 1)) AS INTEGER) AS "piecesCount"
+        CAST(
+          SUM(
+            CASE
+              WHEN si."idSaleItem" IS NOT NULL THEN COALESCE(NULLIF(si."quantity", 0), 1)
+              ELSE 1
+            END
+          ) AS INTEGER
+        ) AS "piecesCount"
       FROM "products" p
+      LEFT JOIN "sale_items" si
+        ON si."productId" = p."id"
       LEFT JOIN "customers" c
         ON c."idCustomer" = p."customerId"
       WHERE

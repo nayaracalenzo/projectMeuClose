@@ -86,6 +86,9 @@ function sanitizePayload(resource, body = {}) {
       case "email":
         payload[field] = normalizeText(body[field])?.toLowerCase() || null;
         break;
+      case "description":
+        payload[field] = normalizeText(body[field]);
+        break;
       case "birthDate":
         payload[field] = normalizeDate(body[field]);
         break;
@@ -114,6 +117,16 @@ function validatePayload(resource, payload, isCreate) {
       throw createAdminResourceError("Descricao e obrigatoria.");
     }
     if (!isCreate && "desc" in payload && !payload.desc) {
+      throw createAdminResourceError("Descricao e obrigatoria.");
+    }
+    return;
+  }
+
+  if (resource === "financial-categories") {
+    if (isCreate && !payload.description) {
+      throw createAdminResourceError("Descricao e obrigatoria.");
+    }
+    if (!isCreate && "description" in payload && !payload.description) {
       throw createAdminResourceError("Descricao e obrigatoria.");
     }
     return;
@@ -209,6 +222,33 @@ async function createResource(resource, body) {
       });
 
       return reactivated;
+    }
+  }
+
+  if (
+    (
+      resource === "colors" ||
+      resource === "clothings-types" ||
+      resource === "fabrics" ||
+      resource === "sizes" ||
+      resource === "financial-categories"
+    ) &&
+    (payload.desc || payload.description)
+  ) {
+    const resourceData = repository.getModelAndConfig(resource);
+    const descriptionField = resource === "financial-categories" ? "description" : "desc";
+    const descriptionValue = payload[descriptionField];
+    const existingRecord = await resourceData?.model?.findOne({
+      where: {
+        [descriptionField]: descriptionValue,
+      },
+    });
+
+    if (existingRecord?.dataValues?.dsbl === true) {
+      return repository.updateResource(resource, existingRecord[resourceData.config.primaryKey], {
+        ...payload,
+        dsbl: false,
+      });
     }
   }
 

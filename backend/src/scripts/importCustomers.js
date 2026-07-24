@@ -4,36 +4,14 @@ const path = require("path");
 const csv = require("csv-parser");
 const { Customers } = require("../models");
 const parseDate = require("../utils/parseDate");
+const { normalizeLegacyDateTime } = require("../utils/normalizeLegacyDateTime");
 const {
   getClientValidationIssues,
   normalizeClientInput,
 } = require("../utils/clientValidation");
 
 function parseLegacyBirthDate(dateString) {
-  if (!dateString) return null;
-
-  const raw = String(dateString).trim();
-  if (!raw) return null;
-
-  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(raw);
-  if (!match) return null;
-
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
-
-  const date = new Date(year, month - 1, day, 0, 0, 0, 0);
-
-  if (
-    Number.isNaN(date.getTime()) ||
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return null;
-  }
-
-  return date;
+  return normalizeLegacyDateTime(dateString, { dateOnly: true });
 }
 
 async function importCustomers() {
@@ -50,7 +28,24 @@ async function importCustomers() {
     .on("end", async () => {
       console.log(`Total encontrados no CSV: ${results.length}`);
 
+      const existingCustomers = await Customers.findAll({
+        attributes: ["idCustomer", "document"],
+      });
+      const existingById = new Map();
+      const existingByDocument = new Map();
+
+      for (const customer of existingCustomers) {
+        if (customer.idCustomer) {
+          existingById.set(Number(customer.idCustomer), customer);
+        }
+
+        if (customer.document) {
+          existingByDocument.set(String(customer.document), customer);
+        }
+      }
+
       const customersToInsert = [];
+      const customersToUpdate = [];
       let skipped = 0;
 
       for (const row of results) {
@@ -96,7 +91,7 @@ async function importCustomers() {
             continue;
           }
 
-          customersToInsert.push({
+          const customerPayload = {
             ...draftCustomer,
             document: normalizedCustomer.document,
             rg: normalizedCustomer.rg,
@@ -104,7 +99,7 @@ async function importCustomers() {
             birthDate: normalizedCustomer.birthDate,
             companyName: normalizedCustomer.companyName,
             tradeName: normalizedCustomer.tradeName,
-            phone: normalizedCustomer.phone,
+            phone: normalizedCustomer.phone || "",
             email: normalizedCustomer.email,
             zipCode: normalizedCustomer.zipCode,
             street: normalizedCustomer.street,
@@ -114,7 +109,24 @@ async function importCustomers() {
             city: normalizedCustomer.city,
             state: normalizedCustomer.state,
             comment: normalizedCustomer.comment,
-          });
+          };
+
+          const existingCustomer =
+            existingById.get(Number(customerPayload.idCustomer)) ||
+            (customerPayload.document
+              ? existingByDocument.get(String(customerPayload.document))
+              : null);
+
+          if (existingCustomer) {
+            customersToUpdate.push({
+              ...customerPayload,
+              idCustomer: existingCustomer.idCustomer,
+              updatedAt: new Date(),
+            });
+            continue;
+          }
+
+          customersToInsert.push(customerPayload);
         } catch (error) {
           console.error(`Erro ao processar ${row.cpf}:`, error.message);
           skipped += 1;
@@ -122,7 +134,21 @@ async function importCustomers() {
       }
 
       try {
-        console.log("Inserindo no banco...");
+        console.log("Atualizando clientes existentes...");
+
+        for (const customer of customersToUpdate) {
+          const {
+            idCustomer,
+            createdAt,
+            ...updatePayload
+          } = customer;
+
+          await Customers.update(updatePayload, {
+            where: { idCustomer },
+          });
+        }
+
+        console.log("Inserindo novos clientes...");
 
         await Customers.bulkCreate(customersToInsert, {
           validate: true,
@@ -131,6 +157,7 @@ async function importCustomers() {
 
         console.log("Importacao finalizada.");
         console.log(`Inseridos: ${customersToInsert.length}`);
+        console.log(`Atualizados: ${customersToUpdate.length}`);
         console.log(`Ignorados: ${skipped}`);
       } catch (error) {
         console.error("Erro geral ao inserir:", error.message);

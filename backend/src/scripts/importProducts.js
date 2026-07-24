@@ -1,6 +1,5 @@
 require("dotenv").config();
 const fs = require("fs");
-const path = require("path");
 const csv = require("csv-parser");
 const {
   Categories,
@@ -16,6 +15,7 @@ const {
 } = require("../models");
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const parseDate = require("../utils/parseDate");
+const { resolveLegacyImportFilePath } = require("./legacyImportSource");
 
 const ACCESSORY_CLOTHING_TYPE_ID = 39;
 const ADJUSTMENT_CLOTHING_TYPE_ID = 82;
@@ -100,7 +100,7 @@ function resolveSpecialDescription(clothingTypeId) {
 
 async function importProducts() {
   const rows = [];
-  const filePath = path.join(__dirname, "produto.csv");
+  const filePath = resolveLegacyImportFilePath("produto.csv");
 
   console.log("Iniciando leitura do CSV de produtos...");
 
@@ -128,10 +128,10 @@ async function importProducts() {
         Employees.findAll({ attributes: ["idEmployee"], raw: true }),
         Status.findAll({ raw: true }),
         ProductsTypes.findAll({ raw: true }),
-        ClothingsType.findAll({ raw: true }),
-        Colors.findAll({ raw: true }),
-        Fabrics.findAll({ raw: true }),
-        Sizes.findAll({ raw: true }),
+        ClothingsType.findAll({ attributes: ["id", "desc"], raw: true }),
+        Colors.findAll({ attributes: ["id", "desc"], raw: true }),
+        Fabrics.findAll({ attributes: ["id", "desc"], raw: true }),
+        Sizes.findAll({ attributes: ["id", "desc"], raw: true }),
       ]);
 
       const validCategoryIds = new Set(categories.map((item) => Number(item.id)));
@@ -206,6 +206,7 @@ async function importProducts() {
           const finalValue = normalizeLegacyCurrency(row.pre) || 0;
           const dressmakerValue = normalizeLegacyCurrency(row.pgCos) ?? 0;
           const remainingValue = Number((finalValue - dressmakerValue).toFixed(2));
+          const qtyStock = normalizeInteger(row.qtdEst) || 0;
 
           productsToInsert.push({
             id: legacyId,
@@ -221,7 +222,7 @@ async function importProducts() {
             sizeId: resolvedSizeId,
             details: normalizeText(row.det),
             testDate: parseDate(row.dtPro) || null,
-            qtyStock: row.qtdEst,
+            qtyStock,
             dressmakerValue,
             finalValue,
             remainingValue,
@@ -242,7 +243,25 @@ async function importProducts() {
 
         await Products.bulkCreate(productsToInsert, {
           validate: true,
-          ignoreDuplicates: true,
+          updateOnDuplicate: [
+            "desc",
+            "customerId",
+            "employeeId",
+            "statusId",
+            "categoryId",
+            "productTypeId",
+            "clothingTypeId",
+            "colorId",
+            "fabricId",
+            "sizeId",
+            "details",
+            "testDate",
+            "qtyStock",
+            "dressmakerValue",
+            "finalValue",
+            "remainingValue",
+            "updatedAt",
+          ],
         });
 
         await Products.sequelize.query(`
@@ -270,4 +289,8 @@ async function importProducts() {
     });
 }
 
-importProducts();
+if (require.main === module) {
+  importProducts();
+}
+
+module.exports = importProducts;

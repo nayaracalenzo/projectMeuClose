@@ -44,9 +44,26 @@ function normalizeState(value) {
   return normalized.toUpperCase().slice(0, 2);
 }
 
+function parseSupplierIdsFilter() {
+  const rawIds =
+    process.env.SUPPLIER_IDS ||
+    process.argv.find((arg) => arg.startsWith("--ids="))?.slice("--ids=".length) ||
+    "";
+
+  if (!rawIds.trim()) return null;
+
+  const ids = rawIds
+    .split(",")
+    .map((value) => normalizeInteger(value))
+    .filter(Boolean);
+
+  return ids.length ? new Set(ids) : null;
+}
+
 async function importSuppliers() {
   const results = [];
   const filePath = path.join(__dirname, "fornecedor.csv");
+  const supplierIdsFilter = parseSupplierIdsFilter();
 
   console.log("Iniciando leitura do CSV de fornecedores...");
 
@@ -65,8 +82,15 @@ async function importSuppliers() {
         try {
           const supplierId = normalizeInteger(row.id);
           const fullName = normalizeText(row.nom);
+          const tradeName = normalizeText(row.nomFan);
+          const preferredName = fullName || tradeName;
 
-          if (!supplierId || !fullName) {
+          if (!supplierId || !preferredName) {
+            skipped += 1;
+            continue;
+          }
+
+          if (supplierIdsFilter && !supplierIdsFilter.has(supplierId)) {
             skipped += 1;
             continue;
           }
@@ -75,8 +99,8 @@ async function importSuppliers() {
 
           suppliersToInsert.push({
             idSupplier: supplierId,
-            fullName,
-            tradeName: normalizeText(row.nomFan),
+            fullName: preferredName,
+            tradeName,
             contactName: normalizeText(row.cont),
             document: normalizeDocument(row.cpf),
             rg: normalizeDocument(row.rg),
