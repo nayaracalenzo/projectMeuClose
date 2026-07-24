@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Pencil, Trash2 } from "lucide-react";
 import { CircularProgress, FormControl, MenuItem, Select } from "@mui/material";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
