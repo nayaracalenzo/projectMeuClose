@@ -59,10 +59,19 @@ async function listUpcomingFittings(limit = 8) {
         ON c."idCustomer" = p."customerId"
       WHERE
         COALESCE(p."dsbl", false) = false
+        AND p."statusId" IN (1, 5)
+        AND (p."productTypeId" IN (4, 5) OR p."categoryId" = 3)
+        AND NOT EXISTS (
+          SELECT 1
+          FROM "sale_items" AS si2
+          INNER JOIN "sales" AS s2
+            ON s2."idSale" = si2."saleId"
+          WHERE si2."productId" = p."id"
+            AND s2."status" = 'BUDGET'
+        )
         AND
         p."testDate" IS NOT NULL
         AND DATE(p."testDate") >= CURRENT_DATE
-        AND COALESCE(p."statusId", 0) NOT IN (3, 4)
       GROUP BY
         COALESCE(c."fullName", c."companyName", 'Sem cliente'),
         DATE(p."testDate")
