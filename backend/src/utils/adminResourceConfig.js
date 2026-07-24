@@ -107,6 +107,19 @@ const resourceConfig = {
     defaultOrder: [["description", "ASC"]],
     editableFields: ["description"],
   },
+  "financial-accounts": {
+    modelName: "FinancialAccounts",
+    primaryKey: "idFinancialAccount",
+    softDelete: true,
+    defaultOrder: [["scope", "ASC"], ["targetType", "ASC"], ["desc", "ASC"]],
+    editableFields: ["desc", "scope", "targetType", "active"],
+  },
+  "measurement-definitions": {
+    modelName: "MeasurementDefinitions",
+    primaryKey: "idMeasurementDefinition",
+    defaultOrder: [["sortOrder", "ASC"], ["label", "ASC"]],
+    editableFields: ["label"],
+  },
   "payment-types": {
     modelName: "PaymentTypes",
     primaryKey: "idPaymentType",

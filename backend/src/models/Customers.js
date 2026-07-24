@@ -88,6 +88,9 @@ const CustomersSchema = (sequelize, DataTypes) => {
     Customers.hasMany(models.CustomerMeasurements, {
       foreignKey: "customerId",
     });
+    Customers.hasMany(models.CustomerMeasurementValues, {
+      foreignKey: "customerId",
+    });
     Customers.hasMany(models.Receivables, {
       foreignKey: "customerId",
     });

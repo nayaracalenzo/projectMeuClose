@@ -2,11 +2,11 @@ require('dotenv').config();
 const { ProductsTypes } = require('../models');
 
 const productsTypesList = [
-  { id: 1, desc: 'roupa pronta' },
-  { id: 2, desc: 'roupa revenda' },
-  { id: 3, desc: 'produto' },
-  { id: 4, desc: 'roupa sob medida' },
-  { id: 5, desc: 'servico' },
+  { id: 1, desc: 'Roupa Pronta' },
+  { id: 2, desc: 'Roupa Revenda' },
+  { id: 3, desc: 'Produto' },
+  { id: 4, desc: 'Roupa Sob Medida' },
+  { id: 5, desc: 'Serviço' },
 ];
 
 async function importProductsTypes() {

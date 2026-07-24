@@ -23,32 +23,17 @@ interface SeamstressOption {
   shortName: string;
 }
 
-interface Measurements {
-  costas: string;
-  comprimentoSaia: string;
-  comprimentoBlusa: string;
-  comprimentoCalca: string;
-  comprimentoManga: string;
-  comprimentoVestido: string;
-  comprimentoBermuda: string;
-  cos: string;
-  colete: string;
-  perna: string;
-  braco: string;
-  alturaBusto: string;
-  busto: string;
-  cintura: string;
-  coice: string;
-  cinturaBaixa: string;
-  quadril: string;
-  gancho: string;
-}
+export type MeasurementOption = {
+  idMeasurementDefinition: number;
+  value: string;
+  label: string;
+};
 
-export type CustomMadeMeasurements = Measurements;
+export type CustomMadeMeasurements = Record<string, string>;
 
-export type MeasurementField = keyof Measurements;
+export type MeasurementField = string;
 
-const measurementOptions: Array<{ value: MeasurementField; label: string }> = [
+const fallbackMeasurementOptions = [
   { value: "busto", label: "Busto" },
   { value: "alturaBusto", label: "Altura do busto" },
   { value: "braco", label: "Braço" },
@@ -74,7 +59,7 @@ interface CustomMadeProduct {
   type: string;
   fabric: string;
   color: string;
-  measurements: Measurements;
+  measurements: CustomMadeMeasurements;
   selectedMeasurements: MeasurementField[];
   description: string;
   price: string;
@@ -119,26 +104,7 @@ interface CustomMadeClothingProps {
   onProductsChange?: (items: CustomMadeProductDraft[]) => void;
 }
 
-const emptyMeasurements = (): Measurements => ({
-  costas: "",
-  comprimentoSaia: "",
-  comprimentoBlusa: "",
-  comprimentoCalca: "",
-  comprimentoManga: "",
-  comprimentoVestido: "",
-  comprimentoBermuda: "",
-  cos: "",
-  colete: "",
-  perna: "",
-  braco: "",
-  alturaBusto: "",
-  busto: "",
-  cintura: "",
-  coice: "",
-  cinturaBaixa: "",
-  quadril: "",
-  gancho: "",
-});
+const emptyMeasurements = (): CustomMadeMeasurements => ({});
 
 function normalizeAdminOptions(data: unknown) {
   if (!Array.isArray(data)) return [];
@@ -147,6 +113,42 @@ function normalizeAdminOptions(data: unknown) {
     .map((item) => String((item as AdminOption)?.desc || "").trim())
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right, "pt-BR"));
+}
+
+function normalizeMeasurementOptions(data: unknown): MeasurementOption[] {
+  if (!Array.isArray(data)) return [];
+
+  return data
+    .map((item) => {
+      const record = item as {
+        idMeasurementDefinition?: number;
+        key?: string | null;
+        label?: string | null;
+      };
+
+      const key = String(record.key || "").trim();
+      const label = String(record.label || "").trim();
+      const idMeasurementDefinition = Number(record.idMeasurementDefinition || 0);
+
+      if (!key || !label || !idMeasurementDefinition) {
+        return null;
+      }
+
+      return {
+        idMeasurementDefinition,
+        value: key,
+        label,
+      };
+    })
+    .filter((item): item is MeasurementOption => Boolean(item));
+}
+
+function buildFallbackMeasurementOptions(): MeasurementOption[] {
+  return fallbackMeasurementOptions.map((item, index) => ({
+    idMeasurementDefinition: index + 1,
+    value: item.value,
+    label: item.label,
+  }));
 }
 
 function buildCustomMadeDescription(product: {
@@ -167,6 +169,9 @@ export default function CustomMadeClothing({
   onProductsChange,
 }: CustomMadeClothingProps) {
   const [seamstresses, setSeamstresses] = useState<SeamstressOption[]>([]);
+  const [measurementOptions, setMeasurementOptions] = useState<MeasurementOption[]>(
+    buildFallbackMeasurementOptions(),
+  );
   const [clothingTypes, setClothingTypes] = useState<string[]>([]);
   const [fabrics, setFabrics] = useState<string[]>([]);
   const [colors, setColors] = useState<string[]>([]);
@@ -254,11 +259,18 @@ export default function CustomMadeClothing({
   useEffect(() => {
     const fetchReferenceData = async () => {
       try {
-        const [employeesData, clothingTypesData, fabricsData, colorsData] = await Promise.all([
+        const [
+          employeesData,
+          clothingTypesData,
+          fabricsData,
+          colorsData,
+          measurementDefinitionsData,
+        ] = await Promise.all([
           getRequest("/admin/employees"),
           getRequest("/admin/clothings-types"),
           getRequest("/admin/fabrics"),
           getRequest("/admin/colors"),
+          getRequest("/admin/measurement-definitions"),
         ]);
 
         const parsedSeamstresses = employeesData
@@ -285,6 +297,11 @@ export default function CustomMadeClothing({
         setClothingTypes(normalizeAdminOptions(clothingTypesData));
         setFabrics(normalizeAdminOptions(fabricsData));
         setColors(normalizeAdminOptions(colorsData));
+        setMeasurementOptions(
+          normalizeMeasurementOptions(measurementDefinitionsData).length
+            ? normalizeMeasurementOptions(measurementDefinitionsData)
+            : buildFallbackMeasurementOptions(),
+        );
       } catch (error) {
         console.error("Erro ao buscar dados de referência da roupa sob medida", error);
       }

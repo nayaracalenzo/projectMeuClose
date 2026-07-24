@@ -49,7 +49,6 @@ async function login({ username, password }) {
       username: user.username,
     },
     process.env.JWT_SECRET,
-    { expiresIn: "1d" },
   );
 
   return {

@@ -21,6 +21,8 @@ type AdminResourceKey =
   | "clothings-types"
   | "fabrics"
   | "financial-categories"
+  | "financial-accounts"
+  | "measurement-definitions"
   | "payment-types"
   | "audits";
 
@@ -53,6 +55,8 @@ type ResourceConfig = {
   primaryKey: string;
   isSoftDelete?: boolean;
   readOnly?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 };
 
 const resourceConfigList: ResourceConfig[] = [
@@ -137,6 +141,24 @@ const resourceConfigList: ResourceConfig[] = [
     isSoftDelete: true,
   },
   {
+    key: "financial-accounts",
+    title: "Contas",
+    endpoint: "/admin/financial-accounts",
+    emptyLabel: "Nenhuma conta cadastrada.",
+    deleteLabel: "Desativar",
+    primaryKey: "idFinancialAccount",
+    isSoftDelete: true,
+  },
+  {
+    key: "measurement-definitions",
+    title: "Medidas",
+    endpoint: "/admin/measurement-definitions",
+    emptyLabel: "Nenhuma medida cadastrada.",
+    deleteLabel: "",
+    primaryKey: "idMeasurementDefinition",
+    canDelete: false,
+  },
+  {
     key: "payment-types",
     title: "Formas de Pagamento",
     endpoint: "/admin/payment-types",
@@ -182,6 +204,9 @@ const employeeInitialForm = {
 const simpleInitialForm = {
   desc: "",
   description: "",
+  label: "",
+  scope: "LOJA",
+  targetType: "BANK",
   active: true,
 };
 
@@ -262,6 +287,8 @@ export default function AdminPage() {
     "clothings-types": [],
     fabrics: [],
     "financial-categories": [],
+    "financial-accounts": [],
+    "measurement-definitions": [],
     "payment-types": [],
     audits: [],
   });
@@ -489,6 +516,9 @@ export default function AdminPage() {
     setSimpleForm({
       desc: String(row.desc ?? ""),
       description: String(row.description ?? ""),
+      label: String(row.label ?? ""),
+      scope: String(row.scope ?? "LOJA"),
+      targetType: String(row.targetType ?? "BANK"),
       active: row.active === undefined ? true : Boolean(row.active),
     });
   }
@@ -561,6 +591,17 @@ export default function AdminPage() {
               ? {
                   description: simpleForm.description,
                 }
+              : selectedResource === "financial-accounts"
+                ? {
+                    desc: simpleForm.desc,
+                    scope: simpleForm.scope,
+                    targetType: simpleForm.targetType,
+                    active: simpleForm.active,
+                  }
+              : selectedResource === "measurement-definitions"
+                ? {
+                    label: simpleForm.label,
+                  }
               : {
                   desc: simpleForm.desc,
                 };
@@ -690,20 +731,24 @@ export default function AdminPage() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => startEdit(row)}
-                    >
-                      <Pencil size={14} />
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDelete(row)}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    {currentConfig.canEdit === false ? null : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => startEdit(row)}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                    )}
+                    {currentConfig.canDelete === false ? null : (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDelete(row)}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -748,20 +793,24 @@ function renderPaymentTypesTable() {
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex justify-end gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => startEdit(row)}
-                    >
-                      <Pencil size={14} />
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDelete(row)}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    {currentConfig.canEdit === false ? null : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => startEdit(row)}
+                      >
+                        <Pencil size={14} />
+                      </Button>
+                    )}
+                    {currentConfig.canDelete === false ? null : (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDelete(row)}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -853,7 +902,11 @@ function renderPaymentTypesTable() {
   function renderSimpleTable() {
     const showStatusColumn = selectedResource === "roles";
     const descriptionField =
-      selectedResource === "financial-categories" ? "description" : "desc";
+      selectedResource === "financial-categories"
+        ? "description"
+        : selectedResource === "measurement-definitions"
+          ? "label"
+          : "desc";
 
     return (
       <div className="hidden overflow-x-auto lg:block">
@@ -1110,6 +1163,12 @@ function renderPaymentTypesTable() {
                   Motivo: {String(row.reason ?? "-")}
                 </p>
               </>
+            ) : selectedResource === "measurement-definitions" ? (
+              <>
+                <p className="text-base font-semibold text-primary">
+                  {String(row.label ?? "")}
+                </p>
+              </>
             ) : (
               <>
                 <p className="text-base font-semibold text-primary">
@@ -1126,20 +1185,24 @@ function renderPaymentTypesTable() {
             )}
             {currentConfig.readOnly ? null : (
               <div className="mt-3 flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => startEdit(row)}
-                >
-                  Editar
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => handleDelete(row)}
-                >
-                  {currentConfig.deleteLabel}
-                </Button>
+                {currentConfig.canEdit === false ? null : (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => startEdit(row)}
+                  >
+                    Editar
+                  </Button>
+                )}
+                {currentConfig.canDelete === false ? null : (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleDelete(row)}
+                  >
+                    {currentConfig.deleteLabel}
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -1325,12 +1388,6 @@ function renderPaymentTypesTable() {
         }
       >
         <div className="mx-auto max-w-3xl">
-          <div className="mb-4 flex items-center gap-2">
-            <Plus size={18} className="text-primary" />
-            <h3 className="text-2xl font-semibold text-primary">
-              {editingId ? "Editar registro" : "Novo registro"}
-            </h3>
-          </div>
 
           {error ? (
             <div className="mb-4 flex items-start gap-2 bg-[#ffe7e7] px-3 py-2 text-sm text-[#8f1515]">
@@ -1824,6 +1881,50 @@ function renderPaymentTypesTable() {
                   Cargo ativo
                 </label>
               </>
+            ) : selectedResource === "financial-accounts" ? (
+              <>
+                <input
+                  value={simpleForm.desc}
+                  onChange={(e) =>
+                    setSimpleForm((prev) => ({ ...prev, desc: e.target.value }))
+                  }
+                  placeholder="Descrição da conta"
+                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  required
+                />
+                <div className="grid gap-3 md:grid-cols-2">
+                  <select
+                    value={simpleForm.scope}
+                    onChange={(e) =>
+                      setSimpleForm((prev) => ({ ...prev, scope: e.target.value }))
+                    }
+                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  >
+                    <option value="LOJA">Loja</option>
+                    <option value="PESSOAL">Pessoal</option>
+                  </select>
+                  <select
+                    value={simpleForm.targetType}
+                    onChange={(e) =>
+                      setSimpleForm((prev) => ({ ...prev, targetType: e.target.value }))
+                    }
+                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  >
+                    <option value="BANK">Banco</option>
+                    <option value="CASH">Caixa</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 text-sm text-primary">
+                  <input
+                    type="checkbox"
+                    checked={simpleForm.active}
+                    onChange={(e) =>
+                      setSimpleForm((prev) => ({ ...prev, active: e.target.checked }))
+                    }
+                  />
+                  Conta ativa
+                </label>
+              </>
             ) : selectedResource === "financial-categories" ? (
               <input
                 value={simpleForm.description}
@@ -1834,6 +1935,19 @@ function renderPaymentTypesTable() {
                   }))
                 }
                 placeholder="DescriÃ§Ã£o"
+                className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                required
+              />
+            ) : selectedResource === "measurement-definitions" ? (
+              <input
+                value={simpleForm.label}
+                onChange={(e) =>
+                  setSimpleForm((prev) => ({
+                    ...prev,
+                    label: e.target.value,
+                  }))
+                }
+                placeholder="Nome da medida"
                 className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
                 required
               />

@@ -29,11 +29,19 @@ const SaleBudgetPaymentDraftsSchema = (sequelize, DataTypes) => {
         type: DataTypes.DATE,
         allowNull: true,
       },
+      receiptFinancialAccountId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
       entryAmount: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
       },
       entryPaymentTypeId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      entryFinancialAccountId: {
         type: DataTypes.INTEGER,
         allowNull: true,
       },
@@ -72,6 +80,14 @@ const SaleBudgetPaymentDraftsSchema = (sequelize, DataTypes) => {
     SaleBudgetPaymentDrafts.belongsTo(models.PaymentTypes, {
       foreignKey: "entryPaymentTypeId",
       as: "EntryPaymentType",
+    });
+    SaleBudgetPaymentDrafts.belongsTo(models.FinancialAccounts, {
+      foreignKey: "receiptFinancialAccountId",
+      as: "ReceiptFinancialAccount",
+    });
+    SaleBudgetPaymentDrafts.belongsTo(models.FinancialAccounts, {
+      foreignKey: "entryFinancialAccountId",
+      as: "EntryFinancialAccount",
     });
   };
 

@@ -1,6 +1,7 @@
 const { notFoundError, validationError } = require("../errors/AppError");
 const repository = require("../repositories/adminRepository");
 const { getAdminResourceConfig } = require("../utils/adminResourceConfig");
+const { generateMeasurementKey } = require("../utils/measurementDefinitions");
 
 function createAdminResourceError(message, statusCode = 400) {
   return validationError(message, {
@@ -87,6 +88,9 @@ function sanitizePayload(resource, body = {}) {
         payload[field] = normalizeText(body[field])?.toLowerCase() || null;
         break;
       case "description":
+      case "label":
+      case "scope":
+      case "targetType":
         payload[field] = normalizeText(body[field]);
         break;
       case "birthDate":
@@ -129,6 +133,37 @@ function validatePayload(resource, payload, isCreate) {
     if (!isCreate && "description" in payload && !payload.description) {
       throw createAdminResourceError("Descricao e obrigatoria.");
     }
+    return;
+  }
+
+  if (resource === "measurement-definitions") {
+    if (isCreate && !payload.label) {
+      throw createAdminResourceError("Nome da medida e obrigatorio.");
+    }
+    if (!isCreate && "label" in payload && !payload.label) {
+      throw createAdminResourceError("Nome da medida e obrigatorio.");
+    }
+    return;
+  }
+
+  if (resource === "financial-accounts") {
+    if (isCreate && !payload.desc) {
+      throw createAdminResourceError("Descricao e obrigatoria.");
+    }
+    if (!isCreate && "desc" in payload && !payload.desc) {
+      throw createAdminResourceError("Descricao e obrigatoria.");
+    }
+
+    if (!["LOJA", "PESSOAL"].includes(String(payload.scope || "").toUpperCase())) {
+      throw createAdminResourceError("Escopo invalido.");
+    }
+
+    if (!["CASH", "BANK"].includes(String(payload.targetType || "").toUpperCase())) {
+      throw createAdminResourceError("Tipo de conta invalido.");
+    }
+
+    payload.scope = String(payload.scope).toUpperCase();
+    payload.targetType = String(payload.targetType).toUpperCase();
     return;
   }
 
@@ -198,6 +233,23 @@ async function createResource(resource, body) {
 
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, true);
+
+  if (resource === "measurement-definitions") {
+    const generatedKey = generateMeasurementKey(payload.label);
+
+    if (!generatedKey) {
+      throw createAdminResourceError("Nao foi possivel gerar a chave da medida.");
+    }
+
+    const existingDefinition = await repository.findMeasurementDefinitionByKey(generatedKey);
+    if (existingDefinition) {
+      throw createAdminResourceError("Ja existe uma medida cadastrada com esse nome.");
+    }
+
+    payload.key = generatedKey;
+    payload.active = true;
+    payload.sortOrder = await repository.getNextMeasurementDefinitionSortOrder();
+  }
 
   if (resource === "employees" && payload.document) {
     const existingEmployee = await repository.findEmployeeByDocument(payload.document);
@@ -277,6 +329,16 @@ async function updateResource(resource, id, body) {
   const payload = sanitizePayload(resource, body);
   validatePayload(resource, payload, false);
 
+  if (
+    resource === "financial-accounts" &&
+    payload.active === false &&
+    (await repository.isFinancialAccountInUse(id))
+  ) {
+    throw createAdminResourceError(
+      "Esta conta ja possui historico vinculado e nao pode ser desativada.",
+    );
+  }
+
   if (resource === "employees" && payload.document) {
     const existingEmployee = await repository.findEmployeeByDocument(payload.document, {
       excludeId: id,
@@ -322,6 +384,16 @@ async function deleteResource(resource, id) {
   const config = getAdminResourceConfig(resource);
   if (config?.readOnly) {
     throw createAdminResourceError("Recurso administrativo somente leitura.");
+  }
+
+  if (resource === "measurement-definitions") {
+    throw createAdminResourceError("Medidas nao permitem exclusao.");
+  }
+
+  if (resource === "financial-accounts" && (await repository.isFinancialAccountInUse(id))) {
+    throw createAdminResourceError(
+      "Esta conta ja possui historico vinculado e nao pode ser desativada.",
+    );
   }
 
   const removed = await repository.deleteResource(resource, id);

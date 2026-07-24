@@ -1,12 +1,14 @@
 const {
   CardTransactions,
-  CustomerMeasurements,
+  CustomerMeasurementValues,
   Customers,
   CustomerCredits,
   CustomerCreditUsages,
   Employees,
+  MeasurementDefinitions,
   PaymentReceipts,
   PaymentTypes,
+  FinancialAccounts,
   Products,
   ReceivableInstallments,
   Receivables,
@@ -57,6 +59,18 @@ function buildSaleBudgetPaymentDraftInclude() {
         model: PaymentTypes,
         as: "EntryPaymentType",
         attributes: ["idPaymentType", "desc"],
+        required: false,
+      },
+      {
+        model: FinancialAccounts,
+        as: "ReceiptFinancialAccount",
+        attributes: ["idFinancialAccount", "desc", "scope", "targetType"],
+        required: false,
+      },
+      {
+        model: FinancialAccounts,
+        as: "EntryFinancialAccount",
+        attributes: ["idFinancialAccount", "desc", "scope", "targetType"],
         required: false,
       },
     ],
@@ -181,7 +195,7 @@ async function createSale({
     let createdBudgetPaymentDraft = null;
 
     if (customerMeasurements.length) {
-      createdMeasurements = await CustomerMeasurements.bulkCreate(
+      createdMeasurements = await CustomerMeasurementValues.bulkCreate(
         customerMeasurements.map((measurement) => ({
           ...measurement,
           customerId: createdSale.customerId,
@@ -405,7 +419,7 @@ async function updateQuote(
       transaction,
     });
 
-    await CustomerMeasurements.destroy({
+    await CustomerMeasurementValues.destroy({
       where: { saleId: existingSale.idSale },
       transaction,
     });
@@ -422,7 +436,7 @@ async function updateQuote(
     let createdMeasurements = [];
 
     if (customerMeasurements.length) {
-      createdMeasurements = await CustomerMeasurements.bulkCreate(
+      createdMeasurements = await CustomerMeasurementValues.bulkCreate(
         customerMeasurements.map((measurement) => ({
           ...measurement,
           customerId: existingSale.customerId,
@@ -476,7 +490,7 @@ async function deleteQuote(idSale) {
       return null;
     }
 
-    await CustomerMeasurements.destroy({
+    await CustomerMeasurementValues.destroy({
       where: { saleId: existingSale.idSale },
       transaction,
     });
@@ -1039,7 +1053,14 @@ async function getSaleById(idSale) {
       model: CardTransactions,
     },
     {
-      model: CustomerMeasurements,
+      model: CustomerMeasurementValues,
+      include: [
+        {
+          model: MeasurementDefinitions,
+          attributes: ["idMeasurementDefinition", "key", "label", "active", "sortOrder"],
+          required: false,
+        },
+      ],
     },
   ];
 
@@ -1059,7 +1080,7 @@ async function getSaleById(idSale) {
       [SaleItems, "idSaleItem", "ASC"],
       [PaymentReceipts, "paidAt", "ASC"],
       [Receivables, ReceivableInstallments, "installmentNumber", "ASC"],
-      [CustomerMeasurements, "idMeasurement", "ASC"],
+      [CustomerMeasurementValues, "idCustomerMeasurementValue", "ASC"],
     ],
   });
 }
@@ -1120,6 +1141,16 @@ async function listSales({ page = 1, pageSize = 10, status, search, customerId }
   });
 }
 
+async function listMeasurementDefinitions() {
+  return MeasurementDefinitions.findAll({
+    where: {
+      active: true,
+    },
+    attributes: ["idMeasurementDefinition", "key", "label", "sortOrder"],
+    order: [["sortOrder", "ASC"], ["label", "ASC"]],
+  });
+}
+
 module.exports = {
   createSale,
   cancelSale,
@@ -1131,6 +1162,7 @@ module.exports = {
   getSaleForFinalization,
   getOrCreateCancelledStatus,
   listSales,
+  listMeasurementDefinitions,
   updateReceivable,
   updateReceivableInstallment,
   updateProductStatusByIds,

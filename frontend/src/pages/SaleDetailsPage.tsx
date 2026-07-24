@@ -79,6 +79,9 @@ type PaymentTypeOption = {
 type SaleDetailsResponse = {
   id: number;
   status: string;
+  doesNotGenerateDebt: boolean;
+  internalReason: string | null;
+  debtExemptionLabel: string | null;
   customer: {
     id: number;
     name: string;
@@ -675,6 +678,17 @@ export default function SaleDetailsPage() {
           </div>
         ) : null}
 
+        {sale.doesNotGenerateDebt ? (
+          <div className="mb-4 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-3 text-sm text-primary">
+            <p className="font-semibold">{sale.debtExemptionLabel || "Esta venda não gera débitos"}</p>
+            {sale.internalReason ? (
+              <p className="mt-1 text-neutral-700">
+                Motivo interno: {sale.internalReason}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
         {error ? (
           <div className="mb-4 rounded-xl border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
             {error}
@@ -706,11 +720,11 @@ export default function SaleDetailsPage() {
             />
             <InfoCard
               label="Saldo em aberto"
-              value={formatCurrency(sale.receivable?.openAmount || 0)}
+              value={formatCurrency(sale.doesNotGenerateDebt ? 0 : sale.receivable?.openAmount || 0)}
             />
             <InfoCard
               label="Parcelas previstas"
-              value={String(sale.installmentCount || 1)}
+              value={String(sale.doesNotGenerateDebt ? 0 : sale.installmentCount || 1)}
             />
             <InfoCard
               label="Criada em"
@@ -944,7 +958,9 @@ export default function SaleDetailsPage() {
 
             {!sale.receivable ? (
               <div className="mt-5 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
-                Esta venda nao gerou contas a receber.
+                {sale.doesNotGenerateDebt
+                  ? sale.debtExemptionLabel || "Esta venda não gera débitos."
+                  : "Esta venda nao gerou contas a receber."}
               </div>
             ) : (
               <>

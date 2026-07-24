@@ -10,6 +10,7 @@ type SaleRow = {
   data: string;
   cliente: string;
   formaPagto: string;
+  observacao: string;
   valorVista: string;
   valorPrazo: string;
   totalVenda: string;
@@ -21,6 +22,8 @@ type SalesApiRow = {
   id: number;
   customerName: string;
   paymentTypeName: string | null;
+  doesNotGenerateDebt: boolean;
+  debtExemptionLabel: string | null;
   finalAmount: number;
   createdAt: string;
   firstItemDescription: string | null;
@@ -69,7 +72,11 @@ function CustomerSalesModalComponent({ open, clientId, clientName, onClose }: Pr
               cod: `#${item.id}`,
               data: formatDate(item.createdAt),
               cliente: item.customerName || "-",
-              formaPagto: item.paymentTypeName || "-",
+              formaPagto: item.doesNotGenerateDebt
+                ? "Permuta"
+                : item.paymentTypeName || "-",
+              observacao:
+                item.debtExemptionLabel || (item.doesNotGenerateDebt ? "Esta venda não gera débitos" : "-"),
               valorVista: "-",
               valorPrazo: "-",
                 totalVenda: formatCurrency(Number(item.finalAmount || 0)),
@@ -111,6 +118,7 @@ function CustomerSalesModalComponent({ open, clientId, clientName, onClose }: Pr
           { key: "data", label: "Data" },
           { key: "cliente", label: "Cliente" },
           { key: "formaPagto", label: "Forma pagto" },
+          { key: "observacao", label: "Observação" },
           { key: "valorVista", label: "Valor a vista", align: "right" },
           { key: "valorPrazo", label: "Valor a prazo", align: "right" },
           { key: "totalVenda", label: "Total venda", align: "right" },

@@ -31,7 +31,8 @@ module.exports = {
   },
 
   production: {
-    ...common,
+    use_env_variable: "DATABASE_URL_PRODUCTION",
+    dialect: "postgres",
     dialectOptions: {
       ssl: {
         require: true,

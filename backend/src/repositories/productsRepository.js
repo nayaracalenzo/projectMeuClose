@@ -1,11 +1,12 @@
 const {
   Categories,
   Customers,
-  CustomerMeasurements,
+  CustomerMeasurementValues,
   ClothingsType,
   Colors,
   Employees,
   Fabrics,
+  MeasurementDefinitions,
   Products,
   ProductsTypes,
   SaleItems,
@@ -94,29 +95,16 @@ function getProductInclude() {
           required: false,
           include: [
             {
-              model: CustomerMeasurements,
-              attributes: [
-                "idMeasurement",
-                "costas",
-                "comprimentoSaia",
-                "comprimentoBlusa",
-                "comprimentoCalca",
-                "comprimentoManga",
-                "comprimentoVestido",
-                "comprimentoBermuda",
-                "cos",
-                "colete",
-                "perna",
-                "braco",
-                "alturaBusto",
-                "busto",
-                "cintura",
-                "coice",
-                "cinturaBaixa",
-                "quadril",
-                "gancho",
-              ],
+              model: CustomerMeasurementValues,
+              attributes: ["idCustomerMeasurementValue", "value"],
               required: false,
+              include: [
+                {
+                  model: MeasurementDefinitions,
+                  attributes: ["idMeasurementDefinition", "key", "label", "sortOrder"],
+                  required: false,
+                },
+              ],
             },
           ],
         },
@@ -171,10 +159,10 @@ function mapCustomMadeStatus(status) {
 }
 
 function mapProductType(itemType) {
-  if (itemType === "CUSTOM_MADE") return "roupa sob medida";
-  if (itemType === "READY_MADE") return "roupa pronta";
-  if (itemType === "SERVICE") return "servico";
-  if (itemType === "ACCESSORY" || itemType === "MISC") return "produto";
+  if (itemType === "CUSTOM_MADE") return "Roupa Sob Medida";
+  if (itemType === "READY_MADE") return "Roupa Pronta";
+  if (itemType === "SERVICE") return "Serviço";
+  if (itemType === "ACCESSORY" || itemType === "MISC") return "Produto";
   return null;
 }
 
@@ -405,11 +393,44 @@ async function updateProductById(id, payload) {
   return getProductById(id);
 }
 
+async function listMeasurementValuesBySaleIds(saleIds = []) {
+  const normalizedSaleIds = Array.from(
+    new Set(
+      saleIds
+        .map((item) => Number(item))
+        .filter((item) => Number.isInteger(item) && item > 0),
+    ),
+  );
+
+  if (!normalizedSaleIds.length) {
+    return [];
+  }
+
+  return CustomerMeasurementValues.findAll({
+    where: {
+      saleId: normalizedSaleIds,
+    },
+    include: [
+      {
+        model: MeasurementDefinitions,
+        attributes: ["idMeasurementDefinition", "key", "label", "sortOrder"],
+        required: false,
+      },
+    ],
+    order: [
+      ["saleId", "ASC"],
+      [MeasurementDefinitions, "sortOrder", "ASC"],
+      ["idCustomerMeasurementValue", "ASC"],
+    ],
+  });
+}
+
 module.exports = {
   createProductsFromSale,
   getProductById,
   getProductUpdateDependencies,
   listProducts,
+  listMeasurementValuesBySaleIds,
   listProductStatuses,
   syncProductsSequence,
   updateProductById,
