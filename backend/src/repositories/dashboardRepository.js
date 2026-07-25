@@ -133,8 +133,7 @@ async function summarizeMonthlyReceivables() {
       INNER JOIN "receivables" r
         ON r."idReceivable" = ri."receivableId"
       WHERE
-        ri."dueDate" >= :startDate
-        AND ri."dueDate" <= :endDate
+        ri."dueDate" <= :endDate
         AND ri."status" != 'CANCELLED'
         AND r."status" != 'CANCELLED';
     `,
