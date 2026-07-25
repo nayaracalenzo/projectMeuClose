@@ -250,7 +250,7 @@ export default function OrderDetails() {
         colorId: product.colorId,
         fabricId: product.fabricId,
         sizeId: product.sizeId,
-        qtyStock: product.qtyStock,
+        qtyStock: product.saleItemQuantity || product.qtyStock || 1,
         finalValue: product.finalValue,
         dressmakerValue: product.dressmakerValue,
         ...form,
