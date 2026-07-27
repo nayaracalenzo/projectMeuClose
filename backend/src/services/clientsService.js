@@ -240,7 +240,7 @@ async function updateClientById(id, body) {
   try {
     updated = await repository.updateClientById(id, payload);
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
+    if (payload.document && isUniqueConstraintError(error)) {
       throw validationError("CPF/CNPJ ja cadastrado.", {
         name: "ClientValidationError",
         code: "CLIENT_VALIDATION_ERROR",
@@ -257,7 +257,9 @@ async function updateClientById(id, body) {
 
 async function createClient(body) {
   const payload = buildClientPayload(body, { isCreate: true });
-  const existingClient = await repository.findClientByDocument(payload.document);
+  const existingClient = payload.document
+    ? await repository.findClientByDocument(payload.document)
+    : null;
 
   if (existingClient && existingClient.blocked !== true) {
     throw validationError("CPF/CNPJ ja cadastrado.", {
@@ -284,7 +286,7 @@ async function createClient(body) {
     const created = await repository.createClient(payload);
     return getClientById(created.idCustomer);
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
+    if (payload.document && isUniqueConstraintError(error)) {
       throw validationError("CPF/CNPJ ja cadastrado.", {
         name: "ClientValidationError",
         code: "CLIENT_VALIDATION_ERROR",
