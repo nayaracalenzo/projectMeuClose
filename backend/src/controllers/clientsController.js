@@ -60,12 +60,12 @@ async function updateClientById(req, res, next) {
 }
 
 async function createClient(req, res, next) {
-  try {
+  // try {
     const created = await service.createClient(req.body);
     return res.status(201).json(created);
-  } catch (error) {
-    return next(error);
-  }
+  // } catch (error) {
+  //   return next(error);
+  // }
 }
 
 async function getClientCreditsController(req, res, next) {
