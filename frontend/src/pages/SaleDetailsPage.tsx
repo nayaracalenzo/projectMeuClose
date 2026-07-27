@@ -41,6 +41,7 @@ type SaleReceipt = {
   amount: number;
   paidAt: string;
   referenceCode: string | null;
+  accountLabel: string | null;
   paymentType: {
     id: number;
     name: string;
@@ -680,7 +681,9 @@ export default function SaleDetailsPage() {
 
         {sale.doesNotGenerateDebt ? (
           <div className="mb-4 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-3 text-sm text-primary">
-            <p className="font-semibold">{sale.debtExemptionLabel || "Esta venda não gera débitos"}</p>
+            <p className="font-semibold">
+              {sale.debtExemptionLabel || "Esta venda não gera débitos"}
+            </p>
             {sale.internalReason ? (
               <p className="mt-1 text-neutral-700">
                 Motivo interno: {sale.internalReason}
@@ -720,11 +723,15 @@ export default function SaleDetailsPage() {
             />
             <InfoCard
               label="Saldo em aberto"
-              value={formatCurrency(sale.doesNotGenerateDebt ? 0 : sale.receivable?.openAmount || 0)}
+              value={formatCurrency(
+                sale.doesNotGenerateDebt ? 0 : sale.receivable?.openAmount || 0,
+              )}
             />
             <InfoCard
               label="Parcelas previstas"
-              value={String(sale.doesNotGenerateDebt ? 0 : sale.installmentCount || 1)}
+              value={String(
+                sale.doesNotGenerateDebt ? 0 : sale.installmentCount || 1,
+              )}
             />
             <InfoCard
               label="Criada em"
@@ -748,7 +755,7 @@ export default function SaleDetailsPage() {
 
           <div className="mt-5 overflow-x-auto">
             <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-              <thead>
+              <thead className="bg-[#dbd1d1] rounded-t-md">
                 <tr className="text-left">
                   <th className="px-4 py-2 font-semibold text-primary">
                     Descricao
@@ -918,6 +925,7 @@ export default function SaleDetailsPage() {
                     </div>
                     <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                       <p>Data: {formatDateTime(receipt.paidAt)}</p>
+                      <p>Recebido em: {receipt.accountLabel || "-"}</p>
                       <p>Referencia: {receipt.referenceCode || "-"}</p>
                     </div>
                   </div>

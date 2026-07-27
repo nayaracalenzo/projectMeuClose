@@ -52,6 +52,14 @@ interface PaymentTypeOption {
   name: string;
 }
 
+interface FinancialAccountOption {
+  id: number;
+  label: string;
+  value: string;
+  scope: "LOJA" | "PESSOAL";
+  targetType: "CASH" | "BANK";
+}
+
 interface CustomerOption {
   id: number;
   name: string;
@@ -99,6 +107,9 @@ const formatDate = (value?: string | null) => {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 };
 
+const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
+  `${account.label} - ${account.scope === "LOJA" ? "Loja" : "Pessoal"} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
+
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
 
 const getReceivableOriginName = (row: ReceivableRow) =>
@@ -140,6 +151,9 @@ export default function ReceivablesPage() {
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<ReceivableRow[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
+  const [financialAccounts, setFinancialAccounts] = useState<
+    FinancialAccountOption[]
+  >([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
@@ -165,6 +179,8 @@ export default function ReceivablesPage() {
     toIsoDate(new Date()),
   );
   const [receiptReferenceCode, setReceiptReferenceCode] = useState("");
+  const [receiptFinancialAccountId, setReceiptFinancialAccountId] =
+    useState("");
   const [discardInterest, setDiscardInterest] = useState(false);
   const [receiptConfirmOpen, setReceiptConfirmOpen] = useState(false);
   const [reverseReceiptModalOpen, setReverseReceiptModalOpen] = useState(false);
@@ -262,6 +278,22 @@ export default function ReceivablesPage() {
     };
 
     fetchCustomers();
+  }, []);
+
+  useEffect(() => {
+    const fetchFinancialAccounts = async () => {
+      try {
+        const data = (await getRequest(
+          "/financial-accounts/options",
+        )) as FinancialAccountOption[];
+        setFinancialAccounts(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Erro ao buscar contas financeiras", error);
+        setFinancialAccounts([]);
+      }
+    };
+
+    fetchFinancialAccounts();
   }, []);
 
   useEffect(() => {
@@ -458,6 +490,7 @@ export default function ReceivablesPage() {
     setDiscardInterest(false);
     setReceiptAmount("");
     setReceiptReferenceCode("");
+    setReceiptFinancialAccountId("");
     setReceiptConfirmOpen(false);
     setQuitModalOpen(true);
   };
@@ -497,6 +530,7 @@ export default function ReceivablesPage() {
     setReceiptPaymentTypeId("");
     setReceiptAmount("");
     setReceiptReferenceCode("");
+    setReceiptFinancialAccountId("");
     setDiscardInterest(false);
   };
 
@@ -542,6 +576,11 @@ export default function ReceivablesPage() {
       return;
     }
 
+    if (!receiptFinancialAccountId) {
+      setMessage("Selecione onde o valor foi recebido.");
+      return;
+    }
+
     setReceiptConfirmOpen(true);
   };
 
@@ -551,6 +590,7 @@ export default function ReceivablesPage() {
     try {
       await postRequest(`/receivables/${selectedRow.id}/receipts`, {
         paymentTypeId: Number(receiptPaymentTypeId),
+        financialAccountId: Number(receiptFinancialAccountId),
         amount: settledAmount,
         paidAt: receiptPaidAt,
         referenceCode: receiptReferenceCode || null,
@@ -719,7 +759,9 @@ export default function ReceivablesPage() {
         <div className="mb-2 flex justify-end">
           <button
             type="button"
-            aria-label={showSummaryValues ? "Ocultar valores" : "Mostrar valores"}
+            aria-label={
+              showSummaryValues ? "Ocultar valores" : "Mostrar valores"
+            }
             onClick={() => setShowSummaryValues((current) => !current)}
             className="text-neutral-600 transition hover:text-primary"
           >
@@ -728,15 +770,21 @@ export default function ReceivablesPage() {
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="bg-surface-lowest p-4">
-            <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
+            <p className="text-xs uppercase text-neutral-700">
+              Saldo em aberto
+            </p>
             <p className="text-lg font-semibold text-primary">
-              {showSummaryValues ? formatCurrency(summary.totalOpen) : HIDDEN_VALUE}
+              {showSummaryValues
+                ? formatCurrency(summary.totalOpen)
+                : HIDDEN_VALUE}
             </p>
           </div>
           <div className="bg-surface-lowest p-4">
             <p className="text-xs uppercase text-neutral-700">Recebido</p>
             <p className="text-lg font-semibold text-primary">
-              {showSummaryValues ? formatCurrency(summary.totalReceived) : HIDDEN_VALUE}
+              {showSummaryValues
+                ? formatCurrency(summary.totalReceived)
+                : HIDDEN_VALUE}
             </p>
           </div>
         </div>
@@ -797,31 +845,31 @@ export default function ReceivablesPage() {
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Origem
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Parcela
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Vencimento
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Status
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Valor
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Recebido
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>
@@ -1121,6 +1169,25 @@ export default function ReceivablesPage() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Recebido em
+                  </label>
+                  <select
+                    value={receiptFinancialAccountId}
+                    onChange={(e) =>
+                      setReceiptFinancialAccountId(e.target.value)
+                    }
+                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                  >
+                    <option value="">Selecione...</option>
+                    {financialAccounts.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {formatFinancialAccountLabel(item)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-semibold text-primary">
                     Referência
@@ -1140,7 +1207,11 @@ export default function ReceivablesPage() {
                 variant="primary"
                 size="sm"
                 onClick={handleRegisterReceipt}
-                disabled={!receiptPaymentTypeId || settledAmount <= 0}
+                disabled={
+                  !receiptPaymentTypeId ||
+                  !receiptFinancialAccountId ||
+                  settledAmount <= 0
+                }
               >
                 Gravar
               </Button>
@@ -1177,7 +1248,11 @@ export default function ReceivablesPage() {
                 variant="primary"
                 size="sm"
                 onClick={handleConfirmRegisterReceipt}
-                disabled={!receiptPaymentTypeId || settledAmount <= 0}
+                disabled={
+                  !receiptPaymentTypeId ||
+                  !receiptFinancialAccountId ||
+                  settledAmount <= 0
+                }
               >
                 Confirmar
               </Button>

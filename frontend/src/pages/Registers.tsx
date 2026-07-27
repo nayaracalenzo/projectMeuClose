@@ -16,6 +16,7 @@ interface CashRow {
   id: number;
   date: string;
   scope: Scope;
+  accountLabel?: string | null;
   parcela?: string;
   description: string;
   category: string;
@@ -141,10 +142,14 @@ export default function Registers() {
     "Transferencia do caixa para o banco",
   );
   const [transferReferenceCode, setTransferReferenceCode] = useState("");
-  const [transferFinancialCategoryId, setTransferFinancialCategoryId] = useState("");
+  const [transferFinancialCategoryId, setTransferFinancialCategoryId] =
+    useState("");
   const [transferAccountLabel, setTransferAccountLabel] = useState("");
-  const [manualMovementType, setManualMovementType] = useState<"IN" | "OUT">("IN");
-  const [manualFinancialCategoryId, setManualFinancialCategoryId] = useState("");
+  const [manualMovementType, setManualMovementType] = useState<"IN" | "OUT">(
+    "IN",
+  );
+  const [manualFinancialCategoryId, setManualFinancialCategoryId] =
+    useState("");
   const [manualAmountInput, setManualAmountInput] = useState("");
   const [manualDate, setManualDate] = useState(getCurrentDateInputValue());
   const [manualDescription, setManualDescription] = useState("");
@@ -152,7 +157,9 @@ export default function Registers() {
   const [financialCategories, setFinancialCategories] = useState<
     FinancialCategoryOption[]
   >([]);
-  const [bankAccountOptions, setBankAccountOptions] = useState<BankAccountOption[]>([]);
+  const [bankAccountOptions, setBankAccountOptions] = useState<
+    BankAccountOption[]
+  >([]);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   const selectedRow = useMemo(
@@ -165,7 +172,9 @@ export default function Registers() {
     scope === "LOJA" && Boolean(currentSession?.pendingPreviousDay);
   const requiresOpenStoreSession = scope === "LOJA" && !currentSession;
   const canOpenTransferModal =
-    scope === "LOJA" ? !requiresOpenStoreSession : bankAccountOptions.length > 0;
+    scope === "LOJA"
+      ? !requiresOpenStoreSession
+      : bankAccountOptions.length > 0;
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
@@ -178,7 +187,9 @@ export default function Registers() {
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
 
-    const data = (await getRequest(`/cash?${params.toString()}`)) as CashListResponse;
+    const data = (await getRequest(
+      `/cash?${params.toString()}`,
+    )) as CashListResponse;
     setRows(Array.isArray(data.items) ? data.items : []);
     setTotalRows(Number(data.total) || 0);
     setTotalPages(Number(data.totalPages) || 1);
@@ -210,7 +221,9 @@ export default function Registers() {
   const fetchFinancialCategories = async () => {
     try {
       const data = await getRequest("/financial-categories");
-      setFinancialCategories(Array.isArray(data) ? (data as FinancialCategoryOption[]) : []);
+      setFinancialCategories(
+        Array.isArray(data) ? (data as FinancialCategoryOption[]) : [],
+      );
     } catch {
       setFinancialCategories([]);
     }
@@ -219,7 +232,9 @@ export default function Registers() {
   const fetchBankAccountOptions = async () => {
     try {
       const data = await getRequest("/bank/account-options?scope=PESSOAL");
-      setBankAccountOptions(Array.isArray(data) ? (data as BankAccountOption[]) : []);
+      setBankAccountOptions(
+        Array.isArray(data) ? (data as BankAccountOption[]) : [],
+      );
     } catch {
       setBankAccountOptions([]);
     }
@@ -249,7 +264,12 @@ export default function Registers() {
         setTotalRows(0);
         setTotalPages(1);
         setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
-        setError(getUserFacingApiErrorMessage(err, "Nao foi possivel carregar o caixa."));
+        setError(
+          getUserFacingApiErrorMessage(
+            err,
+            "Nao foi possivel carregar o caixa.",
+          ),
+        );
       } finally {
         setLoading(false);
       }
@@ -296,7 +316,11 @@ export default function Registers() {
   };
 
   async function refreshData() {
-    await Promise.all([fetchRows(), fetchSessionStatus(), fetchBankAccountOptions()]);
+    await Promise.all([
+      fetchRows(),
+      fetchSessionStatus(),
+      fetchBankAccountOptions(),
+    ]);
   }
 
   async function handleOpenSession() {
@@ -319,7 +343,10 @@ export default function Registers() {
         open: true,
         tone: "error",
         title: "Nao foi possivel abrir",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel abrir o caixa."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel abrir o caixa.",
+        ),
       });
     } finally {
       setSessionActionLoading(false);
@@ -346,7 +373,10 @@ export default function Registers() {
         open: true,
         tone: "error",
         title: "Nao foi possivel fechar",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel fechar o caixa."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel fechar o caixa.",
+        ),
       });
     } finally {
       setSessionActionLoading(false);
@@ -371,7 +401,8 @@ export default function Registers() {
         open: true,
         tone: "success",
         title: "Transferencia registrada",
-        message: "A saida do caixa e a entrada no banco foram registradas com sucesso.",
+        message:
+          "A saida do caixa e a entrada no banco foram registradas com sucesso.",
       });
     } catch (err: unknown) {
       setToast({
@@ -444,7 +475,10 @@ export default function Registers() {
         open: true,
         tone: "error",
         title: "Nao foi possivel extornar",
-        message: getUserFacingApiErrorMessage(err, "Nao foi possivel extornar o lancamento."),
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel extornar o lancamento.",
+        ),
       });
     } finally {
       setSessionActionLoading(false);
@@ -502,19 +536,23 @@ export default function Registers() {
                 Sessao do Caixa da Loja
               </p>
               {sessionLoading ? (
-                <p className="mt-1 text-sm text-neutral-700">Carregando sessao...</p>
+                <p className="mt-1 text-sm text-neutral-700">
+                  Carregando sessao...
+                </p>
               ) : currentSession ? (
                 <>
                   <p className="mt-1 text-sm font-semibold text-primary">
                     Aberto em {formatDateTime(currentSession.openedAt)}
                   </p>
                   <p className="text-sm text-neutral-700">
-                    Saldo inicial: {formatCurrency(currentSession.openingBalance)} |
-                    Entradas: {formatCurrency(currentSession.totalIn)} | Saidas:{" "}
+                    Saldo inicial:{" "}
+                    {formatCurrency(currentSession.openingBalance)} | Entradas:{" "}
+                    {formatCurrency(currentSession.totalIn)} | Saidas:{" "}
                     {formatCurrency(currentSession.totalOut)}
                   </p>
                   <p className="text-sm text-neutral-700">
-                    Saldo esperado: {formatCurrency(currentSession.expectedBalance)}
+                    Saldo esperado:{" "}
+                    {formatCurrency(currentSession.expectedBalance)}
                   </p>
                 </>
               ) : (
@@ -553,8 +591,9 @@ export default function Registers() {
             <div className="rounded-xl border border-[#c6a33a] bg-[#fff8df] px-4 py-3 text-sm text-[#6d5600]">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  O caixa da loja iniciado em {formatDate(currentSession!.openedAt)} ainda
-                  nao foi fechado. Deseja fechar esse caixa agora?
+                  O caixa da loja iniciado em{" "}
+                  {formatDate(currentSession!.openedAt)} ainda nao foi fechado.
+                  Deseja fechar esse caixa agora?
                 </div>
                 <button
                   type="button"
@@ -593,7 +632,10 @@ export default function Registers() {
         <button
           type="button"
           onClick={() => setReverseModalOpen(true)}
-          disabled={!selectedRow?.canReverse || (scope === "LOJA" && requiresOpenStoreSession)}
+          disabled={
+            !selectedRow?.canReverse ||
+            (scope === "LOJA" && requiresOpenStoreSession)
+          }
           className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm font-medium text-primary disabled:opacity-60"
         >
           Extornar
@@ -614,7 +656,9 @@ export default function Registers() {
         </div>
         <div className="flex flex-col gap-3 md:flex-row">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">De</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              De
+            </label>
             <input
               type="date"
               value={startDate}
@@ -623,7 +667,9 @@ export default function Registers() {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Ate</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Ate
+            </label>
             <input
               type="date"
               value={endDate}
@@ -663,24 +709,31 @@ export default function Registers() {
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Data</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Parcela</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Data
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Parcela
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Categoria
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Historico
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Conta
+              </th>
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Entrada
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saida
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>
@@ -689,7 +742,7 @@ export default function Registers() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando lancamentos...
@@ -698,7 +751,7 @@ export default function Registers() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhum lancamento de caixa cadastrado.
@@ -744,6 +797,9 @@ export default function Registers() {
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.description}
                   </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.accountLabel || "-"}
+                  </td>
                   <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
                     {row.amountIn ? formatCurrency(row.amountIn) : "-"}
                   </td>
@@ -778,27 +834,34 @@ export default function Registers() {
                 disabled={!row.canReverse}
                 className="block w-full text-left disabled:cursor-default disabled:opacity-100"
               >
-                <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
-              <p className="text-xs uppercase text-neutral-700">
-                Parcela: {row.parcela || "-"}
-              </p>
-              <p
-                className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
-                  row.category,
-                )}`}
-              >
-                {row.category}
-              </p>
-              <p className="text-xs uppercase text-neutral-700">{row.description}</p>
-              <p className="text-xs text-[#1f7a1f]">
-                Entrada: {row.amountIn ? formatCurrency(row.amountIn) : "-"}
-              </p>
-              <p className="text-xs text-[#b42318]">
-                Saida: {row.amountOut ? formatCurrency(row.amountOut) : "-"}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-primary">
-                Saldo: {formatCurrency(row.balance)}
-              </p>
+                <p className="text-sm font-semibold text-primary">
+                  {formatDate(row.date)}
+                </p>
+                <p className="text-xs uppercase text-neutral-700">
+                  Parcela: {row.parcela || "-"}
+                </p>
+                <p
+                  className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                    row.category,
+                  )}`}
+                >
+                  {row.category}
+                </p>
+                <p className="text-xs uppercase text-neutral-700">
+                  {row.description}
+                </p>
+                <p className="text-xs text-neutral-700">
+                  Conta: {row.accountLabel || "-"}
+                </p>
+                <p className="text-xs text-[#1f7a1f]">
+                  Entrada: {row.amountIn ? formatCurrency(row.amountIn) : "-"}
+                </p>
+                <p className="text-xs text-[#b42318]">
+                  Saida: {row.amountOut ? formatCurrency(row.amountOut) : "-"}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-primary">
+                  Saldo: {formatCurrency(row.balance)}
+                </p>
               </button>
             </div>
           ))
@@ -807,7 +870,9 @@ export default function Registers() {
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
-          {loading ? "Carregando..." : `${totalRows} lancamento(s) | Pagina ${page} de ${totalPages}`}
+          {loading
+            ? "Carregando..."
+            : `${totalRows} lancamento(s) | Pagina ${page} de ${totalPages}`}
         </p>
         <div className="flex gap-2">
           <button
@@ -820,7 +885,9 @@ export default function Registers() {
           </button>
           <button
             type="button"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
             disabled={loading || page >= totalPages}
             className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm text-primary disabled:opacity-60"
           >
@@ -832,7 +899,11 @@ export default function Registers() {
       <CustomerModal
         open={transferModalOpen}
         onClose={resetTransferModal}
-        title={scope === "LOJA" ? "Transferir Caixa da Loja para Banco" : "Transferir Caixa Pessoal para Banco"}
+        title={
+          scope === "LOJA"
+            ? "Transferir Caixa da Loja para Banco"
+            : "Transferir Caixa Pessoal para Banco"
+        }
         subtitle={
           scope === "LOJA"
             ? "Registre a saida do caixa da loja e a entrada correspondente no banco."
@@ -841,7 +912,9 @@ export default function Registers() {
       >
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Categoria</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Categoria
+            </label>
             <select
               value={transferFinancialCategoryId}
               onChange={(e) => setTransferFinancialCategoryId(e.target.value)}
@@ -877,17 +950,23 @@ export default function Registers() {
           ) : null}
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Valor</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Valor
+            </label>
             <input
               value={transferAmountInput}
-              onChange={(e) => setTransferAmountInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setTransferAmountInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Data</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Data
+            </label>
             <input
               type="date"
               value={transferDate}
@@ -897,7 +976,9 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Descricao</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Descricao
+            </label>
             <input
               value={transferDescription}
               onChange={(e) => setTransferDescription(e.target.value)}
@@ -906,7 +987,9 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Referencia</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Referencia
+            </label>
             <input
               value={transferReferenceCode}
               onChange={(e) => setTransferReferenceCode(e.target.value)}
@@ -928,7 +1011,9 @@ export default function Registers() {
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
-              {sessionActionLoading ? "Transferindo..." : "Confirmar transferencia"}
+              {sessionActionLoading
+                ? "Transferindo..."
+                : "Confirmar transferencia"}
             </button>
             <button
               type="button"
@@ -954,7 +1039,9 @@ export default function Registers() {
             </label>
             <select
               value={manualMovementType}
-              onChange={(e) => setManualMovementType(e.target.value as "IN" | "OUT")}
+              onChange={(e) =>
+                setManualMovementType(e.target.value as "IN" | "OUT")
+              }
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             >
               <option value="IN">Entrada</option>
@@ -963,7 +1050,9 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Categoria</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Categoria
+            </label>
             <select
               value={manualFinancialCategoryId}
               onChange={(e) => setManualFinancialCategoryId(e.target.value)}
@@ -979,17 +1068,23 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Valor</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Valor
+            </label>
             <input
               value={manualAmountInput}
-              onChange={(e) => setManualAmountInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setManualAmountInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Data</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Data
+            </label>
             <input
               type="date"
               value={manualDate}
@@ -999,7 +1094,9 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Descricao</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Descricao
+            </label>
             <input
               value={manualDescription}
               onChange={(e) => setManualDescription(e.target.value)}
@@ -1008,7 +1105,9 @@ export default function Registers() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Referencia</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Referencia
+            </label>
             <input
               value={manualReferenceCode}
               onChange={(e) => setManualReferenceCode(e.target.value)}
@@ -1064,7 +1163,9 @@ export default function Registers() {
           ) : null}
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Motivo</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Motivo
+            </label>
             <textarea
               value={reverseReason}
               onChange={(e) => setReverseReason(e.target.value)}
@@ -1077,7 +1178,9 @@ export default function Registers() {
               type="button"
               onClick={handleReverseEntry}
               disabled={
-                sessionActionLoading || !selectedRow?.canReverse || !reverseReason.trim()
+                sessionActionLoading ||
+                !selectedRow?.canReverse ||
+                !reverseReason.trim()
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
@@ -1107,7 +1210,9 @@ export default function Registers() {
             </label>
             <input
               value={openingBalanceInput}
-              onChange={(e) => setOpeningBalanceInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setOpeningBalanceInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
@@ -1155,7 +1260,9 @@ export default function Registers() {
         <div className="space-y-4">
           {currentSession ? (
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
-              <p>Saldo inicial: {formatCurrency(currentSession.openingBalance)}</p>
+              <p>
+                Saldo inicial: {formatCurrency(currentSession.openingBalance)}
+              </p>
               <p>Entradas: {formatCurrency(currentSession.totalIn)}</p>
               <p>Saidas: {formatCurrency(currentSession.totalOut)}</p>
               <p className="font-semibold text-primary">
@@ -1169,7 +1276,9 @@ export default function Registers() {
             </label>
             <input
               value={countedBalanceInput}
-              onChange={(e) => setCountedBalanceInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setCountedBalanceInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />

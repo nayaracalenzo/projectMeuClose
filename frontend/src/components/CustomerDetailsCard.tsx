@@ -134,7 +134,7 @@ function CustomerDetailsCardComponent({
 
   return (
     <section className="rounded border border-outline-variant/40 bg-[#f1eced] p-4">
-      <h2 className="mb-3 font-editorial text-3xl text-primary text-[#2a2526] font-bold">{title}</h2>
+      <h2 className="mb-3 font-editorial text-3xl text-primary font-bold">{title}</h2>
       <div className="space-y-2 text-sm text-neutral-700">{rows}</div>
     </section>
   );

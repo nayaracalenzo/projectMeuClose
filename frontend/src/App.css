@@ -60,6 +60,14 @@ h1 ,h2, .font-editorial{
   backdrop-filter: blur(14px);
 }
 
+thead.rounded-t-md th:first-child {
+  border-top-left-radius: 0.375rem;
+}
+
+thead.rounded-t-md th:last-child {
+  border-top-right-radius: 0.375rem;
+}
+
 
 input::-ms-reveal,
       input::-ms-clear {

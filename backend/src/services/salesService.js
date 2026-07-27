@@ -1223,6 +1223,17 @@ function mapPaymentReceipt(receipt) {
   const paymentType = receipt.PaymentType || receipt.PaymentTypes;
   const fallbackPaymentTypeName =
     receipt.receiptType === "CUSTOMER_CREDIT" ? "Credito da cliente" : null;
+  const cashEntries = Array.isArray(receipt.CashEntries) ? receipt.CashEntries : [];
+  const bankEntries = Array.isArray(receipt.BankEntries) ? receipt.BankEntries : [];
+  const firstBankEntry = bankEntries[0] || null;
+  const firstCashEntry = cashEntries[0] || null;
+  const accountLabel = firstBankEntry?.accountLabel
+    ? String(firstBankEntry.accountLabel).trim()
+    : firstCashEntry
+      ? firstCashEntry.scope === "PESSOAL"
+        ? "Caixa Pessoal"
+        : "Caixa da Loja"
+      : null;
 
   return {
     id: receipt.idPaymentReceipt,
@@ -1232,6 +1243,7 @@ function mapPaymentReceipt(receipt) {
     amount: Number(receipt.amount || 0),
     paidAt: receipt.paidAt,
     referenceCode: receipt.referenceCode || null,
+    accountLabel: accountLabel || null,
     paymentType: paymentType
       ? {
         id: paymentType.idPaymentType,

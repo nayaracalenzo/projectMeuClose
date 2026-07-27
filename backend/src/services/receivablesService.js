@@ -1,5 +1,6 @@
 const { notFoundError, validationError } = require("../errors/AppError");
 const { sequelize } = require("../models");
+const financialAccountsRepository = require("../repositories/financialAccountsRepository");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const repository = require("../repositories/receivablesRepository");
 const cashRepository = require("../repositories/cashRepository");
@@ -44,6 +45,40 @@ function normalizeDate(value, fieldName) {
   }
 
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
+}
+
+async function getFinancialAccountOrDefault({
+  idFinancialAccount,
+  fieldName,
+  defaultTargetType = "BANK",
+  defaultScope = "LOJA",
+}) {
+  if (idFinancialAccount !== null && idFinancialAccount !== undefined && idFinancialAccount !== "") {
+    const normalizedId = Number(idFinancialAccount);
+
+    if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+      throw createReceivablesValidationError(`${fieldName} invalido.`);
+    }
+
+    const account = await financialAccountsRepository.getById(normalizedId);
+
+    if (!account || account.active === false) {
+      throw createReceivablesValidationError(`${fieldName} invalido.`);
+    }
+
+    return account;
+  }
+
+  const fallback = await financialAccountsRepository.findDefaultByScopeAndTarget(
+    defaultScope,
+    defaultTargetType,
+  );
+
+  if (!fallback) {
+    throw createReceivablesValidationError(`${fieldName} invalido.`);
+  }
+
+  return fallback;
 }
 
 function getInstallmentFilter(status, dueDate, paidAmount, amount) {
@@ -614,6 +649,11 @@ async function registerReceipt(installmentId, body = {}) {
   const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
   const discardInterest = normalizeBoolean(body.discardInterest);
+  const financialAccount = await getFinancialAccountOrDefault({
+    idFinancialAccount: body.financialAccountId,
+    fieldName: "Recebido em",
+    defaultTargetType: isImmediateCashPaymentType(normalizedPaymentType) ? "CASH" : "BANK",
+  });
 
   const created = await repository.registerReceipt(normalizedInstallmentId, {
     paymentTypeId,
@@ -622,12 +662,12 @@ async function registerReceipt(installmentId, body = {}) {
     referenceCode,
     discardInterest,
     financialMovement: {
-      target: isImmediateCashPaymentType(normalizedPaymentType) ? "CASH" : "BANK",
-      scope: "LOJA",
+      target: financialAccount.targetType,
+      scope: financialAccount.scope,
       movementType: "IN",
       category: "RECEBIMENTO",
       description: `Recebimento de parcela via ${normalizedPaymentType.name}`,
-      accountLabel: "Banco da Loja",
+      accountLabel: financialAccount.targetType === "BANK" ? financialAccount.desc : null,
       amount,
       occurredAt: paidAt,
       paymentTypeId,

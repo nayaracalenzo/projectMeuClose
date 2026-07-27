@@ -28,6 +28,14 @@ interface PaymentTypeOption {
   name: string;
 }
 
+interface FinancialAccountOption {
+  id: number;
+  label: string;
+  value: string;
+  scope: Scope;
+  targetType: "CASH" | "BANK";
+}
+
 interface SupplierOption {
   id: number;
   name: string;
@@ -97,6 +105,9 @@ const filterOptions: Array<{ value: PayableFilter; label: string }> = [
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 
+const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
+  `${account.label} - ${account.scope === "LOJA" ? "Loja" : "Pessoal"} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
+
 export default function PayablesPage() {
   const [scope, setScope] = useState<Scope>("LOJA");
   const [filter, setFilter] = useState<PayableFilter>("EM_ABERTO");
@@ -105,6 +116,9 @@ export default function PayablesPage() {
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<PayableRow[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
+  const [financialAccounts, setFinancialAccounts] = useState<
+    FinancialAccountOption[]
+  >([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -113,7 +127,9 @@ export default function PayablesPage() {
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [summary, setSummary] = useState({ totalAmount: 0, totalOpen: 0 });
-  const [selectedPayableId, setSelectedPayableId] = useState<number | null>(null);
+  const [selectedPayableId, setSelectedPayableId] = useState<number | null>(
+    null,
+  );
   const [activePayableId, setActivePayableId] = useState<number | null>(null);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [payableFormMode, setPayableFormMode] = useState<"create" | "edit">(
@@ -140,6 +156,8 @@ export default function PayablesPage() {
     new Date().toISOString().slice(0, 10),
   );
   const [referenceCode, setReferenceCode] = useState("");
+  const [paymentFinancialAccountId, setPaymentFinancialAccountId] =
+    useState("");
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
@@ -190,7 +208,10 @@ export default function PayablesPage() {
   }, [fetchRows]);
 
   useEffect(() => {
-    if (selectedPayableId && !rows.some((row) => row.id === selectedPayableId)) {
+    if (
+      selectedPayableId &&
+      !rows.some((row) => row.id === selectedPayableId)
+    ) {
       setSelectedPayableId(null);
       setDeleteConfirmOpen(false);
     }
@@ -236,12 +257,28 @@ export default function PayablesPage() {
     fetchSuppliers();
   }, []);
 
+  useEffect(() => {
+    const fetchFinancialAccounts = async () => {
+      try {
+        const data = (await getRequest(
+          `/financial-accounts/options?scope=${scope}`,
+        )) as FinancialAccountOption[];
+        setFinancialAccounts(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Erro ao buscar contas financeiras", error);
+        setFinancialAccounts([]);
+      }
+    };
+
+    fetchFinancialAccounts();
+  }, [scope]);
+
   const selectedRow = rows.find((row) => row.id === selectedPayableId) || null;
   const canManageSelectedPayable = Boolean(
     selectedRow &&
-      selectedRow.id > 0 &&
-      selectedRow.paidAmount <= 0 &&
-      selectedRow.openAmount === selectedRow.amount,
+    selectedRow.id > 0 &&
+    selectedRow.paidAmount <= 0 &&
+    selectedRow.openAmount === selectedRow.amount,
   );
 
   const resetPayableForm = () => {
@@ -275,7 +312,9 @@ export default function PayablesPage() {
     setSettlementTarget(selectedRow.settlementTarget);
     setAccountLabel(selectedRow.accountLabel || "");
     setPlannedPaymentTypeId(
-      selectedRow.plannedPaymentTypeId ? String(selectedRow.plannedPaymentTypeId) : "",
+      selectedRow.plannedPaymentTypeId
+        ? String(selectedRow.plannedPaymentTypeId)
+        : "",
     );
     setIsCreateFormOpen(true);
   };
@@ -374,6 +413,7 @@ export default function PayablesPage() {
     setPaymentTypeId(
       row.plannedPaymentTypeId ? String(row.plannedPaymentTypeId) : "",
     );
+    setPaymentFinancialAccountId("");
     setPaymentAmount(String(row.openAmount.toFixed(2)));
     setPaidAt(new Date().toISOString().slice(0, 10));
     setReferenceCode("");
@@ -401,6 +441,26 @@ export default function PayablesPage() {
 
   const handleRegisterPayment = () => {
     if (!activePayableId) return;
+    if (!paymentTypeId) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Conta a pagar",
+        message: "Selecione a forma de pagamento.",
+      });
+      return;
+    }
+
+    if (!paymentFinancialAccountId) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Conta a pagar",
+        message: "Selecione onde o pagamento foi realizado.",
+      });
+      return;
+    }
+
     setPaymentConfirmOpen(true);
   };
 
@@ -410,6 +470,7 @@ export default function PayablesPage() {
     try {
       const data = (await postRequest(`/payables/${activePayableId}/payments`, {
         paymentTypeId: Number(paymentTypeId),
+        financialAccountId: Number(paymentFinancialAccountId),
         amount: Number(paymentAmount),
         paidAt,
         referenceCode: referenceCode || null,
@@ -671,7 +732,9 @@ export default function PayablesPage() {
         <div className="mb-2 flex justify-end">
           <button
             type="button"
-            aria-label={showSummaryValues ? "Ocultar valores" : "Mostrar valores"}
+            aria-label={
+              showSummaryValues ? "Ocultar valores" : "Mostrar valores"
+            }
             onClick={() => setShowSummaryValues((current) => !current)}
             className="text-neutral-600 transition hover:text-primary"
           >
@@ -682,13 +745,19 @@ export default function PayablesPage() {
           <div className="bg-surface-lowest p-4">
             <p className="text-xs uppercase text-neutral-700">Valor total</p>
             <p className="text-lg font-semibold text-primary">
-              {showSummaryValues ? formatCurrency(summary.totalAmount) : HIDDEN_VALUE}
+              {showSummaryValues
+                ? formatCurrency(summary.totalAmount)
+                : HIDDEN_VALUE}
             </p>
           </div>
           <div className="bg-surface-lowest p-4">
-            <p className="text-xs uppercase text-neutral-700">Saldo em aberto</p>
+            <p className="text-xs uppercase text-neutral-700">
+              Saldo em aberto
+            </p>
             <p className="text-lg font-semibold text-primary">
-              {showSummaryValues ? formatCurrency(summary.totalOpen) : HIDDEN_VALUE}
+              {showSummaryValues
+                ? formatCurrency(summary.totalOpen)
+                : HIDDEN_VALUE}
             </p>
           </div>
           <div className="bg-surface-lowest p-4">
@@ -761,6 +830,23 @@ export default function PayablesPage() {
                 <option key={item.id} value={item.id}>
                   {item.name}
                 </option>
+                ))}
+              </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Pago em
+            </label>
+            <select
+              value={paymentFinancialAccountId}
+              onChange={(e) => setPaymentFinancialAccountId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
+              <option value="">Selecione...</option>
+              {financialAccounts.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {formatFinancialAccountLabel(item)}
+                </option>
               ))}
             </select>
           </div>
@@ -802,13 +888,17 @@ export default function PayablesPage() {
             <button
               type="button"
               onClick={handleRegisterPayment}
+              disabled={!paymentTypeId || !paymentFinancialAccountId}
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
             >
               Confirmar pagamento
             </button>
             <button
               type="button"
-              onClick={() => setActivePayableId(null)}
+              onClick={() => {
+                setActivePayableId(null);
+                setPaymentFinancialAccountId("");
+              }}
               className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
             >
               Cancelar
@@ -819,31 +909,31 @@ export default function PayablesPage() {
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Descrição
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Fornecedor
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Categoria
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Vencimento
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Valor
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Pago
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>
@@ -935,7 +1025,9 @@ export default function PayablesPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
             disabled={loading || page >= totalPages}
           >
             Próxima
@@ -957,7 +1049,11 @@ export default function PayablesPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={handleConfirmRegisterPayment}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmRegisterPayment}
+            >
               Confirmar
             </Button>
             <Button
@@ -985,7 +1081,11 @@ export default function PayablesPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="primary" size="sm" onClick={handleConfirmDeletePayable}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleConfirmDeletePayable}
+            >
               Confirmar
             </Button>
             <Button

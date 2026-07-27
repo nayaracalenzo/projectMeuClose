@@ -17,6 +17,7 @@ interface BankRow {
   date: string;
   scope: Scope;
   bank: string;
+  accountLabel?: string | null;
   parcela?: string;
   category: string;
   financialCategoryId: number | null;
@@ -89,26 +90,36 @@ export default function BankPage() {
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, balance: 0 });
+  const [summary, setSummary] = useState({
+    totalIn: 0,
+    totalOut: 0,
+    balance: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const [financialCategories, setFinancialCategories] = useState<
     FinancialCategoryOption[]
   >([]);
-  const [bankAccountOptions, setBankAccountOptions] = useState<BankAccountOption[]>([]);
+  const [bankAccountOptions, setBankAccountOptions] = useState<
+    BankAccountOption[]
+  >([]);
   const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
   const [reverseReason, setReverseReason] = useState("");
-  const [manualMovementType, setManualMovementType] = useState<"IN" | "OUT">("IN");
-  const [manualFinancialCategoryId, setManualFinancialCategoryId] = useState("");
+  const [manualMovementType, setManualMovementType] = useState<"IN" | "OUT">(
+    "IN",
+  );
+  const [manualFinancialCategoryId, setManualFinancialCategoryId] =
+    useState("");
   const [manualAmountInput, setManualAmountInput] = useState("");
   const [manualDate, setManualDate] = useState(getCurrentDateInputValue());
   const [manualDescription, setManualDescription] = useState("");
   const [manualReferenceCode, setManualReferenceCode] = useState("");
   const [manualAccountLabel, setManualAccountLabel] = useState("");
-  const [transferFinancialCategoryId, setTransferFinancialCategoryId] = useState("");
+  const [transferFinancialCategoryId, setTransferFinancialCategoryId] =
+    useState("");
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [transferDate, setTransferDate] = useState(getCurrentDateInputValue());
   const [transferDescription, setTransferDescription] = useState(
@@ -137,7 +148,9 @@ export default function BankPage() {
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
 
-    const data = (await getRequest(`/bank?${params.toString()}`)) as BankListResponse;
+    const data = (await getRequest(
+      `/bank?${params.toString()}`,
+    )) as BankListResponse;
     setRows(Array.isArray(data.items) ? data.items : []);
     setTotalRows(Number(data.total) || 0);
     setTotalPages(Number(data.totalPages) || 1);
@@ -151,7 +164,9 @@ export default function BankPage() {
   const fetchFinancialCategories = async () => {
     try {
       const data = await getRequest("/financial-categories");
-      setFinancialCategories(Array.isArray(data) ? (data as FinancialCategoryOption[]) : []);
+      setFinancialCategories(
+        Array.isArray(data) ? (data as FinancialCategoryOption[]) : [],
+      );
     } catch {
       setFinancialCategories([]);
     }
@@ -160,7 +175,9 @@ export default function BankPage() {
   const fetchBankAccountOptions = async () => {
     try {
       const data = await getRequest(`/bank/account-options?scope=${scope}`);
-      setBankAccountOptions(Array.isArray(data) ? (data as BankAccountOption[]) : []);
+      setBankAccountOptions(
+        Array.isArray(data) ? (data as BankAccountOption[]) : [],
+      );
     } catch {
       setBankAccountOptions([]);
     }
@@ -189,7 +206,12 @@ export default function BankPage() {
         setTotalRows(0);
         setTotalPages(1);
         setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
-        setError(getUserFacingApiErrorMessage(err, "Nao foi possivel carregar o banco."));
+        setError(
+          getUserFacingApiErrorMessage(
+            err,
+            "Nao foi possivel carregar o banco.",
+          ),
+        );
       } finally {
         setLoading(false);
       }
@@ -282,7 +304,8 @@ export default function BankPage() {
         open: true,
         tone: "success",
         title: "Transferencia registrada",
-        message: "A saida do banco e a entrada no caixa foram registradas com sucesso.",
+        message:
+          "A saida do banco e a entrada no caixa foram registradas com sucesso.",
       });
     } catch (err: unknown) {
       setToast({
@@ -413,7 +436,9 @@ export default function BankPage() {
         </div>
         <div className="flex flex-col gap-3 md:flex-row">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">De</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              De
+            </label>
             <input
               type="date"
               value={startDate}
@@ -422,7 +447,9 @@ export default function BankPage() {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Ate</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Ate
+            </label>
             <input
               type="date"
               value={endDate}
@@ -461,29 +488,38 @@ export default function BankPage() {
       </div>
 
       <p className="mb-3 text-sm text-neutral-700">
-        {loading ? "Carregando movimentacoes..." : `${totalRows} movimentacao(oes) encontrada(s).`}
+        {loading
+          ? "Carregando movimentacoes..."
+          : `${totalRows} movimentacao(oes) encontrada(s).`}
       </p>
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Data</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">Parcela</th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Data
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Parcela
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Categoria
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Historico
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Conta
+              </th>
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Entrada
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saida
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>
@@ -492,7 +528,7 @@ export default function BankPage() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando movimentacoes...
@@ -501,7 +537,7 @@ export default function BankPage() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhuma movimentacao bancaria cadastrada.
@@ -547,6 +583,9 @@ export default function BankPage() {
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.description}
                   </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.bank || row.accountLabel || "-"}
+                  </td>
                   <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
                     {row.amountIn ? formatCurrency(row.amountIn) : "-"}
                   </td>
@@ -583,7 +622,9 @@ export default function BankPage() {
                 selectedRowId === row.id ? "bg-surface" : "bg-white"
               } disabled:cursor-default disabled:opacity-100`}
             >
-              <p className="text-sm font-semibold text-primary">{formatDate(row.date)}</p>
+              <p className="text-sm font-semibold text-primary">
+                {formatDate(row.date)}
+              </p>
               <p className="text-xs uppercase text-neutral-700">
                 Parcela: {row.parcela || "-"}
               </p>
@@ -594,7 +635,12 @@ export default function BankPage() {
               >
                 {row.category}
               </p>
-              <p className="text-xs uppercase text-neutral-700">{row.description}</p>
+              <p className="text-xs uppercase text-neutral-700">
+                {row.description}
+              </p>
+              <p className="text-xs text-neutral-700">
+                Conta: {row.bank || row.accountLabel || "-"}
+              </p>
               <p className="text-xs text-[#1f7a1f]">
                 Entrada: {row.amountIn ? formatCurrency(row.amountIn) : "-"}
               </p>
@@ -624,7 +670,9 @@ export default function BankPage() {
           </button>
           <button
             type="button"
-            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            onClick={() =>
+              setPage((current) => Math.min(totalPages, current + 1))
+            }
             disabled={loading || page >= totalPages}
             className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm text-primary disabled:opacity-60"
           >
@@ -646,7 +694,9 @@ export default function BankPage() {
             </label>
             <select
               value={manualMovementType}
-              onChange={(e) => setManualMovementType(e.target.value as "IN" | "OUT")}
+              onChange={(e) =>
+                setManualMovementType(e.target.value as "IN" | "OUT")
+              }
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             >
               <option value="IN">Entrada</option>
@@ -656,7 +706,9 @@ export default function BankPage() {
 
           {scope === "PESSOAL" ? (
             <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">Banco</label>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Banco
+              </label>
               <select
                 value={manualAccountLabel}
                 onChange={(e) => setManualAccountLabel(e.target.value)}
@@ -673,7 +725,9 @@ export default function BankPage() {
           ) : null}
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Categoria</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Categoria
+            </label>
             <select
               value={manualFinancialCategoryId}
               onChange={(e) => setManualFinancialCategoryId(e.target.value)}
@@ -689,17 +743,23 @@ export default function BankPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Valor</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Valor
+            </label>
             <input
               value={manualAmountInput}
-              onChange={(e) => setManualAmountInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setManualAmountInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Data</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Data
+            </label>
             <input
               type="date"
               value={manualDate}
@@ -709,7 +769,9 @@ export default function BankPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Descricao</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Descricao
+            </label>
             <input
               value={manualDescription}
               onChange={(e) => setManualDescription(e.target.value)}
@@ -718,7 +780,9 @@ export default function BankPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Referencia</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Referencia
+            </label>
             <input
               value={manualReferenceCode}
               onChange={(e) => setManualReferenceCode(e.target.value)}
@@ -789,7 +853,9 @@ export default function BankPage() {
           ) : null}
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Categoria</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Categoria
+            </label>
             <select
               value={transferFinancialCategoryId}
               onChange={(e) => setTransferFinancialCategoryId(e.target.value)}
@@ -805,17 +871,23 @@ export default function BankPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Valor</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Valor
+            </label>
             <input
               value={transferAmountInput}
-              onChange={(e) => setTransferAmountInput(formatCurrencyInput(e.target.value))}
+              onChange={(e) =>
+                setTransferAmountInput(formatCurrencyInput(e.target.value))
+              }
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Data</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Data
+            </label>
             <input
               type="date"
               value={transferDate}
@@ -825,7 +897,9 @@ export default function BankPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Descricao</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Descricao
+            </label>
             <input
               value={transferDescription}
               onChange={(e) => setTransferDescription(e.target.value)}
@@ -834,7 +908,9 @@ export default function BankPage() {
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Referencia</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Referencia
+            </label>
             <input
               value={transferReferenceCode}
               onChange={(e) => setTransferReferenceCode(e.target.value)}
@@ -892,7 +968,9 @@ export default function BankPage() {
           ) : null}
 
           <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">Motivo</label>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Motivo
+            </label>
             <textarea
               value={reverseReason}
               onChange={(e) => setReverseReason(e.target.value)}
@@ -904,7 +982,11 @@ export default function BankPage() {
             <button
               type="button"
               onClick={handleReverseEntry}
-              disabled={actionLoading || !selectedRow?.canReverse || !reverseReason.trim()}
+              disabled={
+                actionLoading ||
+                !selectedRow?.canReverse ||
+                !reverseReason.trim()
+              }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
               {actionLoading ? "Extornando..." : "Confirmar extorno"}

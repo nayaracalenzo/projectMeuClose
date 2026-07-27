@@ -511,9 +511,12 @@ export default function NewSalePage() {
   const [saveMessage, setSaveMessage] = useState("");
   const [draftSaleId, setDraftSaleId] = useState<number | null>(null);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
-  const [financialAccounts, setFinancialAccounts] = useState<FinancialAccountOption[]>([]);
+  const [financialAccounts, setFinancialAccounts] = useState<
+    FinancialAccountOption[]
+  >([]);
   const [paymentTypeId, setPaymentTypeId] = useState("");
-  const [receiptFinancialAccountId, setReceiptFinancialAccountId] = useState("");
+  const [receiptFinancialAccountId, setReceiptFinancialAccountId] =
+    useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [installmentIntervalDays, setInstallmentIntervalDays] = useState("30");
   const [dueDate, setDueDate] = useState(() => getCurrentDateInputValue());
@@ -923,11 +926,15 @@ export default function NewSalePage() {
   );
   const selectedEntryPaymentType = useMemo(
     () =>
-      paymentTypes.find((item) => String(item.id) === entryPaymentTypeId) || null,
+      paymentTypes.find((item) => String(item.id) === entryPaymentTypeId) ||
+      null,
     [entryPaymentTypeId, paymentTypes],
   );
   const isPixPayment = useMemo(
-    () => String(selectedPaymentType?.name || "").trim().toUpperCase() === "PIX",
+    () =>
+      String(selectedPaymentType?.name || "")
+        .trim()
+        .toUpperCase() === "PIX",
     [selectedPaymentType],
   );
   const shouldShowInstallmentVisualization = useMemo(
@@ -936,7 +943,12 @@ export default function NewSalePage() {
       Boolean(selectedPaymentType) &&
       !isImmediateCashPayment &&
       !isPixPayment,
-    [doesNotGenerateDebt, isImmediateCashPayment, isPixPayment, selectedPaymentType],
+    [
+      doesNotGenerateDebt,
+      isImmediateCashPayment,
+      isPixPayment,
+      selectedPaymentType,
+    ],
   );
   const isDebtExemptionActive = doesNotGenerateDebt;
   const immediateReceiptDestinationLabel = useMemo(() => {
@@ -946,7 +958,10 @@ export default function NewSalePage() {
     return selectedAccount?.label || "";
   }, [financialAccounts, receiptFinancialAccountId]);
   const saleReceiptAccountOptions = useMemo(() => {
-    if (!selectedPaymentType || selectedPaymentType.financialFlow !== "IMMEDIATE_CASH") {
+    if (
+      !selectedPaymentType ||
+      selectedPaymentType.financialFlow !== "IMMEDIATE_CASH"
+    ) {
       return [];
     }
 
@@ -984,7 +999,9 @@ export default function NewSalePage() {
   const entryPaymentTypeOptions = useMemo(
     () =>
       paymentTypes.filter((item) => {
-        const normalizedName = String(item.name || "").trim().toUpperCase();
+        const normalizedName = String(item.name || "")
+          .trim()
+          .toUpperCase();
         return normalizedName === "DINHEIRO" || normalizedName === "PIX";
       }),
     [paymentTypes],
@@ -1153,9 +1170,7 @@ export default function NewSalePage() {
     (isDebtExemptionActive ||
       parsedEntryAmount + customerCreditToApply < discountedTotalValue);
   const canCreateQuote =
-    !isSaving &&
-    !!selectedCustomer &&
-    tableItems.length > 0;
+    !isSaving && !!selectedCustomer && tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
 
   const formatCurrency = (value: number) =>
@@ -1184,10 +1199,10 @@ export default function NewSalePage() {
       doesNotGenerateDebt || !selectedPaymentType?.requiresDueDate
         ? null
         : dueDate,
-    receiptFinancialAccountId: receiptFinancialAccountId
-      && !doesNotGenerateDebt
-      ? Number(receiptFinancialAccountId)
-      : null,
+    receiptFinancialAccountId:
+      receiptFinancialAccountId && !doesNotGenerateDebt
+        ? Number(receiptFinancialAccountId)
+        : null,
     entryAmount:
       !doesNotGenerateDebt &&
       selectedPaymentType?.allowsEntryAmount &&
@@ -1198,10 +1213,10 @@ export default function NewSalePage() {
       !doesNotGenerateDebt && entryPaymentTypeId
         ? Number(entryPaymentTypeId)
         : null,
-    entryFinancialAccountId: entryFinancialAccountId
-      && !doesNotGenerateDebt
-      ? Number(entryFinancialAccountId)
-      : null,
+    entryFinancialAccountId:
+      entryFinancialAccountId && !doesNotGenerateDebt
+        ? Number(entryFinancialAccountId)
+        : null,
     entryReferenceCode: doesNotGenerateDebt ? null : entryReferenceCode || null,
     paymentReferenceCode: doesNotGenerateDebt
       ? null
@@ -1505,18 +1520,28 @@ export default function NewSalePage() {
   }, [doesNotGenerateDebt]);
 
   useEffect(() => {
-    if (!selectedPaymentType || selectedPaymentType.financialFlow !== "IMMEDIATE_CASH") {
+    if (
+      !selectedPaymentType ||
+      selectedPaymentType.financialFlow !== "IMMEDIATE_CASH"
+    ) {
       setReceiptFinancialAccountId("");
       return;
     }
 
-    const availableIds = new Set(saleReceiptAccountOptions.map((item) => String(item.id)));
-    if (receiptFinancialAccountId && availableIds.has(receiptFinancialAccountId)) {
+    const availableIds = new Set(
+      saleReceiptAccountOptions.map((item) => String(item.id)),
+    );
+    if (
+      receiptFinancialAccountId &&
+      availableIds.has(receiptFinancialAccountId)
+    ) {
       return;
     }
 
     const fallback =
-      selectedPaymentType.kind === "CASH" ? defaultCashAccountOption : defaultBankAccountOption;
+      selectedPaymentType.kind === "CASH"
+        ? defaultCashAccountOption
+        : defaultBankAccountOption;
     setReceiptFinancialAccountId(fallback ? String(fallback.id) : "");
   }, [
     defaultBankAccountOption,
@@ -1532,7 +1557,9 @@ export default function NewSalePage() {
       return;
     }
 
-    const availableIds = new Set(entryReceiptAccountOptions.map((item) => String(item.id)));
+    const availableIds = new Set(
+      entryReceiptAccountOptions.map((item) => String(item.id)),
+    );
     if (entryFinancialAccountId && availableIds.has(entryFinancialAccountId)) {
       return;
     }
@@ -2065,7 +2092,9 @@ export default function NewSalePage() {
       totalAmount: totalValue,
       finalAmount: discountedTotalValue,
       doesNotGenerateDebt,
-      internalReason: doesNotGenerateDebt ? internalReason.trim() || null : null,
+      internalReason: doesNotGenerateDebt
+        ? internalReason.trim() || null
+        : null,
       discountType: saleDiscountPayload.discountType,
       discountValue: saleDiscountPayload.discountValue,
       items: buildSaleItemsPayload(),
@@ -2093,28 +2122,31 @@ export default function NewSalePage() {
         doesNotGenerateDebt || !selectedPaymentType?.requiresDueDate
           ? null
           : dueDate,
-      receiptFinancialAccountId: receiptFinancialAccountId
-        && !doesNotGenerateDebt
-        ? Number(receiptFinancialAccountId)
-        : null,
+      receiptFinancialAccountId:
+        receiptFinancialAccountId && !doesNotGenerateDebt
+          ? Number(receiptFinancialAccountId)
+          : null,
       entryAmount:
         !doesNotGenerateDebt &&
         selectedPaymentType?.allowsEntryAmount &&
         parsedEntryAmount > 0
           ? parsedEntryAmount
           : null,
-      entryPaymentTypeId: !doesNotGenerateDebt && entryPaymentTypeId
-        ? Number(entryPaymentTypeId)
-        : null,
-      entryFinancialAccountId: entryFinancialAccountId
-        && !doesNotGenerateDebt
-        ? Number(entryFinancialAccountId)
-        : null,
+      entryPaymentTypeId:
+        !doesNotGenerateDebt && entryPaymentTypeId
+          ? Number(entryPaymentTypeId)
+          : null,
+      entryFinancialAccountId:
+        entryFinancialAccountId && !doesNotGenerateDebt
+          ? Number(entryFinancialAccountId)
+          : null,
       entryPaidAt:
         !doesNotGenerateDebt && parsedEntryAmount > 0
           ? getCurrentDateInputValue()
           : null,
-      entryReferenceCode: doesNotGenerateDebt ? null : entryReferenceCode || null,
+      entryReferenceCode: doesNotGenerateDebt
+        ? null
+        : entryReferenceCode || null,
       paymentReferenceCode: doesNotGenerateDebt
         ? null
         : paymentReferenceCode || null,
@@ -2806,7 +2838,9 @@ export default function NewSalePage() {
                       <input
                         type="checkbox"
                         checked={doesNotGenerateDebt}
-                        onChange={(e) => setDoesNotGenerateDebt(e.target.checked)}
+                        onChange={(e) =>
+                          setDoesNotGenerateDebt(e.target.checked)
+                        }
                         className="h-4 w-4 rounded border border-outline-variant/60 accent-primary"
                       />
                       Não gerar conta a receber
@@ -2828,34 +2862,35 @@ export default function NewSalePage() {
 
                     {doesNotGenerateDebt ? (
                       <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest px-4 py-3 text-sm text-neutral-700">
-                        Esta venda será salva apenas para consulta, sem gerar A Receber, banco ou caixa.
+                        Esta venda será salva apenas para consulta, sem gerar A
+                        Receber, banco ou caixa.
                       </div>
                     ) : null}
                   </div>
                 </div>
 
                 {!doesNotGenerateDebt ? (
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-primary">
-                      Forma de pagamento
-                    </label>
-                    <select
-                      value={paymentTypeId}
-                      onChange={(e) =>
-                        void handlePaymentTypeChange(e.target.value)
-                      }
-                      className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
-                    >
-                      <option value="">Selecione...</option>
-                      {paymentTypes.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Forma de pagamento
+                      </label>
+                      <select
+                        value={paymentTypeId}
+                        onChange={(e) =>
+                          void handlePaymentTypeChange(e.target.value)
+                        }
+                        className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+                      >
+                        <option value="">Selecione...</option>
+                        {paymentTypes.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                </div>
                 ) : null}
 
                 {!doesNotGenerateDebt && customerCreditAvailable > 0 ? (
@@ -2994,71 +3029,74 @@ export default function NewSalePage() {
                   </div>
                 )}
 
-                {!doesNotGenerateDebt && selectedPaymentType?.allowsEntryAmount && (
-                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Valor de entrada
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={entryAmount}
-                        onChange={(e) => setEntryAmount(e.target.value)}
-                        className={paymentFieldClassName}
-                      />
+                {!doesNotGenerateDebt &&
+                  selectedPaymentType?.allowsEntryAmount && (
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Valor de entrada
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={entryAmount}
+                          onChange={(e) => setEntryAmount(e.target.value)}
+                          className={paymentFieldClassName}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Forma da entrada
+                        </label>
+                        <select
+                          value={entryPaymentTypeId}
+                          onChange={(e) =>
+                            void handleEntryPaymentTypeChange(e.target.value)
+                          }
+                          className={paymentFieldClassName}
+                        >
+                          <option value="">Selecione...</option>
+                          {entryPaymentTypeOptions.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Referência
+                        </label>
+                        <input
+                          value={entryReferenceCode}
+                          onChange={(e) =>
+                            setEntryReferenceCode(e.target.value)
+                          }
+                          className={paymentFieldClassName}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Recebido em
+                        </label>
+                        <select
+                          value={entryFinancialAccountId}
+                          onChange={(e) =>
+                            setEntryFinancialAccountId(e.target.value)
+                          }
+                          className={paymentFieldClassName}
+                        >
+                          <option value="">Selecione...</option>
+                          {entryReceiptAccountOptions.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Forma da entrada
-                      </label>
-                      <select
-                        value={entryPaymentTypeId}
-                        onChange={(e) =>
-                          void handleEntryPaymentTypeChange(e.target.value)
-                        }
-                        className={paymentFieldClassName}
-                      >
-                        <option value="">Selecione...</option>
-                        {entryPaymentTypeOptions.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Referência
-                      </label>
-                      <input
-                        value={entryReferenceCode}
-                        onChange={(e) => setEntryReferenceCode(e.target.value)}
-                        className={paymentFieldClassName}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-primary">
-                        Recebido em
-                      </label>
-                      <select
-                        value={entryFinancialAccountId}
-                        onChange={(e) =>
-                          setEntryFinancialAccountId(e.target.value)
-                        }
-                        className={paymentFieldClassName}
-                      >
-                        <option value="">Selecione...</option>
-                        {entryReceiptAccountOptions.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {!doesNotGenerateDebt && selectedPaymentType ? (
                   <div
@@ -3123,7 +3161,8 @@ export default function NewSalePage() {
                           className={paymentFieldClassName}
                         />
                       </div>
-                    ) : selectedPaymentType.financialFlow === "IMMEDIATE_CASH" ? (
+                    ) : selectedPaymentType.financialFlow ===
+                      "IMMEDIATE_CASH" ? (
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
                           Recebido em
@@ -3158,85 +3197,90 @@ export default function NewSalePage() {
                   </div>
                 ) : null}
 
-                {!doesNotGenerateDebt && shouldShowInstallmentVisualization && remainingAmount > 0 && (
-                  <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Saldo a pagar
-                        </label>
-                        <input
-                          value={formatCurrency(remainingAmount)}
-                          disabled
-                          className={paymentReadonlyFieldClassName}
-                        />
+                {!doesNotGenerateDebt &&
+                  shouldShowInstallmentVisualization &&
+                  remainingAmount > 0 && (
+                    <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Saldo a pagar
+                          </label>
+                          <input
+                            value={formatCurrency(remainingAmount)}
+                            disabled
+                            className={paymentReadonlyFieldClassName}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Saldo em parcelas
+                          </label>
+                          <input
+                            value={String(previewInstallmentCount)}
+                            disabled
+                            className={paymentReadonlyFieldClassName}
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            {selectedPaymentType?.requiresDueDate
+                              ? "Primeiro venc."
+                              : "Intervalo (dias)"}
+                          </label>
+                          <input
+                            value={
+                              selectedPaymentType?.requiresDueDate
+                                ? formatDate(
+                                    paymentInstallmentPreview[0]?.dueDate ||
+                                      dueDate,
+                                  )
+                                : String(parsedInstallmentIntervalDays)
+                            }
+                            disabled
+                            className={paymentReadonlyFieldClassName}
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Saldo em parcelas
-                        </label>
-                        <input
-                          value={String(previewInstallmentCount)}
-                          disabled
-                          className={paymentReadonlyFieldClassName}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          {selectedPaymentType?.requiresDueDate
-                            ? "Primeiro venc."
-                            : "Intervalo (dias)"}
-                        </label>
-                        <input
-                          value={
-                            selectedPaymentType?.requiresDueDate
-                              ? formatDate(paymentInstallmentPreview[0]?.dueDate || dueDate)
-                              : String(parsedInstallmentIntervalDays)
-                          }
-                          disabled
-                          className={paymentReadonlyFieldClassName}
-                        />
-                      </div>
-                    </div>
 
-                    <div className="mt-4 overflow-x-auto">
-                      <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-                        <thead>
-                          <tr className="text-left">
-                            <th className="px-3 py-2 font-semibold text-primary">
-                              Doc.
-                            </th>
-                            <th className="px-3 py-2 font-semibold text-primary text-right">
-                              Valor
-                            </th>
-                            <th className="px-3 py-2 font-semibold text-right text-primary">
-                              Data venc.
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paymentInstallmentPreview.map((installment) => (
-                            <tr
-                              key={installment.installmentNumber}
-                              className="bg-surface-lowest"
-                            >
-                              <td className="px-3 py-2 text-neutral-800">
-                                {installment.installmentNumber}/
-                                {installment.totalInstallments}
-                              </td>
-                              <td className="px-3 py-2 text-right text-neutral-800">
-                                {formatCurrency(installment.amount)}
-                              </td>
-                              <td className="px-3 py-2 text-neutral-800 text-right">
-                                {formatDate(installment.dueDate)}
-                              </td>
+                      <div className="mt-4 overflow-x-auto">
+                        <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                          <thead className="bg-[#dbd1d1] rounded-t-md">
+                            <tr className="text-left">
+                              <th className="px-3 py-2 font-semibold text-primary">
+                                Doc.
+                              </th>
+                              <th className="px-3 py-2 font-semibold text-primary text-right">
+                                Valor
+                              </th>
+                              <th className="px-3 py-2 font-semibold text-right text-primary">
+                                Data venc.
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {paymentInstallmentPreview.map((installment) => (
+                              <tr
+                                key={installment.installmentNumber}
+                                className="bg-surface-lowest"
+                              >
+                                <td className="px-3 py-2 text-neutral-800">
+                                  {installment.installmentNumber}/
+                                  {installment.totalInstallments}
+                                </td>
+                                <td className="px-3 py-2 text-right text-neutral-800">
+                                  {formatCurrency(installment.amount)}
+                                </td>
+                                <td className="px-3 py-2 text-neutral-800 text-right">
+                                  {formatDate(installment.dueDate)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div>
@@ -3294,15 +3338,16 @@ export default function NewSalePage() {
                   {!doesNotGenerateDebt &&
                     isImmediateCheckPayment &&
                     paymentReferenceCode.trim() && (
-                    <p>Cheque: {paymentReferenceCode.trim()}</p>
-                  )}
+                      <p>Cheque: {paymentReferenceCode.trim()}</p>
+                    )}
                   {!doesNotGenerateDebt ? (
                     <>
                       <p>Entrada: {formatCurrency(parsedEntryAmount)}</p>
                       <p>Saldo: {formatCurrency(remainingAmount)}</p>
                       <p>
                         Destino do saldo:{" "}
-                        {selectedPaymentType?.financialFlow === "FUTURE_CUSTOMER"
+                        {selectedPaymentType?.financialFlow ===
+                        "FUTURE_CUSTOMER"
                           ? "A receber"
                           : "Caixa/Banco"}
                       </p>
@@ -3312,23 +3357,27 @@ export default function NewSalePage() {
                   {doesNotGenerateDebt && internalReason.trim() ? (
                     <p>Motivo interno: {internalReason.trim()}</p>
                   ) : null}
-                  {!doesNotGenerateDebt && shouldShowInstallmentVisualization && remainingAmount > 0 && (
-                    <p>
-                      {selectedPaymentType?.requiresDueDate
-                        ? `Primeiro vencimento: ${formatDate(
-                            paymentInstallmentPreview[0]?.dueDate || dueDate,
-                          )}`
-                        : `Intervalo entre parcelas: ${parsedInstallmentIntervalDays} dias`}
-                    </p>
-                  )}
-                  {!doesNotGenerateDebt && installmentPreview.length > 0 && remainingAmount > 0 && (
-                    <p>
-                      Valor presumido:{" "}
-                      {installmentPreview
-                        .map((item) => formatCurrency(item))
-                        .join(" / ")}
-                    </p>
-                  )}
+                  {!doesNotGenerateDebt &&
+                    shouldShowInstallmentVisualization &&
+                    remainingAmount > 0 && (
+                      <p>
+                        {selectedPaymentType?.requiresDueDate
+                          ? `Primeiro vencimento: ${formatDate(
+                              paymentInstallmentPreview[0]?.dueDate || dueDate,
+                            )}`
+                          : `Intervalo entre parcelas: ${parsedInstallmentIntervalDays} dias`}
+                      </p>
+                    )}
+                  {!doesNotGenerateDebt &&
+                    installmentPreview.length > 0 &&
+                    remainingAmount > 0 && (
+                      <p>
+                        Valor presumido:{" "}
+                        {installmentPreview
+                          .map((item) => formatCurrency(item))
+                          .join(" / ")}
+                      </p>
+                    )}
                 </div>
 
                 <div className="flex justify-start">
@@ -3362,7 +3411,10 @@ export default function NewSalePage() {
               Tipo: {selectedTypesLabel}
             </p>
             <p className="text-sm text-neutral-700">
-              Forma: {doesNotGenerateDebt ? "Permuta" : selectedPaymentType?.name || "Não definida"}
+              Forma:{" "}
+              {doesNotGenerateDebt
+                ? "Permuta"
+                : selectedPaymentType?.name || "Não definida"}
             </p>
             <p className="text-sm text-neutral-700">
               Status: {hasGeneratedQuote ? "Orçamento" : "Em montagem"}
@@ -3377,10 +3429,12 @@ export default function NewSalePage() {
               Desconto aplicado: {formatCurrency(discountAmount)}
             </p>
             <p className="text-sm text-neutral-700">
-              Entrada: {formatCurrency(doesNotGenerateDebt ? 0 : parsedEntryAmount)}
+              Entrada:{" "}
+              {formatCurrency(doesNotGenerateDebt ? 0 : parsedEntryAmount)}
             </p>
             <p className="text-sm text-neutral-700">
-              Credito aplicado: {formatCurrency(doesNotGenerateDebt ? 0 : customerCreditToApply)}
+              Credito aplicado:{" "}
+              {formatCurrency(doesNotGenerateDebt ? 0 : customerCreditToApply)}
             </p>
             <p className="mb-3 text-sm text-neutral-700">
               Saldo: {formatCurrency(doesNotGenerateDebt ? 0 : remainingAmount)}

@@ -34,7 +34,7 @@ const PAYMENT_TYPE_RULES_BY_ID = {
     kind: CHECK_KIND,
     requiresDueDate: true,
     allowsEntryAmount: true,
-    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
+    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND, TRANSFER_KIND],
     allowsInstallments: true,
     maxInstallments: 12,
     defaultInstallments: 1,
@@ -44,7 +44,7 @@ const PAYMENT_TYPE_RULES_BY_ID = {
     kind: BOOKLET_KIND,
     requiresDueDate: true,
     allowsEntryAmount: true,
-    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
+    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND, TRANSFER_KIND],
     allowsInstallments: true,
     maxInstallments: 12,
     defaultInstallments: 1,
@@ -54,7 +54,7 @@ const PAYMENT_TYPE_RULES_BY_ID = {
     kind: INVOICE_KIND,
     requiresDueDate: true,
     allowsEntryAmount: true,
-    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
+    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND, TRANSFER_KIND],
     allowsInstallments: true,
     maxInstallments: 12,
     defaultInstallments: 1,
@@ -64,7 +64,7 @@ const PAYMENT_TYPE_RULES_BY_ID = {
     kind: CARD_KIND,
     requiresDueDate: false,
     allowsEntryAmount: true,
-    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
+    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND, TRANSFER_KIND],
     allowsInstallments: true,
     maxInstallments: 12,
     defaultInstallments: 1,
@@ -74,7 +74,7 @@ const PAYMENT_TYPE_RULES_BY_ID = {
     kind: CARD_KIND,
     requiresDueDate: false,
     allowsEntryAmount: true,
-    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
+    allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND, TRANSFER_KIND],
     allowsInstallments: true,
     maxInstallments: 12,
     defaultInstallments: 1,
@@ -159,7 +159,7 @@ function getLegacyPaymentTypePreset(paymentType = {}) {
             : CHECK_KIND,
       requiresDueDate: true,
       allowsEntryAmount: true,
-      allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
+      allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND, TRANSFER_KIND],
       allowsInstallments: true,
       maxInstallments: 12,
       defaultInstallments: 1,
@@ -172,7 +172,7 @@ function getLegacyPaymentTypePreset(paymentType = {}) {
       kind: CARD_KIND,
       requiresDueDate: false,
       allowsEntryAmount: true,
-      allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND],
+      allowedEntryPaymentKinds: [CASH_KIND, CHECK_KIND, TRANSFER_KIND],
       allowsInstallments: true,
       maxInstallments: 12,
       defaultInstallments: 1,
@@ -244,7 +244,11 @@ function isCardPaymentType(paymentType) {
 }
 
 function isImmediateEntryPaymentType(paymentType) {
-  return ENTRY_PAYMENT_TYPE_IDS.has(Number(paymentType?.id || paymentType?.idPaymentType));
+  const paymentTypeId = Number(paymentType?.id || paymentType?.idPaymentType);
+  return (
+    ENTRY_PAYMENT_TYPE_IDS.has(paymentTypeId) ||
+    paymentType?.kind === TRANSFER_KIND
+  );
 }
 
 function isImmediateCashPaymentType(paymentType) {

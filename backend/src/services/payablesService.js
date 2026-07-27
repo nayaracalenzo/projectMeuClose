@@ -1,4 +1,5 @@
 const { notFoundError, validationError } = require("../errors/AppError");
+const financialAccountsRepository = require("../repositories/financialAccountsRepository");
 const repository = require("../repositories/payablesRepository");
 
 function createPayablesValidationError(message, statusCode = 400) {
@@ -57,6 +58,40 @@ function normalizeOptionalDate(value, fieldName, options = {}) {
 function normalizeOptionalText(value) {
   const normalized = String(value || "").trim();
   return normalized || null;
+}
+
+async function getFinancialAccountOrDefault({
+  idFinancialAccount,
+  fieldName,
+  defaultTargetType = "BANK",
+  defaultScope = "LOJA",
+}) {
+  if (idFinancialAccount !== null && idFinancialAccount !== undefined && idFinancialAccount !== "") {
+    const normalizedId = Number(idFinancialAccount);
+
+    if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+      throw createPayablesValidationError(`${fieldName} invalido.`);
+    }
+
+    const account = await financialAccountsRepository.getById(normalizedId);
+
+    if (!account || account.active === false) {
+      throw createPayablesValidationError(`${fieldName} invalido.`);
+    }
+
+    return account;
+  }
+
+  const fallback = await financialAccountsRepository.findDefaultByScopeAndTarget(
+    defaultScope,
+    defaultTargetType,
+  );
+
+  if (!fallback) {
+    throw createPayablesValidationError(`${fieldName} invalido.`);
+  }
+
+  return fallback;
 }
 
 function deriveFilter(status, dueDate, openAmount, amount) {
@@ -312,6 +347,12 @@ async function registerPayment(payableId, body = {}) {
   }
   const paidAt = normalizeDate(body.paidAt, "Data do pagamento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
+  const financialAccount = await getFinancialAccountOrDefault({
+    idFinancialAccount: body.financialAccountId,
+    fieldName: "Pago em",
+    defaultTargetType: payable.settlementTarget === "CAIXA" ? "CASH" : "BANK",
+    defaultScope: payable.scope,
+  });
 
   const created = await repository.registerPayment(normalizedPayableId, {
     paymentTypeId,
@@ -319,12 +360,12 @@ async function registerPayment(payableId, body = {}) {
     paidAt,
     referenceCode,
     financialMovement: {
-      target: payable.settlementTarget,
-      scope: payable.scope,
+      target: financialAccount.targetType,
+      scope: financialAccount.scope,
       movementType: "OUT",
       category: payable.category,
       description: payable.description || `Pagamento a ${payable.beneficiary}`,
-      accountLabel: payable.accountLabel || "Banco da Loja",
+      accountLabel: financialAccount.targetType === "BANK" ? financialAccount.desc : null,
       amount,
       occurredAt: paidAt,
       paymentTypeId,
