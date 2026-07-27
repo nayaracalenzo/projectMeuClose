@@ -65,7 +65,9 @@ const formatSaleStatusLabel = (value?: string | null) => {
 };
 
 const getSaleStatusBadgeClassName = (value?: string | null) => {
-  const normalized = String(value || "").trim().toUpperCase();
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
 
   if (normalized === "CANCELLED") {
     return "border border-[#d8a2ab] bg-[#f7d9dd] text-[#8a1f2d]";
@@ -194,7 +196,9 @@ export default function SalesPage() {
         )) as SalesResponse;
         setSales(
           Array.isArray(data.items)
-            ? [...data.items].sort((left, right) => Number(right.id) - Number(left.id))
+            ? [...data.items].sort(
+                (left, right) => Number(right.id) - Number(left.id),
+              )
             : [],
         );
         setTotalItems(Number(data.total) || 0);
@@ -306,24 +310,24 @@ export default function SalesPage() {
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 {viewMode === "budgets" ? "Orçamento" : "Pedido"}
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Cliente
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Itens
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Data
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Status
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary text-right">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary text-right">
                 Valor
               </th>
             </tr>

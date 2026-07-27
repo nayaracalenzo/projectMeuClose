@@ -6,7 +6,10 @@ import CustomerModal from "../components/CustomerModal";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
-import { downloadWeeklyOrdersPdf, type PrintableOrder } from "../utils/ordersWeeklyPdf";
+import {
+  downloadWeeklyOrdersPdf,
+  type PrintableOrder,
+} from "../utils/ordersWeeklyPdf";
 
 interface ProductOrderRow {
   id: number;
@@ -71,7 +74,9 @@ const formatCustomerName = (value?: string | null) => {
 };
 
 const getProductionStatusBadgeClassName = (status?: string | null) => {
-  const normalized = String(status || "").trim().toLowerCase();
+  const normalized = String(status || "")
+    .trim()
+    .toLowerCase();
 
   if (normalized === "entregue") {
     return "bg-[#DFF4E4] text-[#17663A]";
@@ -107,7 +112,9 @@ export default function Orders() {
   const [pdfModalOpen, setPdfModalOpen] = useState(false);
   const [pdfStartDate, setPdfStartDate] = useState("");
   const [pdfEndDate, setPdfEndDate] = useState("");
-  const [pdfValueMode, setPdfValueMode] = useState<"withoutValue" | "withValue">("withoutValue");
+  const [pdfValueMode, setPdfValueMode] = useState<
+    "withoutValue" | "withValue"
+  >("withoutValue");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -144,7 +151,9 @@ export default function Orders() {
           params.set("statusId", statusFilter);
         }
 
-        const data = (await getRequest(`/products?${params.toString()}`)) as ProductionResponse;
+        const data = (await getRequest(
+          `/products?${params.toString()}`,
+        )) as ProductionResponse;
         setProductionItems(Array.isArray(data.items) ? data.items : []);
         setTotalItems(Number(data.total) || 0);
         setTotalPages(Number(data.totalPages) || 1);
@@ -204,27 +213,40 @@ export default function Orders() {
         params.set("statusId", statusFilter);
       }
 
-      const firstPage = (await getRequest(`/products?${params.toString()}`)) as ProductionResponse;
-      let weeklyItems = Array.isArray(firstPage.items) ? [...firstPage.items] : [];
+      const firstPage = (await getRequest(
+        `/products?${params.toString()}`,
+      )) as ProductionResponse;
+      let weeklyItems = Array.isArray(firstPage.items)
+        ? [...firstPage.items]
+        : [];
       const totalWeeklyPages = Number(firstPage.totalPages) || 1;
 
-      for (let currentPage = 2; currentPage <= totalWeeklyPages; currentPage += 1) {
+      for (
+        let currentPage = 2;
+        currentPage <= totalWeeklyPages;
+        currentPage += 1
+      ) {
         params.set("page", String(currentPage));
-        const nextPage = (await getRequest(`/products?${params.toString()}`)) as ProductionResponse;
+        const nextPage = (await getRequest(
+          `/products?${params.toString()}`,
+        )) as ProductionResponse;
         if (Array.isArray(nextPage.items)) {
           weeklyItems = [...weeklyItems, ...nextPage.items];
         }
       }
 
       if (!weeklyItems.length) {
-        setError("Nenhum item de produção foi encontrado no período informado para gerar o PDF.");
+        setError(
+          "Nenhum item de produção foi encontrado no período informado para gerar o PDF.",
+        );
         return;
       }
 
       const printableOrders: PrintableOrder[] = weeklyItems.map((item) => ({
         id: item.id,
         customer: item.customer,
-        kind: item.clothingType || item.productType || item.category || "Produção",
+        kind:
+          item.clothingType || item.productType || item.category || "Produção",
         date: item.testDate || item.createdAt,
         status: item.status || "-",
         total: item.finalValue,
@@ -242,7 +264,9 @@ export default function Orders() {
         ],
       }));
 
-      const [startYear, startMonth, startDay] = pdfStartDate.split("-").map(Number);
+      const [startYear, startMonth, startDay] = pdfStartDate
+        .split("-")
+        .map(Number);
       const [endYear, endMonth, endDay] = pdfEndDate.split("-").map(Number);
       const startDate = new Date(startYear, startMonth - 1, startDay);
       const endDate = new Date(endYear, endMonth - 1, endDay);
@@ -258,7 +282,12 @@ export default function Orders() {
       });
       setPdfModalOpen(false);
     } catch (err: unknown) {
-      setError(getUserFacingApiErrorMessage(err, "Não foi possível gerar o PDF do período."));
+      setError(
+        getUserFacingApiErrorMessage(
+          err,
+          "Não foi possível gerar o PDF do período.",
+        ),
+      );
     } finally {
       setPdfLoading(false);
     }
@@ -452,24 +481,24 @@ export default function Orders() {
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Descrição
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Cliente
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Data Prova
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Costureira
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Status
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary text-right">
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary text-right">
                 Valor
               </th>
             </tr>

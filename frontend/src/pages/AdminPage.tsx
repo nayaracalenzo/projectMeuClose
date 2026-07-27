@@ -346,7 +346,10 @@ export default function AdminPage() {
       }
     }
 
-    const endpoint = params.size > 0 ? `${config.endpoint}?${params.toString()}` : config.endpoint;
+    const endpoint =
+      params.size > 0
+        ? `${config.endpoint}?${params.toString()}`
+        : config.endpoint;
     const data = await getRequest(endpoint);
     setResourceRows((prev) => ({
       ...prev,
@@ -562,7 +565,9 @@ export default function AdminPage() {
       setError("");
 
       if (selectedResource === "employees") {
-        const message = getOptionalDocumentValidationMessage(employeeForm.document);
+        const message = getOptionalDocumentValidationMessage(
+          employeeForm.document,
+        );
 
         if (message) {
           setError(message);
@@ -571,7 +576,9 @@ export default function AdminPage() {
       }
 
       if (selectedResource === "suppliers") {
-        const message = getOptionalDocumentValidationMessage(supplierForm.document);
+        const message = getOptionalDocumentValidationMessage(
+          supplierForm.document,
+        );
 
         if (message) {
           setError(message);
@@ -598,13 +605,13 @@ export default function AdminPage() {
                     targetType: simpleForm.targetType,
                     active: simpleForm.active,
                   }
-              : selectedResource === "measurement-definitions"
-                ? {
-                    label: simpleForm.label,
-                  }
-              : {
-                  desc: simpleForm.desc,
-                };
+                : selectedResource === "measurement-definitions"
+                  ? {
+                      label: simpleForm.label,
+                    }
+                  : {
+                      desc: simpleForm.desc,
+                    };
 
       if (editingId) {
         await updateRequest(`${currentConfig.endpoint}/${editingId}`, payload);
@@ -678,7 +685,7 @@ export default function AdminPage() {
     return (
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
                 Nome
@@ -759,11 +766,11 @@ export default function AdminPage() {
     );
   }
 
-function renderPaymentTypesTable() {
+  function renderPaymentTypesTable() {
     return (
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
                 ID
@@ -825,7 +832,7 @@ function renderPaymentTypesTable() {
     return (
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
                 Nome
@@ -911,7 +918,7 @@ function renderPaymentTypesTable() {
     return (
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
                 ID
@@ -931,7 +938,10 @@ function renderPaymentTypesTable() {
           </thead>
           <tbody>
             {(paginatedRows as GenericRecord[]).map((row) => (
-              <tr key={String(row[currentConfig.primaryKey])} className="bg-surface-lowest">
+              <tr
+                key={String(row[currentConfig.primaryKey])}
+                className="bg-surface-lowest"
+              >
                 <td className="px-4 py-3 text-[14px] font-semibold text-primary">
                   {String(row[currentConfig.primaryKey] ?? "")}
                 </td>
@@ -973,7 +983,7 @@ function renderPaymentTypesTable() {
     return (
       <div className="hidden overflow-x-auto lg:block">
         <table className="w-full border-separate border-spacing-y-2">
-          <thead>
+          <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.4rem] text-primary">
                 Data
@@ -994,7 +1004,10 @@ function renderPaymentTypesTable() {
           </thead>
           <tbody>
             {(paginatedRows as GenericRecord[]).map((row) => (
-              <tr key={String(row.idAudit)} className="bg-surface-lowest align-top">
+              <tr
+                key={String(row.idAudit)}
+                className="bg-surface-lowest align-top"
+              >
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
                   {formatDate(row.occurredAt)}
                 </td>
@@ -1022,7 +1035,10 @@ function renderPaymentTypesTable() {
     return (
       <div className="mb-4 grid gap-4 rounded-xl bg-surface-lowest p-4 md:grid-cols-[160px_160px_minmax(0,1fr)_220px]">
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-primary" htmlFor="audit-start-date">
+          <label
+            className="text-sm font-medium text-primary"
+            htmlFor="audit-start-date"
+          >
             Data inicial
           </label>
           <input
@@ -1030,14 +1046,20 @@ function renderPaymentTypesTable() {
             type="date"
             value={auditFilters.startDate}
             onChange={(event) =>
-              setAuditFilters((prev) => ({ ...prev, startDate: event.target.value }))
+              setAuditFilters((prev) => ({
+                ...prev,
+                startDate: event.target.value,
+              }))
             }
             className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
           />
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-primary" htmlFor="audit-end-date">
+          <label
+            className="text-sm font-medium text-primary"
+            htmlFor="audit-end-date"
+          >
             Data final
           </label>
           <input
@@ -1045,14 +1067,20 @@ function renderPaymentTypesTable() {
             type="date"
             value={auditFilters.endDate}
             onChange={(event) =>
-              setAuditFilters((prev) => ({ ...prev, endDate: event.target.value }))
+              setAuditFilters((prev) => ({
+                ...prev,
+                endDate: event.target.value,
+              }))
             }
             className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
           />
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-primary" htmlFor="audit-history">
+          <label
+            className="text-sm font-medium text-primary"
+            htmlFor="audit-history"
+          >
             Histórico
           </label>
           <input
@@ -1060,21 +1088,30 @@ function renderPaymentTypesTable() {
             type="text"
             value={auditFilters.history}
             onChange={(event) =>
-              setAuditFilters((prev) => ({ ...prev, history: event.target.value }))
+              setAuditFilters((prev) => ({
+                ...prev,
+                history: event.target.value,
+              }))
             }
             className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
           />
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-medium text-primary" htmlFor="audit-type">
+          <label
+            className="text-sm font-medium text-primary"
+            htmlFor="audit-type"
+          >
             Tipo
           </label>
           <select
             id="audit-type"
             value={auditFilters.auditTypeId}
             onChange={(event) =>
-              setAuditFilters((prev) => ({ ...prev, auditTypeId: event.target.value }))
+              setAuditFilters((prev) => ({
+                ...prev,
+                auditTypeId: event.target.value,
+              }))
             }
             className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
           >
@@ -1174,8 +1211,8 @@ function renderPaymentTypesTable() {
                 <p className="text-base font-semibold text-primary">
                   {String(
                     selectedResource === "financial-categories"
-                      ? row.description ?? ""
-                      : row.desc ?? "",
+                      ? (row.description ?? "")
+                      : (row.desc ?? ""),
                   )}
                 </p>
                 <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
@@ -1276,7 +1313,11 @@ function renderPaymentTypesTable() {
                     {currentConfig.title}
                   </h2>
                   {currentConfig.readOnly ? null : (
-                    <Button variant="primary" size="md" onClick={openCreateModal}>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={openCreateModal}
+                    >
                       + Novo
                     </Button>
                   )}
@@ -1304,7 +1345,7 @@ function renderPaymentTypesTable() {
                           ? renderPaymentTypesTable()
                           : selectedResource === "audits"
                             ? renderAuditsTable()
-                          : renderSimpleTable()}
+                            : renderSimpleTable()}
                     {renderMobileCards()}
                     <div className="mt-4 hidden items-center justify-between md:flex">
                       <p className="text-[13px] tracking-[0.04em] text-neutral-700">
@@ -1388,7 +1429,6 @@ function renderPaymentTypesTable() {
         }
       >
         <div className="mx-auto max-w-3xl">
-
           {error ? (
             <div className="mb-4 flex items-start gap-2 bg-[#ffe7e7] px-3 py-2 text-sm text-[#8f1515]">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
@@ -1853,7 +1893,10 @@ function renderPaymentTypesTable() {
                     type="checkbox"
                     checked={simpleForm.active}
                     onChange={(e) =>
-                      setSimpleForm((prev) => ({ ...prev, active: e.target.checked }))
+                      setSimpleForm((prev) => ({
+                        ...prev,
+                        active: e.target.checked,
+                      }))
                     }
                   />
                   Forma de pagamento ativa
@@ -1875,7 +1918,10 @@ function renderPaymentTypesTable() {
                     type="checkbox"
                     checked={simpleForm.active}
                     onChange={(e) =>
-                      setSimpleForm((prev) => ({ ...prev, active: e.target.checked }))
+                      setSimpleForm((prev) => ({
+                        ...prev,
+                        active: e.target.checked,
+                      }))
                     }
                   />
                   Cargo ativo
@@ -1896,7 +1942,10 @@ function renderPaymentTypesTable() {
                   <select
                     value={simpleForm.scope}
                     onChange={(e) =>
-                      setSimpleForm((prev) => ({ ...prev, scope: e.target.value }))
+                      setSimpleForm((prev) => ({
+                        ...prev,
+                        scope: e.target.value,
+                      }))
                     }
                     className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
                   >
@@ -1906,7 +1955,10 @@ function renderPaymentTypesTable() {
                   <select
                     value={simpleForm.targetType}
                     onChange={(e) =>
-                      setSimpleForm((prev) => ({ ...prev, targetType: e.target.value }))
+                      setSimpleForm((prev) => ({
+                        ...prev,
+                        targetType: e.target.value,
+                      }))
                     }
                     className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
                   >
@@ -1919,7 +1971,10 @@ function renderPaymentTypesTable() {
                     type="checkbox"
                     checked={simpleForm.active}
                     onChange={(e) =>
-                      setSimpleForm((prev) => ({ ...prev, active: e.target.checked }))
+                      setSimpleForm((prev) => ({
+                        ...prev,
+                        active: e.target.checked,
+                      }))
                     }
                   />
                   Conta ativa
@@ -1988,17 +2043,27 @@ function renderPaymentTypesTable() {
       <CustomerModal
         open={deleteModal.open}
         onClose={closeDeleteModal}
-        title={currentConfig.isSoftDelete ? "Desativar registro" : "Excluir registro"}
+        title={
+          currentConfig.isSoftDelete ? "Desativar registro" : "Excluir registro"
+        }
         subtitle="Confirme a ação antes de continuar."
       >
         <div className="space-y-5">
           <p className="text-sm text-neutral-700">
             {currentConfig.isSoftDelete ? "Deseja desativar" : "Deseja excluir"}{" "}
-            <span className="font-semibold text-primary">{deleteModal.label}</span>?
+            <span className="font-semibold text-primary">
+              {deleteModal.label}
+            </span>
+            ?
           </p>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="secondary" size="md" onClick={closeDeleteModal}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              onClick={closeDeleteModal}
+            >
               Cancelar
             </Button>
             <Button
@@ -2008,7 +2073,9 @@ function renderPaymentTypesTable() {
               onClick={() => void confirmDelete()}
               isLoading={submitting}
             >
-              {currentConfig.isSoftDelete ? "Confirmar desativação" : "Confirmar exclusão"}
+              {currentConfig.isSoftDelete
+                ? "Confirmar desativação"
+                : "Confirmar exclusão"}
             </Button>
           </div>
         </div>

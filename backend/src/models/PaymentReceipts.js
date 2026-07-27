@@ -56,6 +56,12 @@ const PaymentReceiptsSchema = (sequelize, DataTypes) => {
     PaymentReceipts.hasMany(models.CustomerCreditUsages, {
       foreignKey: "paymentReceiptId",
     });
+    PaymentReceipts.hasMany(models.CashEntries, {
+      foreignKey: "paymentReceiptId",
+    });
+    PaymentReceipts.hasMany(models.BankEntries, {
+      foreignKey: "paymentReceiptId",
+    });
   };
 
   return PaymentReceipts;

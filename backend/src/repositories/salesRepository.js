@@ -5,6 +5,8 @@ const {
   CustomerCredits,
   CustomerCreditUsages,
   Employees,
+  CashEntries,
+  BankEntries,
   MeasurementDefinitions,
   PaymentReceipts,
   PaymentTypes,
@@ -759,6 +761,16 @@ async function getSaleForItemCancellation(idSale, idSaleItem, transaction) {
             model: PaymentTypes,
             required: false,
           },
+          {
+            model: CashEntries,
+            required: false,
+            attributes: ["idCashEntry", "scope"],
+          },
+          {
+            model: BankEntries,
+            required: false,
+            attributes: ["idBankEntry", "scope", "accountLabel"],
+          },
         ],
       },
       {
@@ -1025,6 +1037,16 @@ async function getSaleById(idSale) {
       include: [
         {
           model: PaymentTypes,
+        },
+        {
+          model: CashEntries,
+          required: false,
+          attributes: ["idCashEntry", "scope"],
+        },
+        {
+          model: BankEntries,
+          required: false,
+          attributes: ["idBankEntry", "scope", "accountLabel"],
         },
       ],
     },

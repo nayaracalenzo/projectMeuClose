@@ -197,6 +197,7 @@ async function listEntries(query = {}) {
       id: item.idCashEntry,
       date: item.occurredAt,
       scope: item.scope,
+      accountLabel: item.scope === "PESSOAL" ? "Caixa Pessoal" : "Caixa da Loja",
       parcela: resolveEntryInstallmentLabel(item),
       description: item.description,
       category: item.FinancialCategory?.description || item.category || "DIVERSOS",

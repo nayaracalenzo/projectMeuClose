@@ -69,7 +69,9 @@ export default function CustomersPage() {
           params.set("search", deferredSearch.trim());
         }
 
-        const data = (await getRequest(`/clients?${params.toString()}`)) as CustomersResponse;
+        const data = (await getRequest(
+          `/clients?${params.toString()}`,
+        )) as CustomersResponse;
         const items = Array.isArray(data.items) ? data.items : [];
         const customer = items.map((customer: ICustomer) => ({
           id: Number(customer.id),
@@ -132,7 +134,9 @@ export default function CustomersPage() {
                   disabled={!selectedId}
                   size="md"
                   className="px-5"
-                  onClick={() => selectedId && navigate(`/cliente/${selectedId}`)}
+                  onClick={() =>
+                    selectedId && navigate(`/cliente/${selectedId}`)
+                  }
                 >
                   Mostrar Detalhes
                 </Button>
@@ -185,18 +189,18 @@ export default function CustomersPage() {
 
           <div className="hidden overflow-x-auto md:block">
             <table className="mt-2 w-full border-separate border-spacing-y-2">
-              <thead>
+              <thead className="bg-[#dbd1d1] rounded-t-md">
                 <tr className="text-left">
-                  <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                  <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                     Nome
                   </th>
-                  <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                  <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                     Contato
                   </th>
-                  <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                  <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                     CPF/CNPJ
                   </th>
-                  <th className="px-4 pt-2 font-editorial text-[1.6rem] text-primary">
+                  <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                     Status
                   </th>
                 </tr>
@@ -295,7 +299,9 @@ export default function CustomersPage() {
                 variant="secondary"
                 size="sm"
                 disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                }
               >
                 Próxima
               </Button>

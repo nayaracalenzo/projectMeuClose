@@ -20,7 +20,7 @@ function CustomerRecordsTableComponent<T extends Record<string, unknown>>({
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-separate border-spacing-y-2">
-        <thead>
+        <thead className="bg-[#dbd1d1] rounded-t-md">
           <tr className="text-left">
             {columns.map((column) => (
               <th
@@ -77,6 +77,8 @@ function CustomerRecordsTableComponent<T extends Record<string, unknown>>({
   );
 }
 
-const CustomerRecordsTable = memo(CustomerRecordsTableComponent) as typeof CustomerRecordsTableComponent;
+const CustomerRecordsTable = memo(
+  CustomerRecordsTableComponent,
+) as typeof CustomerRecordsTableComponent;
 
 export default CustomerRecordsTable;
