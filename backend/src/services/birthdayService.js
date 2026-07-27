@@ -47,17 +47,34 @@ function getCurrentWeekBirthdayWindow(referenceDate = new Date()) {
   };
 }
 
-function getBirthdayOccurrenceTimestamp(birthDate, referenceYear) {
-  if (!birthDate) return Number.POSITIVE_INFINITY;
+function extractMonthDayParts(birthDate) {
+  if (!birthDate) return null;
+
+  if (birthDate instanceof Date) {
+    const timestamp = birthDate.getTime();
+    if (Number.isNaN(timestamp)) return null;
+
+    return {
+      month: birthDate.getMonth() + 1,
+      day: birthDate.getDate(),
+    };
+  }
 
   const base = String(birthDate).slice(0, 10);
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
-  if (!match) return Number.POSITIVE_INFINITY;
+  if (!match) return null;
 
-  const month = Number(match[2]);
-  const day = Number(match[3]);
+  return {
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
 
-  return new Date(referenceYear, month - 1, day, 0, 0, 0, 0).getTime();
+function getBirthdayOccurrenceTimestamp(birthDate, referenceYear) {
+  const parts = extractMonthDayParts(birthDate);
+  if (!parts) return Number.POSITIVE_INFINITY;
+
+  return new Date(referenceYear, parts.month - 1, parts.day, 0, 0, 0, 0).getTime();
 }
 
 function isBirthdayInWindow(birthDate, startDate, endDate) {
