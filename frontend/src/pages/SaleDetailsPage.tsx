@@ -215,6 +215,39 @@ function formatReceiptType(receiptType: SaleReceipt["receiptType"]) {
   return "Parcela";
 }
 
+function formatReceivableStatus(value?: string | null) {
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (normalized === "OPEN") return "Aberto";
+  if (normalized === "PARTIAL") return "Parcial";
+  if (normalized === "PAID") return "Pago";
+  if (normalized === "OVERDUE") return "Vencido";
+  if (normalized === "CANCELLED") return "Cancelado";
+
+  return value || "-";
+}
+
+function buildReceiptTitle(
+  receipt: SaleReceipt,
+  installments: SaleInstallment[],
+) {
+  if (receipt.receiptType !== "INSTALLMENT") {
+    return formatReceiptType(receipt.receiptType);
+  }
+
+  const installment = installments.find(
+    (item) => item.id === receipt.receivableInstallmentId,
+  );
+
+  if (!installment) {
+    return formatReceiptType(receipt.receiptType);
+  }
+
+  return `Parcela ${installment.installmentNumber}/${installment.totalInstallments}`;
+}
+
 function formatSaleStatus(value?: string | null) {
   const normalized = String(value || "")
     .trim()
@@ -347,6 +380,13 @@ export default function SaleDetailsPage() {
   );
   const receivableInstallmentsCount = useMemo(
     () => sale?.receivable?.installments.length || 0,
+    [sale],
+  );
+  const openReceivableInstallments = useMemo(
+    () =>
+      sale?.receivable?.installments.filter(
+        (installment) => installment.openAmount > 0,
+      ) || [],
     [sale],
   );
   const activeItemsCount = useMemo(
@@ -912,7 +952,10 @@ export default function SaleDetailsPage() {
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-primary">
-                          {formatReceiptType(receipt.receiptType)}
+                          {buildReceiptTitle(
+                            receipt,
+                            sale.receivable?.installments || [],
+                          )}
                         </p>
                         <p className="text-sm text-neutral-700">
                           {receipt.paymentType?.name ||
@@ -924,7 +967,7 @@ export default function SaleDetailsPage() {
                       </p>
                     </div>
                     <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
-                      <p>Data: {formatDateTime(receipt.paidAt)}</p>
+                      <p>Data: {formatDate(receipt.paidAt)}</p>
                       <p>Recebido em: {receipt.accountLabel || "-"}</p>
                       <p>Referencia: {receipt.referenceCode || "-"}</p>
                     </div>
@@ -978,7 +1021,10 @@ export default function SaleDetailsPage() {
                     value={sale.receivable.originLabel}
                   />
                   <InfoCard label="Origem" value={sale.receivable.originName} />
-                  <InfoCard label="Status" value={sale.receivable.status} />
+                  <InfoCard
+                    label="Status"
+                    value={formatReceivableStatus(sale.receivable.status)}
+                  />
                   <InfoCard
                     label="Valor original"
                     value={formatCurrency(sale.receivable.originalAmount)}
@@ -990,12 +1036,12 @@ export default function SaleDetailsPage() {
                 </div>
 
                 <div className="mt-5 space-y-3">
-                  {sale.receivable.installments.length === 0 ? (
+                  {openReceivableInstallments.length === 0 ? (
                     <div className="rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
-                      Nenhuma parcela cadastrada.
+                      Nenhuma parcela em aberto.
                     </div>
                   ) : (
-                    sale.receivable.installments.map((installment) => (
+                    openReceivableInstallments.map((installment) => (
                       <div
                         key={installment.id}
                         className="rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4"
@@ -1017,7 +1063,7 @@ export default function SaleDetailsPage() {
                         </div>
                         <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                           <p>Vencimento: {formatDate(installment.dueDate)}</p>
-                          <p>Status: {installment.status}</p>
+                          <p>Status: {formatReceivableStatus(installment.status)}</p>
                           <p>Pago: {formatCurrency(installment.paidAmount)}</p>
                           <p>
                             Em aberto: {formatCurrency(installment.openAmount)}

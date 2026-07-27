@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
@@ -11,7 +11,11 @@ import {
 } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { getCategoryBadgeClassName } from "../utils/categoryBadge";
-import { formatCurrency } from "../utils/currency";
+import {
+  formatCurrency,
+  formatCurrencyInput,
+  parseCurrencyToNumber,
+} from "../utils/currency";
 
 type Scope = "LOJA" | "PESSOAL";
 type SettlementTarget = "BANCO" | "CAIXA";
@@ -39,6 +43,11 @@ interface FinancialAccountOption {
 interface SupplierOption {
   id: number;
   name: string;
+}
+
+interface FinancialCategoryOption {
+  id: number;
+  description: string;
 }
 
 interface PayableRow {
@@ -120,6 +129,9 @@ export default function PayablesPage() {
     FinancialAccountOption[]
   >([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [financialCategories, setFinancialCategories] = useState<
+    FinancialCategoryOption[]
+  >([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSummaryValues, setShowSummaryValues] = useState(false);
@@ -159,6 +171,9 @@ export default function PayablesPage() {
   const [paymentFinancialAccountId, setPaymentFinancialAccountId] =
     useState("");
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [newCategoryDescription, setNewCategoryDescription] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   useEffect(() => {
@@ -235,6 +250,22 @@ export default function PayablesPage() {
   }, []);
 
   useEffect(() => {
+    const fetchFinancialCategories = async () => {
+      try {
+        const data = (await getRequest(
+          "/financial-categories",
+        )) as FinancialCategoryOption[];
+        setFinancialCategories(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error("Erro ao buscar categorias financeiras", error);
+        setFinancialCategories([]);
+      }
+    };
+
+    fetchFinancialCategories();
+  }, []);
+
+  useEffect(() => {
     const fetchSuppliers = async () => {
       try {
         const data = await getRequest("/admin/suppliers");
@@ -307,7 +338,7 @@ export default function PayablesPage() {
     setCategory(selectedRow.category);
     setBeneficiary(selectedRow.supplierName ? "" : selectedRow.beneficiary);
     setSupplierId(selectedRow.supplierId ? String(selectedRow.supplierId) : "");
-    setAmount(String(selectedRow.amount.toFixed(2)));
+    setAmount(formatCurrencyInput(String(selectedRow.amount.toFixed(2))));
     setDueDate(selectedRow.dueDate.slice(0, 10));
     setSettlementTarget(selectedRow.settlementTarget);
     setAccountLabel(selectedRow.accountLabel || "");
@@ -327,7 +358,7 @@ export default function PayablesPage() {
         category,
         beneficiary,
         supplierId: supplierId ? Number(supplierId) : null,
-        amount: Number(amount),
+        amount: parseCurrencyToNumber(amount),
         dueDate,
         settlementTarget,
         accountLabel: accountLabel || null,
@@ -464,6 +495,53 @@ export default function PayablesPage() {
     setPaymentConfirmOpen(true);
   };
 
+  const handleCreateFinancialCategory = async () => {
+    const normalizedDescription = newCategoryDescription.trim();
+    if (!normalizedDescription) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Categoria",
+        message: "Informe uma descricao para a categoria.",
+      });
+      return;
+    }
+
+    try {
+      setCreatingCategory(true);
+      const created = (await postRequest("/admin/financial-categories", {
+        description: normalizedDescription,
+      })) as { idFinancialCategory?: number; description?: string };
+
+      const data = (await getRequest(
+        "/financial-categories",
+      )) as FinancialCategoryOption[];
+      const nextCategories = Array.isArray(data) ? data : [];
+      setFinancialCategories(nextCategories);
+      setCategory(created?.description || normalizedDescription);
+      setCategoryModalOpen(false);
+      setNewCategoryDescription("");
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Categoria",
+        message: "Categoria criada com sucesso.",
+      });
+    } catch (error: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Categoria",
+        message: getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel criar a categoria.",
+        ),
+      });
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const handleConfirmRegisterPayment = async () => {
     if (!activePayableId) return;
 
@@ -532,8 +610,20 @@ export default function PayablesPage() {
         </div>
       </div>
 
-      {isCreateFormOpen && (
-        <div className="mb-5 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
+      <CustomerModal
+        open={isCreateFormOpen}
+        onClose={() => {
+          setIsCreateFormOpen(false);
+          resetPayableForm();
+        }}
+        title={
+          payableFormMode === "create"
+            ? "Nova Conta a Pagar"
+            : "Editar Conta a Pagar"
+        }
+        subtitle="Preencha os dados da conta a pagar."
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
               Descrição
@@ -548,11 +638,31 @@ export default function PayablesPage() {
             <label className="mb-1 block text-sm font-semibold text-primary">
               Categoria
             </label>
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
+            <div className="flex gap-2">
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+              >
+                <option value="">Selecione...</option>
+                {financialCategories.map((item) => (
+                  <option key={item.id} value={item.description}>
+                    {item.description}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewCategoryDescription(category.trim());
+                  setCategoryModalOpen(true);
+                }}
+                className="h-11 rounded border border-outline-variant/60 bg-white px-4 text-lg font-semibold text-primary"
+                aria-label="Adicionar categoria"
+              >
+                +
+              </button>
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
@@ -573,24 +683,12 @@ export default function PayablesPage() {
           </div>
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
-              Favorecido livre
-            </label>
-            <input
-              value={beneficiary}
-              onChange={(e) => setBeneficiary(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
               Valor
             </label>
             <input
-              type="number"
-              min="0.01"
-              step="0.01"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => setAmount(formatCurrencyInput(e.target.value))}
+              placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
@@ -605,49 +703,7 @@ export default function PayablesPage() {
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Destino previsto
-            </label>
-            <select
-              value={settlementTarget}
-              onChange={(e) =>
-                setSettlementTarget(e.target.value as SettlementTarget)
-              }
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="BANCO">Banco</option>
-              <option value="CAIXA">Caixa</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Conta vinculada
-            </label>
-            <input
-              value={accountLabel}
-              onChange={(e) => setAccountLabel(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Forma prevista
-            </label>
-            <select
-              value={plannedPaymentTypeId}
-              onChange={(e) => setPlannedPaymentTypeId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {paymentTypes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex gap-2 md:col-span-4">
+          <div className="flex gap-2 md:col-span-2">
             <button
               type="button"
               onClick={handleSubmitPayable}
@@ -669,7 +725,7 @@ export default function PayablesPage() {
             </button>
           </div>
         </div>
-      )}
+      </CustomerModal>
 
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
@@ -1092,6 +1148,53 @@ export default function PayablesPage() {
               variant="secondary"
               size="sm"
               onClick={() => setDeleteConfirmOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={categoryModalOpen}
+        onClose={() => {
+          if (creatingCategory) return;
+          setCategoryModalOpen(false);
+          setNewCategoryDescription("");
+        }}
+        title="Nova Categoria"
+        subtitle="Cadastre uma categoria financeira para usar no A Pagar."
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Categoria
+            </label>
+            <input
+              value={newCategoryDescription}
+              onChange={(e) => setNewCategoryDescription(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+              placeholder="Informe a categoria"
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => void handleCreateFinancialCategory()}
+              isLoading={creatingCategory}
+            >
+              Salvar
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                setCategoryModalOpen(false);
+                setNewCategoryDescription("");
+              }}
+              disabled={creatingCategory}
             >
               Cancelar
             </Button>
