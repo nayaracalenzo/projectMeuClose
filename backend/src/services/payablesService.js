@@ -1,4 +1,4 @@
-const { notFoundError, validationError } = require("../errors/AppError");
+﻿const { notFoundError, validationError } = require("../errors/AppError");
 const financialAccountsRepository = require("../repositories/financialAccountsRepository");
 const repository = require("../repositories/payablesRepository");
 
@@ -201,8 +201,8 @@ async function createPayable(body = {}) {
       : null;
   const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
 
-  if (!description || !category || !beneficiary) {
-    throw createPayablesValidationError("Descrição, categoria e favorecido sao obrigatórios.");
+  if (!description || !category) {
+    throw createPayablesValidationError("DescriÃ§Ã£o e categoria sao obrigatÃ³rias.");
   }
 
   const amount = normalizeAmount(body.amount, "Valor");
@@ -273,8 +273,8 @@ async function updatePayable(payableId, body = {}) {
       : null;
   const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
 
-  if (!description || !category || !beneficiary) {
-    throw createPayablesValidationError("Descricao, categoria e favorecido sao obrigatorios.");
+  if (!description || !category) {
+    throw createPayablesValidationError("Descricao e categoria sao obrigatorias.");
   }
 
   const amount = normalizeAmount(body.amount, "Valor");
