@@ -11,6 +11,11 @@ import CustomerReceivablesModal from "../components/CustomerReceivablesModal";
 import CustomerSalesModal from "../components/CustomerSalesModal";
 import { getRequest, postRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import {
+  formatBirthDateFromApi,
+  maskBirthDate,
+  toBirthDateApiValue,
+} from "../utils/birthDate";
 import { maskCep } from "../utils/maskCep";
 import { maskCpfCnpj } from "../utils/maskCpfCnpj";
 import { fetchAddressByZipCode } from "../utils/zipCodeLookup";
@@ -101,6 +106,7 @@ const formatPhoneMask = (value?: string | null) => {
 const toEditableForm = (clientData: ClientDetails): Partial<ClientDetails> => ({
   ...clientData,
   document: maskCpfCnpj(clientData.document || ""),
+  birthDate: formatBirthDateFromApi(clientData.birthDate),
   phone: formatPhoneMask(clientData.phone),
   zipCode: maskCep(clientData.zipCode || ""),
 });
@@ -111,7 +117,6 @@ const toSharedFormValues = (
   typeCustomer: (form.typeCustomer ||
     "INDIVIDUAL") as CustomerFormValues["typeCustomer"],
   document: String(form.document || ""),
-  rg: String(form.rg || ""),
   fullName: String(form.fullName || ""),
   birthDate: String(form.birthDate || ""),
   companyName: String(form.companyName || ""),
@@ -375,6 +380,11 @@ export default function CustomerDetails() {
       return;
     }
 
+    if (key === "birthDate") {
+      setField("birthDate", maskBirthDate(String(value || "")));
+      return;
+    }
+
     if (key === "professionId") {
       const num = value === "" ? null : Number(value);
       setField("professionId", num);
@@ -470,9 +480,11 @@ export default function CustomerDetails() {
   const buildPayload = (overrides: Partial<ClientDetails> = {}) => ({
     typeCustomer: overrides.typeCustomer ?? form.typeCustomer,
     document: onlyDigits(String(overrides.document ?? form.document ?? "")),
-    rg: overrides.rg ?? form.rg,
+    rg: null,
     fullName: overrides.fullName ?? form.fullName,
-    birthDate: overrides.birthDate ?? form.birthDate,
+    birthDate: toBirthDateApiValue(
+      String(overrides.birthDate ?? form.birthDate ?? ""),
+    ),
     companyName: overrides.companyName ?? form.companyName,
     tradeName: overrides.tradeName ?? form.tradeName,
     phone: onlyDigits(String(overrides.phone ?? form.phone ?? "")),

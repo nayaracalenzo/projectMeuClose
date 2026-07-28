@@ -8,6 +8,7 @@ import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
 import { getRequest, postRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { maskBirthDate, toBirthDateApiValue } from "../utils/birthDate";
 import { maskPhone } from "../utils/maskPhone";
 import { maskCpfCnpj } from "../utils/maskCpfCnpj";
 import { maskCep } from "../utils/maskCep";
@@ -100,7 +101,6 @@ export default function NewCustomer() {
   const [form, setForm] = useState<NewCustomerForm>({
     typeCustomer: "INDIVIDUAL",
     document: "",
-    rg: "",
     fullName: "",
     birthDate: "",
     companyName: "",
@@ -172,6 +172,10 @@ export default function NewCustomer() {
     }
     if (field === "document") {
       setField("document", maskCpfCnpj(value));
+      return;
+    }
+    if (field === "birthDate") {
+      setField("birthDate", maskBirthDate(value));
       return;
     }
     if (field === "zipCode") {
@@ -251,9 +255,9 @@ export default function NewCustomer() {
       await postRequest("/clients", {
         typeCustomer: form.typeCustomer,
         document: onlyDigits(form.document),
-        rg: form.rg || null,
+        rg: null,
         fullName: form.fullName || null,
-        birthDate: form.birthDate || null,
+        birthDate: toBirthDateApiValue(form.birthDate),
         companyName: form.companyName || null,
         tradeName: form.tradeName || null,
         phone: onlyDigits(form.phone),

@@ -240,13 +240,31 @@ function formatDate(value: Primitive) {
   return new Intl.DateTimeFormat("pt-BR").format(date);
 }
 
+function extractDateOnlyParts(value: Primitive) {
+  if (!value || typeof value !== "string") return null;
+
+  const base = value.slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  if (!match) return null;
+
+  return {
+    year: match[1],
+    month: match[2],
+    day: match[3],
+  };
+}
+
+function formatDateOnly(value: Primitive) {
+  const parts = extractDateOnlyParts(value);
+  if (!parts) return "-";
+
+  return `${parts.day}/${parts.month}/${parts.year}`;
+}
+
 function normalizeDateInput(value: Primitive) {
-  if (!value || typeof value !== "string") return "";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  return date.toISOString().slice(0, 10);
+  return extractDateOnlyParts(value)
+    ? String(value).slice(0, 10)
+    : "";
 }
 
 function formatPhone(value: Primitive) {
@@ -731,7 +749,7 @@ export default function AdminPage() {
                   {String(row.email ?? "-")}
                 </td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
-                  {formatDate(row.birthDate)}
+                  {formatDateOnly(row.birthDate)}
                 </td>
                 <td className="px-4 py-3 text-[14px] text-neutral-700">
                   {row.active ? "Ativa" : "Inativa"}
