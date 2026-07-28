@@ -54,32 +54,18 @@ function normalizeReferenceCode(value) {
   return normalized || null;
 }
 
-function normalizeScope(value) {
-  const normalized = String(value || "").trim().toUpperCase();
-
-  if (normalized !== "LOJA" && normalized !== "PESSOAL") {
-    throw validationError("Escopo da transferencia invalido.");
-  }
-
-  return normalized;
-}
-
-function normalizeAccountLabel(scope, value) {
-  if (scope === "LOJA") {
-    return "Banco da Loja";
-  }
-
+function normalizeBankAccountLabel(value) {
   const normalized = String(value || "").trim();
 
   if (!normalized) {
-    throw validationError("Banco de destino obrigatorio.");
+    throw validationError("Conta bancaria obrigatoria.");
   }
 
   return normalized;
 }
 
-function buildTransferKey(scope) {
-  return `TRF-${scope}-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+function buildTransferKey() {
+  return `TRF-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
 async function getRequiredFinancialCategoryId(rawFinancialCategoryId) {
@@ -99,19 +85,18 @@ async function getRequiredFinancialCategoryId(rawFinancialCategoryId) {
 }
 
 async function transferStoreCashToBank(body = {}) {
-  const scope = normalizeScope(body.scope || "LOJA");
   const amount = normalizeAmount(body.amount);
   const occurredAt = normalizeDate(body.occurredAt);
   const description = normalizeDescription(body.description);
   const referenceCode = normalizeReferenceCode(body.referenceCode);
   const financialCategoryId = await getRequiredFinancialCategoryId(body.financialCategoryId);
-  const accountLabel = normalizeAccountLabel(scope, body.accountLabel);
-  const transferKey = buildTransferKey(scope);
+  const accountLabel = normalizeBankAccountLabel(body.accountLabel);
+  const transferKey = buildTransferKey();
 
   return sequelize.transaction(async (transaction) => {
     const cashEntry = await createCashEntry(
       {
-        scope,
+        scope: "LOJA",
         movementType: "OUT",
         financialCategoryId,
         category: "TRANSFERENCIA",
@@ -128,7 +113,7 @@ async function transferStoreCashToBank(body = {}) {
 
     const bankEntry = await createBankEntry(
       {
-        scope,
+        scope: "LOJA",
         movementType: "IN",
         financialCategoryId,
         category: "TRANSFERENCIA",
@@ -153,19 +138,18 @@ async function transferStoreCashToBank(body = {}) {
 }
 
 async function transferBankToCash(body = {}) {
-  const scope = normalizeScope(body.scope || "LOJA");
   const amount = normalizeAmount(body.amount);
   const occurredAt = normalizeDate(body.occurredAt);
   const description = normalizeDescription(body.description);
   const referenceCode = normalizeReferenceCode(body.referenceCode);
   const financialCategoryId = await getRequiredFinancialCategoryId(body.financialCategoryId);
-  const accountLabel = normalizeAccountLabel(scope, body.accountLabel);
-  const transferKey = buildTransferKey(scope);
+  const accountLabel = normalizeBankAccountLabel(body.accountLabel);
+  const transferKey = buildTransferKey();
 
   return sequelize.transaction(async (transaction) => {
     const bankEntry = await createBankEntry(
       {
-        scope,
+        scope: "LOJA",
         movementType: "OUT",
         financialCategoryId,
         category: "TRANSFERENCIA",
@@ -183,7 +167,7 @@ async function transferBankToCash(body = {}) {
 
     const cashEntry = await createCashEntry(
       {
-        scope,
+        scope: "LOJA",
         movementType: "IN",
         financialCategoryId,
         category: "TRANSFERENCIA",

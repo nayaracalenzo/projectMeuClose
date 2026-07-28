@@ -10,12 +10,10 @@ import {
   parseCurrencyToNumber,
 } from "../utils/currency";
 
-type Scope = "LOJA" | "PESSOAL";
-
 interface BankRow {
   id: number;
   date: string;
-  scope: Scope;
+  scope: "LOJA" | "PESSOAL";
   bank: string;
   accountLabel?: string | null;
   parcela?: string;
@@ -81,7 +79,6 @@ const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
 
 export default function BankPage() {
-  const [scope, setScope] = useState<Scope>("LOJA");
   const [search, setSearch] = useState("");
   const [startDate, setStartDate] = useState(getCurrentDateInputValue());
   const [endDate, setEndDate] = useState(getCurrentDateInputValue());
@@ -134,12 +131,10 @@ export default function BankPage() {
     [rows, selectedRowId],
   );
 
-  const canOpenTransferModal =
-    scope === "LOJA" ? true : bankAccountOptions.length > 0;
+  const canOpenTransferModal = bankAccountOptions.length > 0;
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
-      scope,
       page: String(page),
       pageSize: String(PAGE_SIZE),
     });
@@ -174,7 +169,7 @@ export default function BankPage() {
 
   const fetchBankAccountOptions = async () => {
     try {
-      const data = await getRequest(`/bank/account-options?scope=${scope}`);
+      const data = await getRequest("/bank/account-options");
       setBankAccountOptions(
         Array.isArray(data) ? (data as BankAccountOption[]) : [],
       );
@@ -185,7 +180,7 @@ export default function BankPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [scope, search, startDate, endDate]);
+  }, [search, startDate, endDate]);
 
   useEffect(() => {
     if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
@@ -218,7 +213,7 @@ export default function BankPage() {
     };
 
     void fetchData();
-  }, [endDate, page, scope, search, startDate]);
+  }, [endDate, page, search, startDate]);
 
   const resetManualEntryModal = () => {
     setManualMovementType("IN");
@@ -254,14 +249,13 @@ export default function BankPage() {
     try {
       setActionLoading(true);
       await postRequest("/bank/manual-entry", {
-        scope,
         movementType: manualMovementType,
         financialCategoryId: Number(manualFinancialCategoryId),
         amount: parseCurrencyToNumber(manualAmountInput),
         occurredAt: manualDate,
         description: manualDescription.trim(),
         referenceCode: manualReferenceCode.trim() || null,
-        accountLabel: scope === "PESSOAL" ? manualAccountLabel : null,
+        accountLabel: manualAccountLabel,
       });
       resetManualEntryModal();
       await refreshData();
@@ -290,13 +284,12 @@ export default function BankPage() {
     try {
       setActionLoading(true);
       await postRequest("/bank/transfers/to-cash", {
-        scope,
         amount: parseCurrencyToNumber(transferAmountInput),
         occurredAt: transferDate,
         description: transferDescription.trim(),
         referenceCode: transferReferenceCode.trim() || null,
         financialCategoryId: Number(transferFinancialCategoryId),
-        accountLabel: scope === "PESSOAL" ? transferAccountLabel : null,
+        accountLabel: transferAccountLabel,
       });
       resetTransferModal();
       await refreshData();
@@ -368,33 +361,6 @@ export default function BankPage() {
       <h1 className="mb-5 pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">
         Banco
       </h1>
-
-      <div className="mb-5 border-b border-outline-variant/35">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setScope("LOJA")}
-            className={`px-4 py-2 text-sm uppercase tracking-[0.08em] ${
-              scope === "LOJA"
-                ? "border-b-2 border-primary font-semibold text-primary"
-                : "text-neutral-700"
-            }`}
-          >
-            Banco da Loja
-          </button>
-          <button
-            type="button"
-            onClick={() => setScope("PESSOAL")}
-            className={`px-4 py-2 text-sm uppercase tracking-[0.08em] ${
-              scope === "PESSOAL"
-                ? "border-b-2 border-primary font-semibold text-primary"
-                : "text-neutral-700"
-            }`}
-          >
-            Banco Pessoal
-          </button>
-        </div>
-      </div>
 
       <div className="mb-5 flex flex-wrap gap-2">
         <button
@@ -685,7 +651,7 @@ export default function BankPage() {
         open={manualEntryModalOpen}
         onClose={resetManualEntryModal}
         title="Incluir lancamento manual no banco"
-        subtitle="Registre uma entrada ou saida no banco selecionado."
+        subtitle="Registre uma entrada ou saida em uma conta bancaria."
       >
         <div className="space-y-4">
           <div>
@@ -704,25 +670,23 @@ export default function BankPage() {
             </select>
           </div>
 
-          {scope === "PESSOAL" ? (
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">
-                Banco
-              </label>
-              <select
-                value={manualAccountLabel}
-                onChange={(e) => setManualAccountLabel(e.target.value)}
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              >
-                <option value="">Selecione</option>
-                {bankAccountOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Conta
+            </label>
+            <select
+              value={manualAccountLabel}
+              onChange={(e) => setManualAccountLabel(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+            >
+              <option value="">Selecione</option>
+              {bankAccountOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-primary">
@@ -797,10 +761,10 @@ export default function BankPage() {
               onClick={handleCreateManualEntry}
               disabled={
                 actionLoading ||
+                !manualAccountLabel ||
                 !manualFinancialCategoryId ||
                 !manualAmountInput ||
-                !manualDescription.trim() ||
-                (scope === "PESSOAL" && !manualAccountLabel)
+                !manualDescription.trim()
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
@@ -820,37 +784,27 @@ export default function BankPage() {
       <CustomerModal
         open={transferModalOpen}
         onClose={resetTransferModal}
-        title={
-          scope === "LOJA"
-            ? "Transferir Banco da Loja para Caixa"
-            : "Transferir Banco Pessoal para Caixa"
-        }
-        subtitle={
-          scope === "LOJA"
-            ? "Registre a saida do banco da loja e a entrada correspondente no caixa."
-            : "Registre a saida do banco pessoal e a entrada correspondente no caixa pessoal."
-        }
+        title="Transferir banco para caixa"
+        subtitle="Registre a saida de uma conta bancaria e a entrada correspondente no caixa."
       >
         <div className="space-y-4">
-          {scope === "PESSOAL" ? (
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">
-                Banco de origem
-              </label>
-              <select
-                value={transferAccountLabel}
-                onChange={(e) => setTransferAccountLabel(e.target.value)}
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              >
-                <option value="">Selecione</option>
-                {bankAccountOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Conta de origem
+            </label>
+            <select
+              value={transferAccountLabel}
+              onChange={(e) => setTransferAccountLabel(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+            >
+              <option value="">Selecione</option>
+              {bankAccountOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-primary">
@@ -925,10 +879,10 @@ export default function BankPage() {
               onClick={handleTransferToCash}
               disabled={
                 actionLoading ||
+                !transferAccountLabel ||
                 !transferFinancialCategoryId ||
                 !transferAmountInput ||
-                !transferDescription.trim() ||
-                (scope === "PESSOAL" && !transferAccountLabel)
+                !transferDescription.trim()
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >

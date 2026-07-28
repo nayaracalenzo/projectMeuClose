@@ -46,16 +46,6 @@ function normalizeAmount(value, fieldName) {
   return Number(normalized.toFixed(2));
 }
 
-function normalizeScope(value) {
-  const normalized = String(value || "").trim().toUpperCase();
-
-  if (normalized !== "LOJA" && normalized !== "PESSOAL") {
-    throw createCashValidationError("Escopo invalido.");
-  }
-
-  return normalized;
-}
-
 function normalizeMovementType(value) {
   const normalized = String(value || "").trim().toUpperCase();
 
@@ -115,13 +105,40 @@ function resolveEntryInstallmentLabel(item) {
   return "-";
 }
 
+function extractLegacyPaymentTypeName(description) {
+  const normalized = String(description || "").trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const match = /\bvia\s+(.+)$/i.exec(normalized);
+  return match?.[1]?.trim() || null;
+}
+
+function resolveEntryPaymentTypeName(item) {
+  return item.PaymentType?.desc || extractLegacyPaymentTypeName(item.description);
+}
+
+function resolveDisplayDescription(description, paymentTypeName) {
+  const normalizedDescription = String(description || "").trim();
+  const normalizedPaymentTypeName = String(paymentTypeName || "").trim();
+
+  if (!normalizedDescription || !normalizedPaymentTypeName) {
+    return normalizedDescription;
+  }
+
+  return normalizedDescription.replace(
+    new RegExp(`\\s+via\\s+${normalizedPaymentTypeName}$`, "i"),
+    "",
+  );
+}
+
 function buildAuditHistory(kind, scope, entry, occurredAt) {
   const amount = Number(entry.amount || 0).toFixed(2);
   const dateLabel = new Intl.DateTimeFormat("pt-BR").format(new Date(occurredAt));
 
-  return `${kind} de ${scope === "LOJA" ? "CAIXA" : "CAIXA PESSOAL"} do lancamento ${
-    entry.idCashEntry
-  } em ${dateLabel}, valor ${amount}, descricao ${entry.description}.`;
+  return `${kind} de CAIXA do lancamento ${entry.idCashEntry} em ${dateLabel}, valor ${amount}, descricao ${entry.description}.`;
 }
 
 function isCancelledSaleEntry(entry) {
@@ -193,30 +210,35 @@ async function listEntries(query = {}) {
   });
 
   return {
-    items: result.rows.map((item) => ({
-      id: item.idCashEntry,
-      date: item.occurredAt,
-      scope: item.scope,
-      accountLabel: item.scope === "PESSOAL" ? "Caixa Pessoal" : "Caixa da Loja",
-      parcela: resolveEntryInstallmentLabel(item),
-      description: item.description,
-      category: item.FinancialCategory?.description || item.category || "DIVERSOS",
-      financialCategoryId:
-        item.financialCategoryId || item.FinancialCategory?.idFinancialCategory || null,
-      financialCategoryDescription:
-        item.FinancialCategory?.description || item.category || "DIVERSOS",
-      movementType: item.movementType,
-      amount: Number(item.amount),
-      amountIn: item.movementType === "IN" ? Number(item.amount) : 0,
-      amountOut: item.movementType === "OUT" ? Number(item.amount) : 0,
-      balance: Number(item.get("runningBalance") || 0),
-      referenceCode: item.referenceCode,
-      sourceType: item.sourceType,
-      transferKey: item.transferKey || null,
-      reversalOfCashEntryId: item.reversalOfCashEntryId || null,
-      hasReversal: Boolean(item.get?.("hasReversal") || item.hasReversal),
-      canReverse: canReverseEntry(item),
-    })),
+    items: result.rows.map((item) => {
+      const paymentTypeName = resolveEntryPaymentTypeName(item);
+
+      return {
+        id: item.idCashEntry,
+        date: item.occurredAt,
+        scope: item.scope,
+        accountLabel: "Caixa",
+        parcela: resolveEntryInstallmentLabel(item),
+        description: resolveDisplayDescription(item.description, paymentTypeName),
+        paymentTypeName,
+        category: item.FinancialCategory?.description || item.category || "DIVERSOS",
+        financialCategoryId:
+          item.financialCategoryId || item.FinancialCategory?.idFinancialCategory || null,
+        financialCategoryDescription:
+          item.FinancialCategory?.description || item.category || "DIVERSOS",
+        movementType: item.movementType,
+        amount: Number(item.amount),
+        amountIn: item.movementType === "IN" ? Number(item.amount) : 0,
+        amountOut: item.movementType === "OUT" ? Number(item.amount) : 0,
+        balance: Number(item.get("runningBalance") || 0),
+        referenceCode: item.referenceCode,
+        sourceType: item.sourceType,
+        transferKey: item.transferKey || null,
+        reversalOfCashEntryId: item.reversalOfCashEntryId || null,
+        hasReversal: Boolean(item.get?.("hasReversal") || item.hasReversal),
+        canReverse: canReverseEntry(item),
+      };
+    }),
     total: Number(result.count || 0),
     page,
     pageSize,
@@ -230,7 +252,7 @@ async function listEntries(query = {}) {
 }
 
 async function createManualEntry(body = {}) {
-  const scope = normalizeScope(body.scope);
+  const scope = "LOJA";
   const movementType = normalizeMovementType(body.movementType);
   const financialCategoryId = await getRequiredFinancialCategoryId(body.financialCategoryId);
   const description = normalizeDescription(body.description);
