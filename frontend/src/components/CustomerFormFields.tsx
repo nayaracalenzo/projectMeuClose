@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { formatBirthDateFromApi } from "../utils/birthDate";
 import { formatDocument } from "../utils/formatDocument";
 
 type ProfessionOption = {
@@ -9,7 +10,6 @@ type ProfessionOption = {
 export type CustomerFormValues = {
   typeCustomer: "INDIVIDUAL" | "COMPANY";
   document: string;
-  rg: string;
   fullName: string;
   birthDate: string;
   companyName: string;
@@ -85,7 +85,7 @@ export default function CustomerFormFields({
         required: form.typeCustomer === "INDIVIDUAL",
         section: "main",
       },
-      { key: "rg", label: "RG", section: "main" },
+      { key: "birthDate", label: "Data de nascimento", section: "main" },
       {
         key: "companyName",
         label: "Razão social",
@@ -137,6 +137,7 @@ export default function CustomerFormFields({
     if (!rawValue) return "-";
     if (field.key === "document") return formatDocument(rawValue);
     if (field.key === "professionId") return professionLabel || "-";
+    if (field.key === "birthDate") return formatBirthDateFromApi(rawValue) || rawValue;
 
     return rawValue;
   };
@@ -203,6 +204,9 @@ export default function CustomerFormFields({
           value={String(form[field.key] ?? "")}
           onChange={(e) => onFieldChange(field.key, e.target.value)}
           className={baseClass}
+          placeholder={field.key === "birthDate" ? "DD/MM/AAAA" : undefined}
+          inputMode={field.key === "birthDate" ? "numeric" : undefined}
+          maxLength={field.key === "birthDate" ? 10 : undefined}
         />
         {field.key === "zipCode" && zipCodeHelperMessage ? (
           <p className="mt-1 text-xs text-neutral-700">
