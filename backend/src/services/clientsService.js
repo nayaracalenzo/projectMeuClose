@@ -90,15 +90,15 @@ function getSequelizeValidationMessage(error) {
   const field = String(firstIssue?.path || error?.path || "").trim();
   const message = String(firstIssue?.message || error?.message || "").trim();
 
-  if (field === "phone" || /phone/i.test(message)) {
-    return "Telefone invalido.";
+  if (field && message) {
+    return `${field}: ${message}`;
   }
 
-  if (field === "document" || /document/i.test(message)) {
-    return "CPF/CNPJ invalido.";
+  if (message) {
+    return message;
   }
 
-  return message || "Dados do cliente invalidos.";
+  return "Dados do cliente invalidos.";
 }
 
 async function getBirthdaysOfMonth(query) {

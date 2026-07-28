@@ -268,12 +268,10 @@ export default function NewCustomer() {
         comment: form.comment || null,
       };
 
-      console.info("[NewCustomer] submitting payload", payload);
       await postRequest("/clients", payload);
 
       navigate("/clientes");
     } catch (error: unknown) {
-      console.error("[NewCustomer] submit failed", error);
       setNotice({
         open: true,
         tone: "error",
