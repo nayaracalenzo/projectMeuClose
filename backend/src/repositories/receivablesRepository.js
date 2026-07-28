@@ -281,7 +281,7 @@ async function listInstallments({
   const query = {
     where,
     include: buildReceivablesInclude({ customerId }),
-    order: [["dueDate", "ASC"], ["installmentNumber", "ASC"]],
+    order: [["dueDate", "DESC"], ["installmentNumber", "DESC"]],
     distinct: true,
     subQuery: false,
   };
