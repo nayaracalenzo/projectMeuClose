@@ -136,7 +136,7 @@ const formatDate = (value?: string | null) => {
 };
 
 const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
-  `${account.label} - ${account.scope === "LOJA" ? "Loja" : "Pessoal"} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
+  `${account.label} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
 
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
 
@@ -1562,7 +1562,7 @@ export default function ReceivablesPage() {
       <CustomerModal
         open={openCashModalOpen}
         onClose={() => setOpenCashModalOpen(false)}
-        title="Abrir Caixa da Loja"
+        title="Abrir Caixa"
         subtitle="Informe o saldo inicial para iniciar a sessao de caixa."
       >
         <div className="space-y-4">
@@ -1613,7 +1613,7 @@ export default function ReceivablesPage() {
       <CustomerModal
         open={closeCashModalOpen}
         onClose={() => setCloseCashModalOpen(false)}
-        title="Fechar Caixa da Loja"
+        title="Fechar Caixa"
         subtitle={
           cashSessionStatus?.currentSession
             ? `Existe um caixa pendente aberto em ${formatDate(

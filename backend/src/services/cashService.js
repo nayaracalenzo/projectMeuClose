@@ -188,6 +188,9 @@ async function getRequiredFinancialCategoryId(rawFinancialCategoryId) {
 async function listEntries(query = {}) {
   const scope = query.scope ? String(query.scope).trim() : undefined;
   const search = query.search ? String(query.search).trim() : undefined;
+  const financialCategoryId = query.financialCategoryId
+    ? Number(query.financialCategoryId)
+    : undefined;
   const page = Math.max(1, Number(query.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 10));
   const startDate = normalizeDate(query.startDate, "Data inicial");
@@ -196,6 +199,7 @@ async function listEntries(query = {}) {
   const result = await repository.listEntries({
     scope,
     search,
+    financialCategoryId,
     page,
     pageSize,
     startDate,
@@ -205,6 +209,7 @@ async function listEntries(query = {}) {
   const summary = await repository.summarizeEntries({
     scope,
     search,
+    financialCategoryId,
     startDate,
     endDate,
   });
@@ -249,6 +254,15 @@ async function listEntries(query = {}) {
       balance: Number((Number(summary.totalIn || 0) - Number(summary.totalOut || 0)).toFixed(2)),
     },
   };
+}
+
+async function listAccountOptions() {
+  return [
+    {
+      label: "Caixa",
+      value: "Caixa",
+    },
+  ];
 }
 
 async function createManualEntry(body = {}) {
@@ -396,6 +410,7 @@ async function reverseEntry(idCashEntry, user, body = {}) {
 
 module.exports = {
   listEntries,
+  listAccountOptions,
   createManualEntry,
   reverseEntry,
 };

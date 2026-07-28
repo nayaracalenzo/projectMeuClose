@@ -130,12 +130,12 @@ const formatDate = (value: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 
 const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
-  `${account.label} - ${account.scope === "LOJA" ? "Loja" : "Pessoal"} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
+  `${account.label} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
 
 export default function PayablesPage() {
-  const [scope, setScope] = useState<Scope>("LOJA");
   const [filter, setFilter] = useState<PayableFilter>("EM_ABERTO");
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<PayableRow[]>([]);
@@ -186,6 +186,14 @@ export default function PayablesPage() {
   const [paymentFinancialAccountId, setPaymentFinancialAccountId] =
     useState("");
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
+  const [cashSessionStatus, setCashSessionStatus] =
+    useState<CashSessionStatusResponse | null>(null);
+  const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
+  const [closeCashModalOpen, setCloseCashModalOpen] = useState(false);
+  const [openingBalanceInput, setOpeningBalanceInput] = useState("");
+  const [countedBalanceInput, setCountedBalanceInput] = useState("");
+  const [cashSessionNotes, setCashSessionNotes] = useState("");
+  const [cashSessionLoading, setCashSessionLoading] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [newCategoryDescription, setNewCategoryDescription] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -193,7 +201,7 @@ export default function PayablesPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [scope, filter, search, startDate, endDate]);
+  }, [categoryFilter, filter, search, startDate, endDate]);
 
   const fetchRows = useCallback(async () => {
     try {
@@ -201,13 +209,13 @@ export default function PayablesPage() {
       setMessage("");
 
       const params = new URLSearchParams({
-        scope,
         status: filter,
         page: String(page),
         pageSize: String(PAGE_SIZE),
       });
 
       if (search.trim()) params.set("search", search.trim());
+      if (categoryFilter) params.set("category", categoryFilter);
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
 
@@ -231,7 +239,7 @@ export default function PayablesPage() {
     } finally {
       setLoading(false);
     }
-  }, [endDate, filter, page, scope, search, startDate]);
+  }, [categoryFilter, endDate, filter, page, search, startDate]);
 
   useEffect(() => {
     fetchRows();
@@ -307,7 +315,7 @@ export default function PayablesPage() {
     const fetchFinancialAccounts = async () => {
       try {
         const data = (await getRequest(
-          `/financial-accounts/options?scope=${scope}`,
+          "/financial-accounts/options",
         )) as FinancialAccountOption[];
         setFinancialAccounts(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -317,7 +325,7 @@ export default function PayablesPage() {
     };
 
     fetchFinancialAccounts();
-  }, [scope]);
+  }, []);
 
   const selectedRow = rows.find((row) => row.id === selectedPayableId) || null;
   const canManageSelectedPayable = Boolean(
@@ -368,7 +376,7 @@ export default function PayablesPage() {
   const handleSubmitPayable = async () => {
     try {
       const payload = {
-        scope,
+        scope: "LOJA" as Scope,
         description,
         category,
         beneficiary,
@@ -541,7 +549,6 @@ export default function PayablesPage() {
   ) => {
     if (
       !financialAccount ||
-      financialAccount.scope !== "LOJA" ||
       financialAccount.targetType !== "CASH"
     ) {
       return true;
@@ -737,33 +744,6 @@ export default function PayablesPage() {
         A Pagar
       </h1>
 
-      <div className="mb-5 border-b border-outline-variant/35">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setScope("LOJA")}
-            className={`px-4 py-2 text-sm uppercase tracking-[0.08em] ${
-              scope === "LOJA"
-                ? "border-b-2 border-primary font-semibold text-primary"
-                : "text-neutral-700"
-            }`}
-          >
-            Loja
-          </button>
-          <button
-            type="button"
-            onClick={() => setScope("PESSOAL")}
-            className={`px-4 py-2 text-sm uppercase tracking-[0.08em] ${
-              scope === "PESSOAL"
-                ? "border-b-2 border-primary font-semibold text-primary"
-                : "text-neutral-700"
-            }`}
-          >
-            Pessoal
-          </button>
-        </div>
-      </div>
-
       <CustomerModal
         open={isCreateFormOpen}
         onClose={() => {
@@ -909,6 +889,24 @@ export default function PayablesPage() {
             placeholder="Fornecedor, categoria ou descrição"
             className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
           />
+        </div>
+
+        <div className="md:min-w-52">
+          <label className="mb-1 block text-sm font-semibold text-primary">
+            Categoria
+          </label>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+          >
+            <option value="">Todos</option>
+            {financialCategories.map((item) => (
+              <option key={item.id} value={item.description}>
+                {item.description}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row">
@@ -1350,6 +1348,129 @@ export default function PayablesPage() {
               disabled={creatingCategory}
             >
               Cancelar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={openCashModalOpen}
+        onClose={() => setOpenCashModalOpen(false)}
+        title="Abrir Caixa"
+        subtitle="Informe o saldo inicial para iniciar a sessao de caixa."
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-primary">
+              Saldo inicial
+            </label>
+            <input
+              value={openingBalanceInput}
+              onChange={(e) =>
+                setOpeningBalanceInput(formatCurrencyInput(e.target.value))
+              }
+              placeholder="R$ 0,00"
+              className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-primary">
+              Observacoes
+            </label>
+            <textarea
+              value={cashSessionNotes}
+              onChange={(e) => setCashSessionNotes(e.target.value)}
+              className="min-h-24 w-full rounded-lg border border-outline-variant/60 bg-white px-3 py-2 text-[15px] text-primary"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={handleOpenCashSession}
+              isLoading={cashSessionLoading}
+            >
+              Confirmar abertura
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setOpenCashModalOpen(false)}
+            >
+              Voltar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={closeCashModalOpen}
+        onClose={() => setCloseCashModalOpen(false)}
+        title="Fechar Caixa"
+        subtitle={
+          cashSessionStatus?.currentSession
+            ? `Existe um caixa pendente aberto em ${formatDate(
+                cashSessionStatus.currentSession.openedAt,
+              )}.`
+            : "Feche o caixa da loja para continuar."
+        }
+      >
+        <div className="space-y-4">
+          {cashSessionStatus?.currentSession ? (
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p>
+                Data do caixa pendente:{" "}
+                {formatDate(cashSessionStatus.currentSession.openedAt)}
+              </p>
+              <p>
+                Saldo esperado:{" "}
+                {formatCurrency(
+                  cashSessionStatus.currentSession.expectedBalance,
+                )}
+              </p>
+            </div>
+          ) : null}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-primary">
+              Saldo contado
+            </label>
+            <input
+              value={countedBalanceInput}
+              onChange={(e) =>
+                setCountedBalanceInput(formatCurrencyInput(e.target.value))
+              }
+              placeholder="R$ 0,00"
+              className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-primary">
+              Observacoes
+            </label>
+            <textarea
+              value={cashSessionNotes}
+              onChange={(e) => setCashSessionNotes(e.target.value)}
+              className="min-h-24 w-full rounded-lg border border-outline-variant/60 bg-white px-3 py-2 text-[15px] text-primary"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={handleClosePreviousCashSession}
+              isLoading={cashSessionLoading}
+            >
+              Confirmar fechamento
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setCloseCashModalOpen(false)}
+            >
+              Voltar
             </Button>
           </div>
         </div>

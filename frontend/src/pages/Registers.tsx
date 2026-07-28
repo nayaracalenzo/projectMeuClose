@@ -107,6 +107,8 @@ const formatDateTime = (dateString: string) =>
 export default function Registers() {
   const pageSize = 10;
   const [search, setSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [startDate, setStartDate] = useState(getCurrentDateInputValue());
   const [endDate, setEndDate] = useState(getCurrentDateInputValue());
   const [rows, setRows] = useState<CashRow[]>([]);
@@ -178,6 +180,10 @@ export default function Registers() {
     });
 
     if (search.trim()) params.set("search", search.trim());
+    if (accountFilter && accountFilter !== "Caixa") {
+      params.set("accountLabel", accountFilter);
+    }
+    if (categoryFilter) params.set("financialCategoryId", categoryFilter);
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
 
@@ -220,7 +226,7 @@ export default function Registers() {
 
   const fetchBankAccountOptions = async () => {
     try {
-      const data = await getRequest("/bank/account-options");
+      const data = await getRequest("/cash/account-options");
       setBankAccountOptions(
         Array.isArray(data) ? (data as BankAccountOption[]) : [],
       );
@@ -231,7 +237,7 @@ export default function Registers() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, startDate, endDate]);
+  }, [accountFilter, categoryFilter, search, startDate, endDate]);
 
   useEffect(() => {
     if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
@@ -265,7 +271,7 @@ export default function Registers() {
     };
 
     void fetchData();
-  }, [endDate, page, search, startDate]);
+  }, [accountFilter, categoryFilter, endDate, page, search, startDate]);
 
   const resetOpenModal = () => {
     setOpeningBalanceInput("");
@@ -610,6 +616,40 @@ export default function Registers() {
             placeholder="Descricao do lancamento"
             className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
           />
+        </div>
+        <div className="md:min-w-56">
+          <label className="mb-2 block text-sm font-semibold text-primary">
+            Conta
+          </label>
+          <select
+            value={accountFilter}
+            onChange={(e) => setAccountFilter(e.target.value)}
+            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
+          >
+            <option value="">Todos</option>
+            {bankAccountOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="md:min-w-56">
+          <label className="mb-2 block text-sm font-semibold text-primary">
+            Categoria
+          </label>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
+          >
+            <option value="">Todos</option>
+            {financialCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.description}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex flex-col gap-3 md:flex-row">
           <div>

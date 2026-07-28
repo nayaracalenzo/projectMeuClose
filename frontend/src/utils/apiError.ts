@@ -17,8 +17,6 @@ export function getUserFacingApiErrorMessage(
   fallbackMessage = DEFAULT_UNEXPECTED_ERROR_MESSAGE,
 ) {
   const maybeAxiosError = error as ApiLikeError;
-  const errorName = maybeAxiosError.name;
-  const directMessage = maybeAxiosError.message;
   const status = maybeAxiosError.response?.status;
   const message = maybeAxiosError.response?.data?.message;
 

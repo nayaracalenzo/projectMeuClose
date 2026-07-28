@@ -3,7 +3,7 @@ const { PayablePayments, Payables, PaymentTypes, Suppliers, sequelize } = requir
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 const auditsRepository = require("./auditsRepository");
 
-function buildWhere({ scope, status, startDate, endDate, search } = {}) {
+function buildWhere({ scope, status, startDate, endDate, search, category } = {}) {
   const where = {};
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -51,6 +51,10 @@ function buildWhere({ scope, status, startDate, endDate, search } = {}) {
         [Op.iLike]: term,
       }),
     ];
+  }
+
+  if (category) {
+    where.category = category;
   }
 
   switch (status) {
@@ -112,9 +116,9 @@ function buildInclude({ summary = false } = {}) {
   ];
 }
 
-async function listPayables({ scope, status, startDate, endDate, search, page, pageSize } = {}) {
+async function listPayables({ scope, status, startDate, endDate, search, category, page, pageSize } = {}) {
   return Payables.findAndCountAll({
-    where: buildWhere({ scope, status, startDate, endDate, search }),
+    where: buildWhere({ scope, status, startDate, endDate, search, category }),
     include: [
       ...buildInclude(),
     ],
@@ -126,9 +130,9 @@ async function listPayables({ scope, status, startDate, endDate, search, page, p
   });
 }
 
-async function summarizePayables({ scope, status, startDate, endDate, search } = {}) {
+async function summarizePayables({ scope, status, startDate, endDate, search, category } = {}) {
   const [summary] = await Payables.findAll({
-    where: buildWhere({ scope, status, startDate, endDate, search }),
+    where: buildWhere({ scope, status, startDate, endDate, search, category }),
     include: [
       ...buildInclude({ summary: true }),
     ],

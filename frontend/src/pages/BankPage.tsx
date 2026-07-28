@@ -81,6 +81,8 @@ const formatDate = (dateString: string) =>
 
 export default function BankPage() {
   const [search, setSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [startDate, setStartDate] = useState(getCurrentDateInputValue());
   const [endDate, setEndDate] = useState(getCurrentDateInputValue());
   const [rows, setRows] = useState<BankRow[]>([]);
@@ -141,6 +143,8 @@ export default function BankPage() {
     });
 
     if (search.trim()) params.set("search", search.trim());
+    if (accountFilter) params.set("accountLabel", accountFilter);
+    if (categoryFilter) params.set("financialCategoryId", categoryFilter);
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
 
@@ -181,7 +185,7 @@ export default function BankPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, startDate, endDate]);
+  }, [accountFilter, categoryFilter, search, startDate, endDate]);
 
   useEffect(() => {
     if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
@@ -214,7 +218,7 @@ export default function BankPage() {
     };
 
     void fetchData();
-  }, [endDate, page, search, startDate]);
+  }, [accountFilter, categoryFilter, endDate, page, search, startDate]);
 
   const resetManualEntryModal = () => {
     setManualMovementType("IN");
@@ -400,6 +404,40 @@ export default function BankPage() {
             placeholder="Descricao, categoria ou banco"
             className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
           />
+        </div>
+        <div className="md:min-w-56">
+          <label className="mb-2 block text-sm font-semibold text-primary">
+            Conta
+          </label>
+          <select
+            value={accountFilter}
+            onChange={(e) => setAccountFilter(e.target.value)}
+            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
+          >
+            <option value="">Todos</option>
+            {bankAccountOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="md:min-w-56">
+          <label className="mb-2 block text-sm font-semibold text-primary">
+            Categoria
+          </label>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
+          >
+            <option value="">Todos</option>
+            {financialCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.description}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex flex-col gap-3 md:flex-row">
           <div>

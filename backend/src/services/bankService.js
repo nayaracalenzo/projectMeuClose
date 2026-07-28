@@ -188,6 +188,12 @@ function resolveDisplayDescription(description, paymentTypeName) {
 async function listEntries(query = {}) {
   const scope = query.scope ? String(query.scope).trim() : undefined;
   const search = query.search ? String(query.search).trim() : undefined;
+  const accountLabel = query.accountLabel
+    ? String(query.accountLabel).trim()
+    : undefined;
+  const financialCategoryId = query.financialCategoryId
+    ? Number(query.financialCategoryId)
+    : undefined;
   const page = Math.max(1, Number(query.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 10));
   const startDate = normalizeDate(query.startDate, "Data inicial");
@@ -196,6 +202,8 @@ async function listEntries(query = {}) {
   const result = await repository.listEntries({
     scope,
     search,
+    accountLabel,
+    financialCategoryId,
     page,
     pageSize,
     startDate,
@@ -205,6 +213,8 @@ async function listEntries(query = {}) {
   const summary = await repository.summarizeEntries({
     scope,
     search,
+    accountLabel,
+    financialCategoryId,
     startDate,
     endDate,
   });
