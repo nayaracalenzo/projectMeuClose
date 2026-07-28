@@ -50,8 +50,31 @@ function serializeError(error) {
     return { message: String(error) };
   }
 
+  const sequelizeErrors = Array.isArray(error.errors)
+    ? error.errors.map((item) => ({
+        message: item?.message,
+        path: item?.path,
+        type: item?.type,
+        value: item?.value,
+        validatorKey: item?.validatorKey,
+        validatorName: item?.validatorName,
+      }))
+    : undefined;
+
   return {
+    name: error.name,
+    code: error.code,
     message: error.message,
+    statusCode: error.statusCode,
+    constraint: error.constraint,
+    fields: error.fields,
+    parentMessage: error.parent?.message,
+    parentDetail: error.parent?.detail,
+    parentCode: error.parent?.code,
+    parentConstraint: error.parent?.constraint,
+    originalDetail: error.original?.detail,
+    sql: process.env.NODE_ENV === "production" ? undefined : error.sql,
+    errors: sequelizeErrors,
     stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
   };
 }
