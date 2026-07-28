@@ -3,6 +3,7 @@ const {
   CashEntries,
   FinancialCategories,
   PaymentReceipts,
+  PaymentTypes,
   PayablePayments,
   ReceivableInstallments,
   Sales,
@@ -233,6 +234,11 @@ async function listEntries(filters = {}) {
             attributes: ["installmentNumber", "totalInstallments"],
           },
         ],
+      },
+      {
+        model: PaymentTypes,
+        required: false,
+        attributes: ["idPaymentType", "desc"],
       },
       {
         model: PayablePayments,

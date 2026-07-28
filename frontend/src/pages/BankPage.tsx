@@ -20,6 +20,7 @@ interface BankRow {
   category: string;
   financialCategoryId: number | null;
   description: string;
+  paymentTypeName?: string | null;
   amountIn: number;
   amountOut: number;
   balance: number;
@@ -459,8 +460,8 @@ export default function BankPage() {
           : `${totalRows} movimentacao(oes) encontrada(s).`}
       </p>
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 w-full border-separate border-spacing-y-2">
+      <div className="hidden overflow-auto md:block">
+        <table className="mt-2 min-w-[1100px] w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
@@ -470,13 +471,16 @@ export default function BankPage() {
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Parcela
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[180px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Categoria
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="min-w-[320px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Historico
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[170px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Forma pag.
+              </th>
+              <th className="w-[180px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Conta
               </th>
               <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
@@ -494,7 +498,7 @@ export default function BankPage() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando movimentacoes...
@@ -503,7 +507,7 @@ export default function BankPage() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhuma movimentacao bancaria cadastrada.
@@ -537,7 +541,7 @@ export default function BankPage() {
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.parcela || "-"}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="w-[180px] px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
                         row.category,
@@ -546,10 +550,13 @@ export default function BankPage() {
                       {row.category}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                  <td className="min-w-[320px] px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.description}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="w-[170px] whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
+                    {row.paymentTypeName || "-"}
+                  </td>
+                  <td className="w-[180px] px-4 py-3 text-[14px] text-neutral-700">
                     {row.bank || row.accountLabel || "-"}
                   </td>
                   <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
@@ -603,6 +610,9 @@ export default function BankPage() {
               </p>
               <p className="text-xs uppercase text-neutral-700">
                 {row.description}
+              </p>
+              <p className="text-xs text-neutral-700">
+                Forma de pagamento: {row.paymentTypeName || "-"}
               </p>
               <p className="text-xs text-neutral-700">
                 Conta: {row.bank || row.accountLabel || "-"}
@@ -912,6 +922,7 @@ export default function BankPage() {
               <p>Banco: {selectedRow.bank}</p>
               <p>Categoria: {selectedRow.category}</p>
               <p>Descricao: {selectedRow.description}</p>
+              <p>Forma de pagamento: {selectedRow.paymentTypeName || "-"}</p>
               <p>
                 Valor:{" "}
                 {selectedRow.amountIn

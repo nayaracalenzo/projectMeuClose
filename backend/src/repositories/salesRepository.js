@@ -151,7 +151,7 @@ function buildSaleFinancialMovementDescription(movement, saleId, customerName) {
 
   const resolvedCustomerName = String(customerName || "").trim() || "Cliente";
 
-  return `Entrada da venda ${saleId} - ${resolvedCustomerName}`;
+  return `Recebimento da venda ${saleId} - ${resolvedCustomerName}`;
 }
 
 async function createSale({

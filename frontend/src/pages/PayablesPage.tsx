@@ -87,6 +87,21 @@ interface RegisterPaymentResponse {
   paymentId: number;
 }
 
+interface CashSessionSummary {
+  id: number;
+  openedAt: string;
+  expectedBalance: number;
+  notes: string | null;
+  pendingPreviousDay: boolean;
+}
+
+interface CashSessionStatusResponse {
+  currentSession: CashSessionSummary | null;
+  lastClosedSession?: CashSessionSummary | null;
+  hasOpenSession: boolean;
+  pendingPreviousDay: boolean;
+}
+
 type ToastState = {
   open: boolean;
   tone: "success" | "warning" | "error";
@@ -391,6 +406,7 @@ export default function PayablesPage() {
       setSelectedPayableId(null);
       await fetchRows();
     } catch (error: unknown) {
+      setPaymentConfirmOpen(false);
       setToast({
         open: true,
         tone: "error",
@@ -451,6 +467,16 @@ export default function PayablesPage() {
     setPaymentConfirmOpen(false);
   };
 
+  const resetPaymentFlow = () => {
+    setPaymentConfirmOpen(false);
+    setActivePayableId(null);
+    setPaymentTypeId("");
+    setPaymentAmount("");
+    setPaidAt(new Date().toISOString().slice(0, 10));
+    setReferenceCode("");
+    setPaymentFinancialAccountId("");
+  };
+
   const handleSelectRow = (rowId: number) => {
     setSelectedPayableId((current) => (current === rowId ? null : rowId));
   };
@@ -492,7 +518,136 @@ export default function PayablesPage() {
       return;
     }
 
-    setPaymentConfirmOpen(true);
+    void (async () => {
+      const selectedFinancialAccount =
+        financialAccounts.find(
+          (item) => String(item.id) === paymentFinancialAccountId,
+        ) || null;
+
+      if (
+        !(await ensureCashSessionBeforeStoreCashSettlement(
+          selectedFinancialAccount,
+        ))
+      ) {
+        return;
+      }
+
+      setPaymentConfirmOpen(true);
+    })();
+  };
+
+  const ensureCashSessionBeforeStoreCashSettlement = async (
+    financialAccount: FinancialAccountOption | null,
+  ) => {
+    if (
+      !financialAccount ||
+      financialAccount.scope !== "LOJA" ||
+      financialAccount.targetType !== "CASH"
+    ) {
+      return true;
+    }
+
+    try {
+      const data = await getRequest("/cash/session-status");
+      const parsed = (data as CashSessionStatusResponse) || null;
+      setCashSessionStatus(parsed);
+
+      if (parsed?.currentSession?.pendingPreviousDay) {
+        setCashSessionNotes(parsed.currentSession.notes || "");
+        setCountedBalanceInput(formatCurrencyInput("0"));
+        setCloseCashModalOpen(true);
+        return false;
+      }
+
+      if (!parsed?.hasOpenSession) {
+        setOpeningBalanceInput(
+          formatCurrency(parsed?.lastClosedSession?.expectedBalance ?? 0),
+        );
+        setCashSessionNotes("");
+        setOpenCashModalOpen(true);
+        return false;
+      }
+
+      return true;
+    } catch (error: unknown) {
+      setCashSessionStatus(null);
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Conta a pagar",
+        message: getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel verificar o caixa.",
+        ),
+      });
+      return false;
+    }
+  };
+
+  const handleClosePreviousCashSession = async () => {
+    try {
+      setCashSessionLoading(true);
+      await postRequest("/cash/sessions/current/close", {
+        countedBalance: parseCurrencyToNumber(countedBalanceInput),
+        notes: cashSessionNotes.trim() || null,
+      });
+
+      const updated = await getRequest("/cash/session-status");
+      setCashSessionStatus((updated as CashSessionStatusResponse) || null);
+      setCloseCashModalOpen(false);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Caixa fechado",
+        message:
+          "O caixa pendente foi fechado. Agora voce pode continuar com a quitacao.",
+      });
+    } catch (error: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel fechar",
+        message: getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel fechar o caixa.",
+        ),
+      });
+    } finally {
+      setCashSessionLoading(false);
+    }
+  };
+
+  const handleOpenCashSession = async () => {
+    try {
+      setCashSessionLoading(true);
+      await postRequest("/cash/sessions/open", {
+        openingBalance: parseCurrencyToNumber(openingBalanceInput),
+        notes: cashSessionNotes.trim() || null,
+      });
+
+      const updated = await getRequest("/cash/session-status");
+      setCashSessionStatus((updated as CashSessionStatusResponse) || null);
+      setOpenCashModalOpen(false);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Caixa aberto",
+        message:
+          "O caixa da loja foi aberto. Agora voce pode continuar com a quitacao.",
+      });
+    } catch (error: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel abrir",
+        message: getUserFacingApiErrorMessage(
+          error,
+          "Nao foi possivel abrir o caixa.",
+        ),
+      });
+    } finally {
+      setCashSessionLoading(false);
+    }
   };
 
   const handleCreateFinancialCategory = async () => {
@@ -560,8 +715,7 @@ export default function PayablesPage() {
         title: "Conta a pagar",
         message: data?.message || "Pagamento registrado com sucesso.",
       });
-      setPaymentConfirmOpen(false);
-      setActivePayableId(null);
+      resetPaymentFlow();
       setSelectedPayableId(null);
       await fetchRows();
     } catch (error: unknown) {
@@ -952,8 +1106,7 @@ export default function PayablesPage() {
             <button
               type="button"
               onClick={() => {
-                setActivePayableId(null);
-                setPaymentFinancialAccountId("");
+                resetPaymentFlow();
               }}
               className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
             >
@@ -1093,7 +1246,7 @@ export default function PayablesPage() {
 
       <CustomerModal
         open={paymentConfirmOpen && Boolean(activePayableId)}
-        onClose={() => setPaymentConfirmOpen(false)}
+        onClose={resetPaymentFlow}
         title="Confirmar quitação"
         subtitle="Confirme o pagamento da conta a pagar."
         size="sm"
@@ -1115,7 +1268,7 @@ export default function PayablesPage() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => setPaymentConfirmOpen(false)}
+              onClick={resetPaymentFlow}
             >
               Cancelar
             </Button>
