@@ -81,6 +81,26 @@ function isUniqueConstraintError(error) {
   return error?.name === "SequelizeUniqueConstraintError";
 }
 
+function getSequelizeValidationMessage(error) {
+  if (error?.name !== "SequelizeValidationError" && error?.name !== "SequelizeDatabaseError") {
+    return null;
+  }
+
+  const firstIssue = Array.isArray(error?.errors) ? error.errors[0] : null;
+  const field = String(firstIssue?.path || error?.path || "").trim();
+  const message = String(firstIssue?.message || error?.message || "").trim();
+
+  if (field && message) {
+    return `${field}: ${message}`;
+  }
+
+  if (message) {
+    return message;
+  }
+
+  return "Dados do cliente invalidos.";
+}
+
 async function getBirthdaysOfMonth(query) {
   const filters = parseBirthdayFilters(query);
 
@@ -197,7 +217,7 @@ function buildClientPayload(body, { isCreate }) {
     birthDate: normalizeDateToLocalMidnight(normalizedBody.birthDate),
     companyName: normalizedBody.companyName,
     tradeName: normalizedBody.tradeName,
-    phone: normalizedBody.phone,
+    phone: normalizedBody.phone ?? "",
     email: normalizedBody.email,
     zipCode: normalizedBody.zipCode,
     street: normalizedBody.street,
@@ -240,8 +260,16 @@ async function updateClientById(id, body) {
   try {
     updated = await repository.updateClientById(id, payload);
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
+    if (payload.document && isUniqueConstraintError(error)) {
       throw validationError("CPF/CNPJ ja cadastrado.", {
+        name: "ClientValidationError",
+        code: "CLIENT_VALIDATION_ERROR",
+      });
+    }
+
+    const validationMessage = getSequelizeValidationMessage(error);
+    if (validationMessage) {
+      throw validationError(validationMessage, {
         name: "ClientValidationError",
         code: "CLIENT_VALIDATION_ERROR",
       });
@@ -257,7 +285,9 @@ async function updateClientById(id, body) {
 
 async function createClient(body) {
   const payload = buildClientPayload(body, { isCreate: true });
-  const existingClient = await repository.findClientByDocument(payload.document);
+  const existingClient = payload.document
+    ? await repository.findClientByDocument(payload.document)
+    : null;
 
   if (existingClient && existingClient.blocked !== true) {
     throw validationError("CPF/CNPJ ja cadastrado.", {
@@ -284,8 +314,16 @@ async function createClient(body) {
     const created = await repository.createClient(payload);
     return getClientById(created.idCustomer);
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
+    if (payload.document && isUniqueConstraintError(error)) {
       throw validationError("CPF/CNPJ ja cadastrado.", {
+        name: "ClientValidationError",
+        code: "CLIENT_VALIDATION_ERROR",
+      });
+    }
+
+    const validationMessage = getSequelizeValidationMessage(error);
+    if (validationMessage) {
+      throw validationError(validationMessage, {
         name: "ClientValidationError",
         code: "CLIENT_VALIDATION_ERROR",
       });

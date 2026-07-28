@@ -237,32 +237,31 @@ export default function NewCustomer() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const validationIssues = getCustomerValidationIssues(form);
-    if (validationIssues.length > 0) {
-      setNotice({
-        open: true,
-        tone: "warning",
-        title: "Campos obrigatorios",
-        message: validationIssues.map((issue) => issue.message).join(" "),
-      });
-      return;
-    }
-
     try {
+      const validationIssues = getCustomerValidationIssues(form);
+      if (validationIssues.length > 0) {
+        setNotice({
+          open: true,
+          tone: "warning",
+          title: "Campos obrigatorios",
+          message: validationIssues.map((issue) => issue.message).join(" "),
+        });
+        return;
+      }
+
       setSaving(true);
 
-      await postRequest("/clients", {
+      const payload = {
         typeCustomer: form.typeCustomer,
-        document: onlyDigits(form.document),
         rg: null,
+        document: onlyDigits(form.document) || null,
         fullName: form.fullName || null,
         birthDate: toBirthDateApiValue(form.birthDate),
         companyName: form.companyName || null,
         tradeName: form.tradeName || null,
-        phone: onlyDigits(form.phone),
+        phone: onlyDigits(form.phone) || null,
         email: form.email || null,
-        zipCode: onlyDigits(form.zipCode),
+        zipCode: onlyDigits(form.zipCode) || null,
         street: form.street || null,
         number: form.number || null,
         complement: form.complement || null,
@@ -271,7 +270,9 @@ export default function NewCustomer() {
         state: form.state || null,
         professionId: form.professionId ? Number(form.professionId) : null,
         comment: form.comment || null,
-      });
+      };
+
+      await postRequest("/clients", payload);
 
       navigate("/clientes");
     } catch (error: unknown) {

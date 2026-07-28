@@ -15,6 +15,11 @@ const CustomersSchema = (sequelize, DataTypes) => {
     document: {
       type: DataTypes.STRING(14),
       unique: true,
+      allowNull: true,
+      set(value) {
+        const normalized = String(value || "").replace(/\D/g, "");
+        this.setDataValue("document", normalized || null);
+      },
     },
     rg: {
       type: DataTypes.STRING(20),

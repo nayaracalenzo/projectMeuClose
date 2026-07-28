@@ -6,6 +6,7 @@ const FinancialCategoriesSchema = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         primaryKey: true,
         allowNull: false,
+        autoIncrement: true,
       },
       description: {
         type: DataTypes.STRING(255),

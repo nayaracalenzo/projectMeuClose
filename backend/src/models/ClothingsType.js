@@ -11,7 +11,6 @@ const ClothingsTypeSchema = (sequelize, DataTypes) => {
       desc: {
         type: DataTypes.STRING(50),
         allowNull: false,
-        unique: true,
       },
       dsbl: {
         type: DataTypes.BOOLEAN,
