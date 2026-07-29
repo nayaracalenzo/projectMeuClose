@@ -500,7 +500,7 @@ export default function Orders() {
       </CustomerModal>
 
       <div className="hidden w-full overflow-x-auto md:block">
-        <table className="mt-2 min-w-full border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-[1400px] border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
@@ -552,22 +552,22 @@ export default function Orders() {
                   className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
                   onClick={() => navigate(`/pedido/${order.id}`)}
                 >
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {order.description || "-"}
                   </td>
-                  <td className="px-4 py-3 text-[14px] font-semibold uppercase text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] font-semibold uppercase text-neutral-700">
                     {formatProductionType(order)}
                   </td>
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {formatCustomerName(order.customer)}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(order.testDate)}
                   </td>
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {order.seamstress || "-"}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getProductionStatusBadgeClassName(
                         order.status,
@@ -576,7 +576,7 @@ export default function Orders() {
                       {order.status || "-"}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] font-semibold text-primary">
                     {formatCurrency(order.finalValue)}
                   </td>
                 </tr>
