@@ -52,7 +52,7 @@ const ProductsSchema = (sequelize, DataTypes) => {
         allowNull: true,
       },
       testDate: {
-        type: DataTypes.DATE,
+        type: DataTypes.DATEONLY,
         allowNull: true,
       },
       dsbl: {

@@ -45,11 +45,25 @@ interface ProductionResponse {
   totalPages: number;
 }
 
-const formatDate = (value?: string | null) => {
-  if (!value) return "-";
+const parseDateOnly = (value?: string | null) => {
+  const base = String(value || "").slice(0, 10);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  if (!match) return null;
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    0,
+    0,
+    0,
+    0,
+  );
+};
+
+const formatDate = (value?: string | null) => {
+  const date = parseDateOnly(value);
+  if (!date) return "-";
 
   return new Intl.DateTimeFormat("pt-BR").format(date);
 };
