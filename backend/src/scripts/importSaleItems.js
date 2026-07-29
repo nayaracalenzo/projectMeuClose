@@ -1,7 +1,7 @@
 require("dotenv").config();
 const fs = require("fs");
 const csv = require("csv-parser");
-const { Products, SaleItems, Sales } = require("../models");
+const { Products, ProductsTypes, SaleItems, Sales } = require("../models");
 const { normalizeLegacyCurrency } = require("../utils/normalizeLegacyCurrency");
 const { resolveLegacyImportFilePath } = require("./legacyImportSource");
 
@@ -15,21 +15,39 @@ function roundCurrency(value) {
   return Number(Number(value).toFixed(2));
 }
 
+function normalizeLookupKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
+}
+
 function inferItemType(product) {
   const categoryId = Number(product?.categoryId || 0);
   const productTypeId = Number(product?.productTypeId || 0);
   const statusId = Number(product?.statusId || 0);
+  const productTypeDesc = normalizeLookupKey(product?.productTypeDesc);
 
   if (categoryId === 4) return "ACCESSORY";
-  if (categoryId === 3) return "SERVICE";
+  if (
+    productTypeDesc === "roupa sob medida" ||
+    productTypeDesc === "ajuste" ||
+    productTypeDesc === "reforma"
+  ) {
+    return "CUSTOM_MADE";
+  }
+
   if (categoryId === 5) return "MISC";
   if (categoryId === 1 && statusId === 1) return "CUSTOM_MADE";
   if (categoryId === 1 && statusId === 5) return "CUSTOM_MADE";
   if (categoryId === 1 && productTypeId === 4) return "CUSTOM_MADE";
+  if (categoryId === 1 && productTypeId === 7) return "CUSTOM_MADE";
+  if (categoryId === 1 && productTypeId === 8) return "CUSTOM_MADE";
   if (categoryId === 1) return "READY_MADE";
 
-  if (productTypeId === 5) return "SERVICE";
   if (productTypeId === 4) return "CUSTOM_MADE";
+  if (productTypeId === 7) return "CUSTOM_MADE";
+  if (productTypeId === 8) return "CUSTOM_MADE";
+  if (productTypeId === 5) return "MISC";
 
   return "MISC";
 }
@@ -62,12 +80,27 @@ async function importSaleItems() {
             "statusId",
             "createdAt",
           ],
+          include: [
+            {
+              model: ProductsTypes,
+              attributes: ["desc"],
+              required: false,
+            },
+          ],
           raw: true,
         }),
       ]);
 
       const salesMap = new Map(sales.map((sale) => [Number(sale.idSale), sale]));
-      const productsMap = new Map(products.map((product) => [Number(product.id), product]));
+      const productsMap = new Map(
+        products.map((product) => [
+          Number(product.id),
+          {
+            ...product,
+            productTypeDesc: product["ProductsType.desc"] || null,
+          },
+        ]),
+      );
 
       const saleItemsToInsert = [];
       let skipped = 0;
