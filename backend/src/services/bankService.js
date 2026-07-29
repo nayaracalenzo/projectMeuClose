@@ -46,16 +46,6 @@ function normalizeAmount(value, fieldName) {
   return Number(normalized.toFixed(2));
 }
 
-function normalizeScope(value) {
-  const normalized = String(value || "").trim().toUpperCase();
-
-  if (normalized !== "LOJA" && normalized !== "PESSOAL") {
-    throw createBankValidationError("Escopo invalido.");
-  }
-
-  return normalized;
-}
-
 function normalizeMovementType(value) {
   const normalized = String(value || "").trim().toUpperCase();
 
@@ -95,8 +85,7 @@ function buildAuditHistory(kind, scope, entry, occurredAt) {
   const amount = Number(entry.amount || 0).toFixed(2);
   const dateLabel = new Intl.DateTimeFormat("pt-BR").format(new Date(occurredAt));
 
-  return `${kind} de ${scope === "LOJA" ? "BANCO" : "BANCO PESSOAL"} do lancamento ${entry.idBankEntry
-    } em ${dateLabel}, valor ${amount}, descricao ${entry.description}.`;
+  return `${kind} de BANCO do lancamento ${entry.idBankEntry} em ${dateLabel}, valor ${amount}, descricao ${entry.description}.`;
 }
 
 function isCancelledSaleEntry(entry) {
@@ -167,9 +156,44 @@ function resolveEntryInstallmentLabel(item) {
   return "-";
 }
 
+function extractLegacyPaymentTypeName(description) {
+  const normalized = String(description || "").trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const match = /\bvia\s+(.+)$/i.exec(normalized);
+  return match?.[1]?.trim() || null;
+}
+
+function resolveEntryPaymentTypeName(item) {
+  return item.PaymentType?.desc || extractLegacyPaymentTypeName(item.description);
+}
+
+function resolveDisplayDescription(description, paymentTypeName) {
+  const normalizedDescription = String(description || "").trim();
+  const normalizedPaymentTypeName = String(paymentTypeName || "").trim();
+
+  if (!normalizedDescription || !normalizedPaymentTypeName) {
+    return normalizedDescription;
+  }
+
+  return normalizedDescription.replace(
+    new RegExp(`\\s+via\\s+${normalizedPaymentTypeName}$`, "i"),
+    "",
+  );
+}
+
 async function listEntries(query = {}) {
   const scope = query.scope ? String(query.scope).trim() : undefined;
   const search = query.search ? String(query.search).trim() : undefined;
+  const accountLabel = query.accountLabel
+    ? String(query.accountLabel).trim()
+    : undefined;
+  const financialCategoryId = query.financialCategoryId
+    ? Number(query.financialCategoryId)
+    : undefined;
   const page = Math.max(1, Number(query.page) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 10));
   const startDate = normalizeDate(query.startDate, "Data inicial");
@@ -178,6 +202,8 @@ async function listEntries(query = {}) {
   const result = await repository.listEntries({
     scope,
     search,
+    accountLabel,
+    financialCategoryId,
     page,
     pageSize,
     startDate,
@@ -187,39 +213,46 @@ async function listEntries(query = {}) {
   const summary = await repository.summarizeEntries({
     scope,
     search,
+    accountLabel,
+    financialCategoryId,
     startDate,
     endDate,
   });
 
   return {
-    items: result.rows.map((item) => ({
-      id: item.idBankEntry,
-      date: item.occurredAt,
-      scope: item.scope,
-      bank: item.accountLabel || "Banco da Loja",
-      parcela: resolveEntryInstallmentLabel(item),
-      financialCategoryId:
-        item.financialCategoryId || item.FinancialCategory?.idFinancialCategory || null,
-      financialCategoryDescription:
-        item.FinancialCategory?.description || item.category || "DIVERSOS",
-      category: item.FinancialCategory?.description || item.category || "DIVERSOS",
-      description: item.description,
-      amount: Number(item.amount),
-      amountIn: item.movementType === "IN" ? Number(item.amount) : 0,
-      amountOut: item.movementType === "OUT" ? Number(item.amount) : 0,
-      balance: Number(item.get("runningBalance") || 0),
-      referenceCode: item.referenceCode,
-      sourceType: item.sourceType,
-      transferKey: item.transferKey || null,
-      reversalOfBankEntryId: item.reversalOfBankEntryId || null,
-      hasReversal: Boolean(item.get?.("hasReversal") || item.hasReversal),
-      canReverse: canReverseEntry(item),
-      canDelete:
-        item.sourceType === "MANUAL" &&
-        !item.transferKey &&
-        !item.reversalOfBankEntryId &&
-        !String(item.description || "").trim().toUpperCase().startsWith("ESTORNO - "),
-    })),
+    items: result.rows.map((item) => {
+      const paymentTypeName = resolveEntryPaymentTypeName(item);
+
+      return {
+        id: item.idBankEntry,
+        date: item.occurredAt,
+        scope: item.scope,
+        bank: item.accountLabel || "Banco",
+        parcela: resolveEntryInstallmentLabel(item),
+        financialCategoryId:
+          item.financialCategoryId || item.FinancialCategory?.idFinancialCategory || null,
+        financialCategoryDescription:
+          item.FinancialCategory?.description || item.category || "DIVERSOS",
+        category: item.FinancialCategory?.description || item.category || "DIVERSOS",
+        description: resolveDisplayDescription(item.description, paymentTypeName),
+        paymentTypeName,
+        amount: Number(item.amount),
+        amountIn: item.movementType === "IN" ? Number(item.amount) : 0,
+        amountOut: item.movementType === "OUT" ? Number(item.amount) : 0,
+        balance: Number(item.get("runningBalance") || 0),
+        referenceCode: item.referenceCode,
+        sourceType: item.sourceType,
+        transferKey: item.transferKey || null,
+        reversalOfBankEntryId: item.reversalOfBankEntryId || null,
+        hasReversal: Boolean(item.get?.("hasReversal") || item.hasReversal),
+        canReverse: canReverseEntry(item),
+        canDelete:
+          item.sourceType === "MANUAL" &&
+          !item.transferKey &&
+          !item.reversalOfBankEntryId &&
+          !String(item.description || "").trim().toUpperCase().startsWith("ESTORNO - "),
+      };
+    }),
     total: Number(result.count || 0),
     page,
     pageSize,
@@ -233,8 +266,7 @@ async function listEntries(query = {}) {
 }
 
 async function listAccountOptions(query = {}) {
-  const scope = query.scope ? String(query.scope).trim() : undefined;
-  const labels = await repository.listAccountOptions(scope);
+  const labels = await repository.listAccountOptions();
 
   return labels.map((label) => ({
     label,
@@ -243,17 +275,14 @@ async function listAccountOptions(query = {}) {
 }
 
 async function createManualEntry(body = {}) {
-  const scope = normalizeScope(body.scope);
+  const scope = "LOJA";
   const movementType = normalizeMovementType(body.movementType);
   const financialCategoryId = await getRequiredFinancialCategoryId(body.financialCategoryId);
   const description = normalizeDescription(body.description);
   const amount = normalizeAmount(body.amount, "Valor");
   const occurredAt = normalizeDate(body.occurredAt, "Data") || new Date();
   const referenceCode = normalizeReferenceCode(body.referenceCode);
-  const accountLabel =
-    scope === "LOJA"
-      ? "Banco da Loja"
-      : normalizeDescription(body.accountLabel, "Banco");
+  const accountLabel = normalizeDescription(body.accountLabel, "Conta");
 
   const created = await createBankEntry({
     scope,
@@ -314,7 +343,7 @@ async function reverseEntry(idBankEntry, user, body = {}) {
         financialCategoryId: entry.financialCategoryId || null,
         category: categoryDescription,
         description: reversalDescription,
-        accountLabel: entry.accountLabel || "Banco da Loja",
+        accountLabel: entry.accountLabel || "Banco",
         amount: Number(entry.amount),
         occurredAt,
         sourceType: "MANUAL",

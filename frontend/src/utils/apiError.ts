@@ -1,4 +1,6 @@
 type ApiLikeError = {
+  name?: string;
+  message?: string;
   response?: {
     status?: number;
     data?: {
@@ -17,6 +19,10 @@ export function getUserFacingApiErrorMessage(
   const maybeAxiosError = error as ApiLikeError;
   const status = maybeAxiosError.response?.status;
   const message = maybeAxiosError.response?.data?.message;
+
+  if (maybeAxiosError.name === "MutationInProgressError" && maybeAxiosError.message) {
+    return maybeAxiosError.message;
+  }
 
   if (status && status >= 400 && status < 500 && status !== 404 && message) {
     return message;

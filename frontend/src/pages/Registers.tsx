@@ -10,15 +10,14 @@ import {
   parseCurrencyToNumber,
 } from "../utils/currency";
 
-type Scope = "LOJA" | "PESSOAL";
-
 interface CashRow {
   id: number;
   date: string;
-  scope: Scope;
+  scope: "LOJA" | "PESSOAL";
   accountLabel?: string | null;
   parcela?: string;
   description: string;
+  paymentTypeName?: string | null;
   category: string;
   financialCategoryId: number | null;
   movementType: "IN" | "OUT";
@@ -107,8 +106,9 @@ const formatDateTime = (dateString: string) =>
 
 export default function Registers() {
   const pageSize = 10;
-  const [scope, setScope] = useState<Scope>("LOJA");
   const [search, setSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [startDate, setStartDate] = useState(getCurrentDateInputValue());
   const [endDate, setEndDate] = useState(getCurrentDateInputValue());
   const [rows, setRows] = useState<CashRow[]>([]);
@@ -168,22 +168,22 @@ export default function Registers() {
   );
 
   const currentSession = sessionStatus?.currentSession || null;
-  const previousDayWarningVisible =
-    scope === "LOJA" && Boolean(currentSession?.pendingPreviousDay);
-  const requiresOpenStoreSession = scope === "LOJA" && !currentSession;
+  const previousDayWarningVisible = Boolean(currentSession?.pendingPreviousDay);
+  const requiresOpenStoreSession = !currentSession;
   const canOpenTransferModal =
-    scope === "LOJA"
-      ? !requiresOpenStoreSession
-      : bankAccountOptions.length > 0;
+    !requiresOpenStoreSession && bankAccountOptions.length > 0;
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
-      scope,
       page: String(page),
       pageSize: String(pageSize),
     });
 
     if (search.trim()) params.set("search", search.trim());
+    if (accountFilter && accountFilter !== "Caixa") {
+      params.set("accountLabel", accountFilter);
+    }
+    if (categoryFilter) params.set("financialCategoryId", categoryFilter);
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
 
@@ -201,11 +201,6 @@ export default function Registers() {
   };
 
   const fetchSessionStatus = async () => {
-    if (scope !== "LOJA") {
-      setSessionStatus(null);
-      return;
-    }
-
     setSessionLoading(true);
 
     try {
@@ -231,7 +226,7 @@ export default function Registers() {
 
   const fetchBankAccountOptions = async () => {
     try {
-      const data = await getRequest("/bank/account-options?scope=PESSOAL");
+      const data = await getRequest("/cash/account-options");
       setBankAccountOptions(
         Array.isArray(data) ? (data as BankAccountOption[]) : [],
       );
@@ -242,7 +237,7 @@ export default function Registers() {
 
   useEffect(() => {
     setPage(1);
-  }, [scope, search, startDate, endDate]);
+  }, [accountFilter, categoryFilter, search, startDate, endDate]);
 
   useEffect(() => {
     if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
@@ -276,7 +271,7 @@ export default function Registers() {
     };
 
     void fetchData();
-  }, [endDate, page, scope, search, startDate]);
+  }, [accountFilter, categoryFilter, endDate, page, search, startDate]);
 
   const resetOpenModal = () => {
     setOpeningBalanceInput("");
@@ -387,13 +382,12 @@ export default function Registers() {
     try {
       setSessionActionLoading(true);
       await postRequest("/cash/transfers/to-bank", {
-        scope,
         amount: parseCurrencyToNumber(transferAmountInput),
         occurredAt: transferDate,
         description: transferDescription.trim(),
         referenceCode: transferReferenceCode.trim() || null,
         financialCategoryId: Number(transferFinancialCategoryId),
-        accountLabel: scope === "PESSOAL" ? transferAccountLabel : null,
+        accountLabel: transferAccountLabel,
       });
       resetTransferModal();
       await refreshData();
@@ -423,7 +417,6 @@ export default function Registers() {
     try {
       setSessionActionLoading(true);
       await postRequest("/cash/manual-entry", {
-        scope,
         movementType: manualMovementType,
         financialCategoryId: Number(manualFinancialCategoryId),
         amount: parseCurrencyToNumber(manualAmountInput),
@@ -501,39 +494,11 @@ export default function Registers() {
         Caixa
       </h1>
 
-      <div className="mb-5 border-b border-outline-variant/35">
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setScope("LOJA")}
-            className={`px-4 py-2 text-sm uppercase tracking-[0.08em] ${
-              scope === "LOJA"
-                ? "border-b-2 border-primary font-semibold text-primary"
-                : "text-neutral-700"
-            }`}
-          >
-            Caixa da Loja
-          </button>
-          <button
-            type="button"
-            onClick={() => setScope("PESSOAL")}
-            className={`px-4 py-2 text-sm uppercase tracking-[0.08em] ${
-              scope === "PESSOAL"
-                ? "border-b-2 border-primary font-semibold text-primary"
-                : "text-neutral-700"
-            }`}
-          >
-            Caixa Pessoal
-          </button>
-        </div>
-      </div>
-
-      {scope === "LOJA" ? (
-        <section className="mb-5 space-y-4">
+      <section className="mb-5 space-y-4">
           <div className="flex flex-col gap-3 rounded-xl border border-outline-variant/35 bg-white p-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
-                Sessao do Caixa da Loja
+                Sessao do Caixa
               </p>
               {sessionLoading ? (
                 <p className="mt-1 text-sm text-neutral-700">
@@ -557,7 +522,7 @@ export default function Registers() {
                 </>
               ) : (
                 <p className="mt-1 text-sm text-neutral-700">
-                  Nenhum caixa da loja aberto no momento.
+                  Nenhum caixa aberto no momento.
                 </p>
               )}
             </div>
@@ -591,7 +556,7 @@ export default function Registers() {
             <div className="rounded-xl border border-[#c6a33a] bg-[#fff8df] px-4 py-3 text-sm text-[#6d5600]">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  O caixa da loja iniciado em{" "}
+                  O caixa iniciado em{" "}
                   {formatDate(currentSession!.openedAt)} ainda nao foi fechado.
                   Deseja fechar esse caixa agora?
                 </div>
@@ -610,13 +575,12 @@ export default function Registers() {
             </div>
           ) : null}
         </section>
-      ) : null}
 
       <div className="mb-5 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setManualEntryModalOpen(true)}
-          disabled={scope === "LOJA" && requiresOpenStoreSession}
+          disabled={requiresOpenStoreSession}
           className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
           Incluir
@@ -633,8 +597,7 @@ export default function Registers() {
           type="button"
           onClick={() => setReverseModalOpen(true)}
           disabled={
-            !selectedRow?.canReverse ||
-            (scope === "LOJA" && requiresOpenStoreSession)
+            !selectedRow?.canReverse || requiresOpenStoreSession
           }
           className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm font-medium text-primary disabled:opacity-60"
         >
@@ -653,6 +616,40 @@ export default function Registers() {
             placeholder="Descricao do lancamento"
             className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
           />
+        </div>
+        <div className="md:min-w-56">
+          <label className="mb-2 block text-sm font-semibold text-primary">
+            Conta
+          </label>
+          <select
+            value={accountFilter}
+            onChange={(e) => setAccountFilter(e.target.value)}
+            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
+          >
+            <option value="">Todos</option>
+            {bankAccountOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="md:min-w-56">
+          <label className="mb-2 block text-sm font-semibold text-primary">
+            Categoria
+          </label>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
+          >
+            <option value="">Todos</option>
+            {financialCategories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.description}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="flex flex-col gap-3 md:flex-row">
           <div>
@@ -707,8 +704,8 @@ export default function Registers() {
         </div>
       </div>
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 w-full border-separate border-spacing-y-2">
+      <div className="hidden overflow-auto md:block">
+        <table className="mt-2 min-w-[1100px] w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
@@ -718,13 +715,16 @@ export default function Registers() {
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Parcela
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[180px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Categoria
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="min-w-[320px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Historico
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[170px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Forma pag.
+              </th>
+              <th className="w-[180px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Conta
               </th>
               <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
@@ -742,7 +742,7 @@ export default function Registers() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando lancamentos...
@@ -751,7 +751,7 @@ export default function Registers() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={10}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhum lancamento de caixa cadastrado.
@@ -785,7 +785,7 @@ export default function Registers() {
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.parcela || "-"}
                   </td>
-                  <td className="w-60 px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="w-[180px] px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
                         row.category,
@@ -794,10 +794,13 @@ export default function Registers() {
                       {row.category}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                  <td className="min-w-[320px] px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.description}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="w-[170px] whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
+                    {row.paymentTypeName || "-"}
+                  </td>
+                  <td className="w-[180px] px-4 py-3 text-[14px] text-neutral-700">
                     {row.accountLabel || "-"}
                   </td>
                   <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
@@ -851,6 +854,9 @@ export default function Registers() {
                   {row.description}
                 </p>
                 <p className="text-xs text-neutral-700">
+                  Forma de pagamento: {row.paymentTypeName || "-"}
+                </p>
+                <p className="text-xs text-neutral-700">
                   Conta: {row.accountLabel || "-"}
                 </p>
                 <p className="text-xs text-[#1f7a1f]">
@@ -899,16 +905,8 @@ export default function Registers() {
       <CustomerModal
         open={transferModalOpen}
         onClose={resetTransferModal}
-        title={
-          scope === "LOJA"
-            ? "Transferir Caixa da Loja para Banco"
-            : "Transferir Caixa Pessoal para Banco"
-        }
-        subtitle={
-          scope === "LOJA"
-            ? "Registre a saida do caixa da loja e a entrada correspondente no banco."
-            : "Registre a saida do caixa pessoal e selecione o banco de destino."
-        }
+        title="Transferir caixa para banco"
+        subtitle="Registre a saida do caixa e a entrada correspondente na conta bancaria selecionada."
       >
         <div className="space-y-4">
           <div>
@@ -929,25 +927,23 @@ export default function Registers() {
             </select>
           </div>
 
-          {scope === "PESSOAL" ? (
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">
-                Banco de destino
-              </label>
-              <select
-                value={transferAccountLabel}
-                onChange={(e) => setTransferAccountLabel(e.target.value)}
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              >
-                <option value="">Selecione</option>
-                {bankAccountOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Conta de destino
+            </label>
+            <select
+              value={transferAccountLabel}
+              onChange={(e) => setTransferAccountLabel(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+            >
+              <option value="">Selecione</option>
+              {bankAccountOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-primary">
@@ -1004,10 +1000,10 @@ export default function Registers() {
               onClick={handleTransferToBank}
               disabled={
                 sessionActionLoading ||
+                !transferAccountLabel ||
                 !transferFinancialCategoryId ||
                 !transferAmountInput ||
-                !transferDescription.trim() ||
-                (scope === "PESSOAL" && !transferAccountLabel)
+                !transferDescription.trim()
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
@@ -1030,7 +1026,7 @@ export default function Registers() {
         open={manualEntryModalOpen}
         onClose={resetManualEntryModal}
         title="Incluir lancamento manual"
-        subtitle="Registre uma entrada ou saida no caixa selecionado."
+        subtitle="Registre uma entrada ou saida no caixa."
       >
         <div className="space-y-4">
           <div>
@@ -1153,6 +1149,7 @@ export default function Registers() {
               <p>Data: {formatDate(selectedRow.date)}</p>
               <p>Categoria: {selectedRow.category}</p>
               <p>Descricao: {selectedRow.description}</p>
+              <p>Forma de pagamento: {selectedRow.paymentTypeName || "-"}</p>
               <p>
                 Valor:{" "}
                 {selectedRow.amountIn
@@ -1200,7 +1197,7 @@ export default function Registers() {
       <CustomerModal
         open={openSessionModal}
         onClose={resetOpenModal}
-        title="Abrir Caixa da Loja"
+        title="Abrir Caixa"
         subtitle="Informe o saldo inicial para iniciar a sessao de caixa."
       >
         <div className="space-y-4">
@@ -1250,7 +1247,7 @@ export default function Registers() {
       <CustomerModal
         open={closeSessionModal}
         onClose={resetCloseModal}
-        title="Fechar Caixa da Loja"
+        title="Fechar Caixa"
         subtitle={
           currentSession
             ? `Sessao aberta em ${formatDateTime(currentSession.openedAt)}.`

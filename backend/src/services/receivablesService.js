@@ -286,6 +286,25 @@ function getReceivableUserId(user) {
   return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
 }
 
+function buildReceivableFinancialMovementDescription({
+  saleId,
+  customerName,
+  paymentTypeName,
+}) {
+  const resolvedCustomerName = String(customerName || "").trim() || "Cliente";
+  const resolvedPaymentTypeName = String(paymentTypeName || "").trim() || null;
+
+  if (saleId) {
+    return `Recebimento da venda ${saleId} - ${resolvedCustomerName}`;
+  }
+
+  if (resolvedPaymentTypeName) {
+    return `Recebimento de ${resolvedCustomerName} via ${resolvedPaymentTypeName}`;
+  }
+
+  return `Recebimento de ${resolvedCustomerName}`;
+}
+
 function normalizeRequiredText(value, fieldName) {
   const normalized = String(value || "").trim();
 
@@ -649,6 +668,17 @@ async function registerReceipt(installmentId, body = {}) {
   const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
   const discardInterest = normalizeBoolean(body.discardInterest);
+  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+
+  if (!installment || !installment.Receivable) {
+    throw notFoundError("Parcela nao encontrada.");
+  }
+
+  const customerName =
+    installment.Receivable?.Customer?.fullName ||
+    installment.Receivable?.Customer?.companyName ||
+    null;
+  const saleId = installment.Receivable?.saleId || null;
   const financialAccount = await getFinancialAccountOrDefault({
     idFinancialAccount: body.financialAccountId,
     fieldName: "Recebido em",
@@ -666,7 +696,11 @@ async function registerReceipt(installmentId, body = {}) {
       scope: financialAccount.scope,
       movementType: "IN",
       category: "RECEBIMENTO",
-      description: `Recebimento de parcela via ${normalizedPaymentType.name}`,
+      description: buildReceivableFinancialMovementDescription({
+        saleId,
+        customerName,
+        paymentTypeName: normalizedPaymentType.name,
+      }),
       accountLabel: financialAccount.targetType === "BANK" ? financialAccount.desc : null,
       amount,
       occurredAt: paidAt,

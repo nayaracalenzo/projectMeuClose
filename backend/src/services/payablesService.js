@@ -111,6 +111,7 @@ async function listPayables({
   status,
   scope,
   search: rawSearch,
+  category: rawCategory,
   page: rawPage,
   pageSize: rawPageSize,
   startDate: rawStartDate,
@@ -121,10 +122,12 @@ async function listPayables({
   const startDate = normalizeOptionalDate(rawStartDate, "Data inicial");
   const endDate = normalizeOptionalDate(rawEndDate, "Data final", { endOfDay: true });
   const search = rawSearch ? String(rawSearch).trim() : undefined;
+  const category = rawCategory ? String(rawCategory).trim() : undefined;
   const result = await repository.listPayables({
     status,
     scope,
     search,
+    category,
     page,
     pageSize,
     startDate,
@@ -134,6 +137,7 @@ async function listPayables({
     status,
     scope,
     search,
+    category,
     startDate,
     endDate,
   });

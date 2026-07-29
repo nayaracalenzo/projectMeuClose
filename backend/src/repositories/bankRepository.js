@@ -4,13 +4,14 @@ const {
   FinancialAccounts,
   FinancialCategories,
   PaymentReceipts,
+  PaymentTypes,
   PayablePayments,
   ReceivableInstallments,
   Sales,
   sequelize,
 } = require("../models");
 
-function buildWhere({ scope, search, startDate, endDate } = {}) {
+function buildWhere({ scope, search, startDate, endDate, accountLabel, financialCategoryId } = {}) {
   const where = {};
 
   if (scope) {
@@ -47,6 +48,16 @@ function buildWhere({ scope, search, startDate, endDate } = {}) {
         },
       },
     ];
+  }
+
+  if (accountLabel) {
+    where.accountLabel = {
+      [Op.iLike]: accountLabel,
+    };
+  }
+
+  if (financialCategoryId) {
+    where.financialCategoryId = financialCategoryId;
   }
 
   return where;
@@ -264,6 +275,11 @@ async function listEntries(filters = {}) {
             attributes: ["installmentNumber", "totalInstallments"],
           },
         ],
+      },
+      {
+        model: PaymentTypes,
+        required: false,
+        attributes: ["idPaymentType", "desc"],
       },
       {
         model: PayablePayments,
