@@ -261,7 +261,16 @@ function normalizeNullableDate(value) {
   const month = Number(match[2]);
   const day = Number(match[3]);
 
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  const normalizedDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  if (
+    normalizedDate.getUTCFullYear() !== year ||
+    normalizedDate.getUTCMonth() !== month - 1 ||
+    normalizedDate.getUTCDate() !== day
+  ) {
+    throw validationError("Data de prova invÃ¡lida.");
+  }
+
+  return raw;
 }
 
 function normalizeFilterDate(value) {
