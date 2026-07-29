@@ -5,7 +5,7 @@ const productsTypesList = [
   { id: 1, desc: 'Roupa Pronta' },
   { id: 2, desc: 'Roupa Revenda' },
   { id: 3, desc: 'Produto' },
-  { id: 4, desc: 'Roupa Sob Medida' },
+  { id: 4, desc: 'Sob Medida' },
   { id: 5, desc: 'Serviço' },
 ];
 

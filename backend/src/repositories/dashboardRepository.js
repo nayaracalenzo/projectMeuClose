@@ -60,7 +60,12 @@ async function listUpcomingFittings(limit = 8) {
       WHERE
         COALESCE(p."dsbl", false) = false
         AND p."statusId" IN (1, 5)
-        AND (p."productTypeId" IN (4, 5) OR p."categoryId" = 3)
+        AND EXISTS (
+          SELECT 1
+          FROM "sale_items" AS si_type
+          WHERE si_type."productId" = p."id"
+            AND si_type."itemType" IN ('READY_MADE', 'CUSTOM_MADE')
+        )
         AND NOT EXISTS (
           SELECT 1
           FROM "sale_items" AS si2

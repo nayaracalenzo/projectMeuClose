@@ -1109,6 +1109,8 @@ function mapSaleItem(item) {
   const product = item.Product || item.Products;
   const employee = product?.Employee || product?.Employees;
   const status = product?.Status;
+  const itemMetadata = item.metadata && typeof item.metadata === "object" ? item.metadata : null;
+  const productMode = String(itemMetadata?.productMode || "").trim() || null;
   const quantity = Number(item.quantity || 0);
   const unitPrice = Number(item.unitPrice || 0);
   const subtotal = Number(item.subtotal || 0);
@@ -1121,6 +1123,7 @@ function mapSaleItem(item) {
     id: item.idSaleItem,
     productId: item.productId || null,
     itemType: item.itemType,
+    productMode,
     description: item.description,
     quantity,
     unitPrice,

@@ -11,6 +11,7 @@ type SaleDetailItem = {
   id: number;
   productId: number | null;
   itemType: string;
+  productMode?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -258,16 +259,24 @@ function formatSaleStatus(value?: string | null) {
   return value || "-";
 }
 
-function formatSaleItemType(value?: string | null) {
-  const normalized = String(value || "")
+function formatSaleItemType(item?: SaleDetailItem | null) {
+  const normalizedProductMode = String(item?.productMode || "")
+    .trim()
+    .toLowerCase();
+
+  if (normalizedProductMode === "sob medida") return "Sob medida";
+  if (normalizedProductMode === "ajuste") return "Ajuste";
+  if (normalizedProductMode === "reforma") return "Reforma";
+
+  const normalized = String(item?.itemType || "")
     .trim()
     .toUpperCase();
   if (normalized === "CUSTOM_MADE") return "Sob medida";
-  if (normalized === "READY_MADE") return "Roupa pronta";
+  if (normalized === "READY_MADE") return "Pronta";
   if (normalized === "ACCESSORY") return "Acessorio";
   if (normalized === "SERVICE") return "Servico";
   if (normalized === "MISC") return "Diversos";
-  return value || "-";
+  return item?.itemType || "-";
 }
 
 function isProductionItem(item?: SaleDetailItem | null) {
@@ -880,7 +889,7 @@ export default function SaleDetailsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-neutral-800">
-                        {formatSaleItemType(item.itemType)}
+                        {formatSaleItemType(item)}
                       </td>
                       <td className="px-4 py-3 text-neutral-800">
                         {item.quantity}

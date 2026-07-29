@@ -73,6 +73,7 @@ interface CustomMadeProduct {
 
 export interface CustomMadeProductDraft {
   id: number;
+  productMode?: string | null;
   type: string;
   fabric: string;
   color: string;

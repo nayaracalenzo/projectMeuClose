@@ -112,6 +112,14 @@ function mapProductRow(product, measurementsBySaleId = new Map()) {
   const size = product.Size || product.Sizes;
   const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
   const saleId = Number(saleItem?.saleId || 0) || null;
+  const saleItemMetadata =
+    saleItem?.metadata && typeof saleItem.metadata === "object" ? saleItem.metadata : null;
+  const productMode = String(saleItemMetadata?.productMode || "").trim() || null;
+  const resolvedProductType =
+    productMode ||
+    (saleItem?.itemType === "READY_MADE" ? "Roupa pronta" : null) ||
+    productType?.desc ||
+    null;
   const measurements = saleId ? measurementsBySaleId.get(saleId) || [] : [];
 
   return {
@@ -120,7 +128,7 @@ function mapProductRow(product, measurementsBySaleId = new Map()) {
     description: product.desc,
     customer: customer?.fullName || customer?.companyName || "Sem cliente",
     category: category?.desc || null,
-    productType: productType?.desc || null,
+    productType: resolvedProductType,
     clothingType: clothingType?.desc || null,
     seamstress: employee?.shortName || null,
     status: status?.desc || null,
@@ -147,6 +155,14 @@ function mapProductDetails(product, measurementsBySaleId = new Map()) {
   const fabric = product.Fabric || product.Fabrics;
   const size = product.Size || product.Sizes;
   const saleItem = Array.isArray(product.SaleItems) ? product.SaleItems[0] : null;
+  const saleItemMetadata =
+    saleItem?.metadata && typeof saleItem.metadata === "object" ? saleItem.metadata : null;
+  const productMode = String(saleItemMetadata?.productMode || "").trim() || null;
+  const resolvedProductType =
+    productMode ||
+    (saleItem?.itemType === "READY_MADE" ? "Roupa pronta" : null) ||
+    productType?.desc ||
+    null;
   const saleItemQuantity = Number(saleItem?.quantity || 0);
   const saleItemUnitPrice = Number(saleItem?.unitPrice || 0);
   const saleItemSubtotal = Number(saleItem?.subtotal || 0);
@@ -171,7 +187,7 @@ function mapProductDetails(product, measurementsBySaleId = new Map()) {
     categoryId: product.categoryId || null,
     categoryName: category?.desc || null,
     productTypeId: product.productTypeId || null,
-    productTypeName: productType?.desc || null,
+    productTypeName: resolvedProductType,
     clothingTypeId: product.clothingTypeId || null,
     clothingTypeName: clothingType?.desc || null,
     colorId: product.colorId || null,

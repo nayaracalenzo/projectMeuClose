@@ -29,12 +29,16 @@ interface CustomerOption {
 }
 
 type SaleCategoryCode = "CLOTHING" | "ACCESSORY" | "SERVICE" | "MISC";
-type ClothingSubtype = "READY_MADE" | "CUSTOM_MADE";
+type ClothingSubtype =
+  | "READY_MADE"
+  | "CUSTOM_MADE"
+  | "CUSTOM_ADJUSTMENT"
+  | "CUSTOM_REFORM";
 type ModalType =
   | "Roupa pronta"
   | "Sob medida"
   | "Acessório"
-  | "ServiÃ§o"
+  | "Serviço"
   | "Diversos";
 
 interface SaleCategoryOption {
@@ -224,7 +228,7 @@ const CATEGORY_CODE_BY_ID: Record<number, SaleCategoryCode> = {
 
 const DEFAULT_CATEGORIES: SaleCategoryOption[] = [
   { id: 1, code: "CLOTHING", label: "Roupas" },
-  { id: 3, code: "SERVICE", label: "ServiÃ§os" },
+  { id: 3, code: "SERVICE", label: "Serviços" },
   { id: 4, code: "ACCESSORY", label: "Acessórios" },
   { id: 5, code: "MISC", label: "Diversos" },
 ];
@@ -233,6 +237,22 @@ function getCategoryLabelByCode(code: SaleCategoryCode) {
   return (
     DEFAULT_CATEGORIES.find((item) => item.code === code)?.label || "Categoria"
   );
+}
+
+function isCustomMadeClothingSubtype(subtype: ClothingSubtype | "") {
+  return (
+    subtype === "CUSTOM_MADE" ||
+    subtype === "CUSTOM_ADJUSTMENT" ||
+    subtype === "CUSTOM_REFORM"
+  );
+}
+
+function getCustomProductModeLabel(
+  subtype: ClothingSubtype | "" | null | undefined,
+) {
+  if (subtype === "CUSTOM_ADJUSTMENT") return "Ajuste";
+  if (subtype === "CUSTOM_REFORM") return "Reforma";
+  return "Sob medida";
 }
 
 const paymentFieldClassName =
@@ -280,7 +300,7 @@ function mapSaleItemTypeToModalType(
   if (itemType === "READY_MADE") return "Roupa pronta";
   if (itemType === "CUSTOM_MADE") return "Sob medida";
   if (itemType === "ACCESSORY") return "Acessório";
-  if (itemType === "SERVICE") return "ServiÃ§o";
+  if (itemType === "SERVICE") return "Serviço";
   return "Diversos";
 }
 
@@ -415,7 +435,7 @@ function buildTableItemsFromDraftCollections(
   };
 
   appendGenericRows(drafts.accessory, "ACCESSORY", "Acessório", "Acessório");
-  appendGenericRows(drafts.service, "SERVICE", "ServiÃ§o", "ServiÃ§o");
+  appendGenericRows(drafts.service, "SERVICE", "Serviço", "Serviço");
   appendGenericRows(drafts.misc, "MISC", "Diversos", "Diversos");
 
   return rows.map((item) => ({
@@ -1266,6 +1286,7 @@ export default function NewSalePage() {
 
           customMade.push({
             id: item.id || index + 1,
+            productMode: String(metadata.productMode || "Sob medida"),
             type: String(metadata.clothingType || ""),
             fabric: String(metadata.fabric || ""),
             color: String(metadata.color || ""),
@@ -1378,12 +1399,13 @@ export default function NewSalePage() {
   const resolveModalTypeFromSelection = () => {
     if (selectedCategoryCode === "CLOTHING") {
       if (selectedClothingSubtype === "READY_MADE") return "Roupa pronta";
-      if (selectedClothingSubtype === "CUSTOM_MADE") return "Sob medida";
+      if (isCustomMadeClothingSubtype(selectedClothingSubtype))
+        return "Sob medida";
       return null;
     }
 
     if (selectedCategoryCode === "ACCESSORY") return "Acessório";
-    if (selectedCategoryCode === "SERVICE") return "ServiÃ§o";
+    if (selectedCategoryCode === "SERVICE") return "Serviço";
     if (selectedCategoryCode === "MISC") return "Diversos";
     return null;
   };
@@ -1610,8 +1632,13 @@ export default function NewSalePage() {
         editingItem.sourceItemType === "CUSTOM_MADE" &&
         modalCustomMadeProducts[0]
       ) {
-        nextDrafts.customMade[editingItem.sourceIndex] =
-          modalCustomMadeProducts[0];
+        nextDrafts.customMade[editingItem.sourceIndex] = {
+          ...modalCustomMadeProducts[0],
+          productMode:
+            modalCustomMadeProducts[0].productMode ||
+            nextDrafts.customMade[editingItem.sourceIndex]?.productMode ||
+            "Sob medida",
+        };
       } else if (
         editingItem.sourceItemType === "ACCESSORY" &&
         modalGeneralProducts[0]
@@ -1634,9 +1661,15 @@ export default function NewSalePage() {
         ...modalReadyMadeProducts,
       ];
     } else if (modalType === "Sob medida") {
+      const resolvedModeLabel = getCustomProductModeLabel(
+        selectedClothingSubtype,
+      );
       nextDrafts.customMade = [
         ...nextDrafts.customMade,
-        ...modalCustomMadeProducts,
+        ...modalCustomMadeProducts.map((product) => ({
+          ...product,
+          productMode: product.productMode || resolvedModeLabel,
+        })),
       ];
     } else if (normalizedModalType.includes("acessor")) {
       nextDrafts.accessory = [...nextDrafts.accessory, ...modalGeneralProducts];
@@ -1811,6 +1844,9 @@ export default function NewSalePage() {
             (unitPrice * (1 - discountPercent / 100)).toFixed(2),
           ),
           metadata: {
+            productMode:
+              product.productMode ||
+              getCustomProductModeLabel(selectedClothingSubtype),
             clothingType: product.type || null,
             fabric: product.fabric || null,
             color: product.color || null,
@@ -1832,7 +1868,7 @@ export default function NewSalePage() {
       const serviceItems = buildGenericSaleItems(
         serviceProducts,
         "SERVICE",
-        "ServiÃ§o",
+        "Serviço",
       );
       const miscItems = buildGenericSaleItems(miscProducts, "MISC", "Diversos");
 
@@ -2038,6 +2074,9 @@ export default function NewSalePage() {
         discountValue: discountPercent > 0 ? discountPercent : null,
         subtotal: Number((unitPrice * (1 - discountPercent / 100)).toFixed(2)),
         metadata: {
+          productMode:
+            product.productMode ||
+            getCustomProductModeLabel(selectedClothingSubtype),
           clothingType: product.type || null,
           fabric: product.fabric || null,
           color: product.color || null,
@@ -2059,7 +2098,7 @@ export default function NewSalePage() {
     const serviceItems = buildGenericSaleItems(
       serviceProducts,
       "SERVICE",
-      "ServiÃ§o",
+      "Serviço",
     );
     const miscItems = buildGenericSaleItems(miscProducts, "MISC", "Diversos");
 
@@ -2223,7 +2262,7 @@ export default function NewSalePage() {
         setSaveMessage(
           getUserFacingApiErrorMessage(
             error,
-            "NÃƒÂ£o foi possÃƒÂ­vel descartar o orçamento.",
+            "Não foi possível descartar o orçamento.",
           ),
         );
         setIsSaving(false);
@@ -2308,7 +2347,7 @@ export default function NewSalePage() {
       setSaveMessage(
         getUserFacingApiErrorMessage(
           error,
-          "NÃƒÂ£o foi possÃƒÂ­vel salvar o orçamento.",
+          "Não foi possível salvar o orçamento.",
         ),
       );
       return null;
@@ -2432,7 +2471,7 @@ export default function NewSalePage() {
     } catch (error: unknown) {
       const message = getUserFacingApiErrorMessage(
         error,
-        "NÃƒÂ£o foi possÃƒÂ­vel concluir o pedido.",
+        "Não foi possível concluir o pedido.",
       );
 
       if (
@@ -2611,6 +2650,8 @@ export default function NewSalePage() {
                         <option value="">Selecione...</option>
                         <option value="READY_MADE">Roupa pronta</option>
                         <option value="CUSTOM_MADE">Sob medida</option>
+                        <option value="CUSTOM_ADJUSTMENT">Ajuste</option>
+                        <option value="CUSTOM_REFORM">Reforma</option>
                       </select>
                     </div>
                   ) : (
@@ -2687,6 +2728,8 @@ export default function NewSalePage() {
                         <option value="">Selecione...</option>
                         <option value="READY_MADE">Roupa pronta</option>
                         <option value="CUSTOM_MADE">Sob medida</option>
+                        <option value="CUSTOM_ADJUSTMENT">Ajuste</option>
+                        <option value="CUSTOM_REFORM">Reforma</option>
                       </select>
                     </div>
                   ) : (
