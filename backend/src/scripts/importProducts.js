@@ -21,21 +21,6 @@ const ACCESSORY_CLOTHING_TYPE_ID = 39;
 const ADJUSTMENT_CLOTHING_TYPE_ID = 82;
 const REFORM_CLOTHING_TYPE_ID = 101;
 
-const CATEGORY_IDS = {
-  CLOTHING: 1,
-  SERVICE: 3,
-  ACCESSORY: 4,
-  MISC: 5,
-};
-
-const PRODUCT_TYPE_IDS = {
-  READY_CLOTHING: 1,
-  PRODUCT: 3,
-  CUSTOM_CLOTHING: 4,
-  SERVICE: 5,
-  ACCESSORY: 6,
-};
-
 function normalizeText(value) {
   if (value === undefined || value === null) return null;
   const normalized = String(value).trim();
@@ -48,47 +33,52 @@ function normalizeInteger(value) {
   return Number.isInteger(normalized) ? normalized : null;
 }
 
-function inferCategoryId(clothingTypeId, productTypeId) {
-  if (clothingTypeId === ACCESSORY_CLOTHING_TYPE_ID) {
-    return CATEGORY_IDS.ACCESSORY;
-  }
-
-  if (
-    clothingTypeId === ADJUSTMENT_CLOTHING_TYPE_ID ||
-    clothingTypeId === REFORM_CLOTHING_TYPE_ID
-  ) {
-    return CATEGORY_IDS.SERVICE;
-  }
-
-  if (productTypeId === PRODUCT_TYPE_IDS.SERVICE) {
-    return CATEGORY_IDS.SERVICE;
-  }
-
-  if (productTypeId === PRODUCT_TYPE_IDS.PRODUCT) {
-    return CATEGORY_IDS.MISC;
-  }
-
-  return CATEGORY_IDS.CLOTHING;
+function normalizeLookupKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
-function inferProductTypeId(clothingTypeId, productTypeId, categoryId, statusId) {
-  if (categoryId === CATEGORY_IDS.ACCESSORY) {
-    return PRODUCT_TYPE_IDS.ACCESSORY;
+function buildLookupMap(rows = []) {
+  return new Map(
+    rows.map((item) => [normalizeLookupKey(item.desc), Number(item.id)]),
+  );
+}
+
+function inferCategoryKey(clothingTypeId, productTypeId) {
+  if (clothingTypeId === ACCESSORY_CLOTHING_TYPE_ID) {
+    return "acessorios";
   }
 
-  if (categoryId === CATEGORY_IDS.SERVICE) {
-    return PRODUCT_TYPE_IDS.SERVICE;
+  if (productTypeId === 3) {
+    return "diversos";
   }
 
-  if (categoryId === CATEGORY_IDS.CLOTHING && statusId === 1) {
-    return PRODUCT_TYPE_IDS.CUSTOM_CLOTHING;
+  return "roupas";
+}
+
+function inferProductTypeKey(clothingTypeId, productTypeId, categoryKey) {
+  if (clothingTypeId === ADJUSTMENT_CLOTHING_TYPE_ID) {
+    return "ajuste";
   }
 
-  if (productTypeId) {
-    return productTypeId;
+  if (clothingTypeId === REFORM_CLOTHING_TYPE_ID) {
+    return "reforma";
   }
 
-  return PRODUCT_TYPE_IDS.READY_CLOTHING;
+  if (categoryKey === "acessorios") {
+    return "acessorio";
+  }
+
+  if (productTypeId === 4) {
+    return "roupa sob medida";
+  }
+
+  if (productTypeId === 3 || productTypeId === 5) {
+    return "produto";
+  }
+
+  return "roupa pronta";
 }
 
 function resolveSpecialDescription(clothingTypeId) {
@@ -139,6 +129,8 @@ async function importProducts() {
       const validEmployeeIds = new Set(employees.map((item) => Number(item.idEmployee)));
       const validStatusIds = new Set(statusList.map((item) => Number(item.id)));
       const validProductTypeIds = new Set(productsTypes.map((item) => Number(item.id)));
+      const categoryLookup = buildLookupMap(categories);
+      const productTypeLookup = buildLookupMap(productsTypes);
       const clothingTypeMap = new Map(
         clothingsTypes.map((item) => [Number(item.id), String(item.desc || "").trim()]),
       );
@@ -168,13 +160,14 @@ async function importProducts() {
           const clothingTypeId = normalizeInteger(row.idTipRou);
           const productTypeIdFromLegacy = normalizeInteger(row.idTipPro);
           const statusId = normalizeInteger(row.idSit);
-          const categoryId = inferCategoryId(clothingTypeId, productTypeIdFromLegacy);
-          const normalizedProductTypeId = inferProductTypeId(
+          const categoryKey = inferCategoryKey(clothingTypeId, productTypeIdFromLegacy);
+          const productTypeKey = inferProductTypeKey(
             clothingTypeId,
             productTypeIdFromLegacy,
-            categoryId,
-            statusId,
+            categoryKey,
           );
+          const categoryId = categoryLookup.get(categoryKey) || null;
+          const normalizedProductTypeId = productTypeLookup.get(productTypeKey) || null;
           const customerId = normalizeInteger(row.idCli);
           const employeeId = normalizeInteger(row.idFunc);
           const colorId = normalizeInteger(row.idCor);
@@ -187,17 +180,20 @@ async function importProducts() {
           const resolvedEmployeeId =
             employeeId && validEmployeeIds.has(employeeId) ? employeeId : null;
           const resolvedStatusId = statusId && validStatusIds.has(statusId) ? statusId : 2;
-          const resolvedCategoryId = validCategoryIds.has(categoryId)
-            ? categoryId
-            : CATEGORY_IDS.MISC;
+          const fallbackCategoryId =
+            categoryLookup.get("diversos") || categoryLookup.get("roupas") || null;
+          const resolvedCategoryId =
+            categoryId && validCategoryIds.has(categoryId) ? categoryId : fallbackCategoryId;
           const resolvedProductTypeId =
             normalizedProductTypeId && validProductTypeIds.has(normalizedProductTypeId)
               ? normalizedProductTypeId
               : null;
+          const clothingCategoryId = categoryLookup.get("roupas") || null;
+          const accessoryCategoryId = categoryLookup.get("acessorios") || null;
+          const allowsClothingType =
+            resolvedCategoryId === clothingCategoryId || resolvedCategoryId === accessoryCategoryId;
           const resolvedClothingTypeId =
-            resolvedCategoryId === CATEGORY_IDS.CLOTHING &&
-            clothingTypeId &&
-            clothingTypeMap.has(clothingTypeId)
+            allowsClothingType && clothingTypeId && clothingTypeMap.has(clothingTypeId)
               ? clothingTypeId
               : null;
           const resolvedColorId = colorId && colorMap.has(colorId) ? colorId : null;

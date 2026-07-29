@@ -500,16 +500,16 @@ export default function Orders() {
       </CustomerModal>
 
       <div className="hidden w-full overflow-x-auto md:block">
-        <table className="mt-2 min-w-[1400px] border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-[1180px] border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[280px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Descrição
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Tipo
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[260px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Cliente
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
@@ -552,14 +552,24 @@ export default function Orders() {
                   className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
                   onClick={() => navigate(`/pedido/${order.id}`)}
                 >
-                  <td className="whitespace-nowrap px-4 py-3 text-[14px] uppercase text-neutral-700">
-                    {order.description || "-"}
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                    <div
+                      className="max-w-[280px] truncate whitespace-nowrap"
+                      title={order.description || "-"}
+                    >
+                      {order.description || "-"}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-[14px] font-semibold uppercase text-neutral-700">
                     {formatProductionType(order)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-[14px] uppercase text-neutral-700">
-                    {formatCustomerName(order.customer)}
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                    <div
+                      className="max-w-[260px] truncate whitespace-nowrap"
+                      title={formatCustomerName(order.customer)}
+                    >
+                      {formatCustomerName(order.customer)}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(order.testDate)}
