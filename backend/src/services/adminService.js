@@ -297,7 +297,7 @@ async function createResource(resource, body) {
     });
 
     if (existingRecord?.dataValues?.dsbl === true) {
-      return repository.updateResource(resource, existingRecord[resourceData.config.primaryKey], {
+      return repository.createResource(resource, {
         ...payload,
         dsbl: false,
       });
