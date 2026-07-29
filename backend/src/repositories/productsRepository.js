@@ -30,6 +30,30 @@ async function syncProductsSequence(transaction) {
   );
 }
 
+async function syncModelSequence(model, transaction) {
+  const primaryKeyField = Array.isArray(model.primaryKeyAttributes)
+    ? model.primaryKeyAttributes[0]
+    : null;
+  const tableName = model.getTableName();
+  const resolvedTableName =
+    typeof tableName === "string" ? tableName : tableName?.tableName;
+
+  if (!primaryKeyField || !resolvedTableName) {
+    return;
+  }
+
+  await model.sequelize.query(
+    `
+      SELECT setval(
+        pg_get_serial_sequence('"${resolvedTableName}"', '${primaryKeyField}'),
+        COALESCE((SELECT MAX("${primaryKeyField}") FROM "${resolvedTableName}"), 1),
+        true
+      );
+    `,
+    { transaction },
+  );
+}
+
 function normalizeText(value) {
   const normalized = String(value || "").trim();
   return normalized || null;
@@ -57,6 +81,7 @@ async function findOrCreateByDesc(model, desc, transaction) {
     return existing;
   }
 
+  await syncModelSequence(model, transaction);
   return model.create(
     {
       desc: normalizedDesc,
@@ -86,7 +111,7 @@ function getProductInclude() {
   return [
     {
       model: SaleItems,
-      attributes: ["saleId"],
+      attributes: ["saleId", "itemType", "metadata"],
       required: false,
       include: [
         {
@@ -158,8 +183,10 @@ function mapCustomMadeStatus(status) {
   return "a produzir";
 }
 
-function mapProductType(itemType) {
-  if (itemType === "CUSTOM_MADE") return "Roupa Sob Medida";
+function mapProductType(itemType, metadata = {}) {
+  const productMode = normalizeText(metadata.productMode);
+
+  if (itemType === "CUSTOM_MADE") return productMode || "Sob medida";
   if (itemType === "READY_MADE") return "Roupa Pronta";
   if (itemType === "SERVICE") return "Serviço";
   if (itemType === "ACCESSORY" || itemType === "MISC") return "Produto";
@@ -179,7 +206,7 @@ async function buildProductPayload(customerId, item, transaction) {
   const isCustomMade = item.itemType === "CUSTOM_MADE";
   const isReadyMade = item.itemType === "READY_MADE";
   const categoryId = mapCategoryId(item.itemType);
-  const productTypeDesc = mapProductType(item.itemType);
+  const productTypeDesc = mapProductType(item.itemType, metadata);
   const clothingTypeSource = isCustomMade ? metadata.clothingType || item.description : null;
 
   const [
@@ -267,12 +294,15 @@ async function listProducts(filters = {}) {
   };
 
   if (productionOnly) {
-    where[Sequelize.Op.or] = [
-      { productTypeId: 4 },
-      { productTypeId: 5 },
-      { categoryId: 3 },
-    ];
     where[Sequelize.Op.and] = [
+      Sequelize.literal(`
+        EXISTS (
+          SELECT 1
+          FROM "sale_items" AS psi
+          WHERE psi."productId" = "Products"."id"
+            AND psi."itemType" = 'CUSTOM_MADE'
+        )
+      `),
       Sequelize.literal(`
         NOT EXISTS (
           SELECT 1

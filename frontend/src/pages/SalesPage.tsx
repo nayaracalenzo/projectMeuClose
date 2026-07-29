@@ -42,14 +42,8 @@ const formatDate = (value?: string | null) => {
 };
 
 const formatCustomerName = (value?: string | null) => {
-  const parts = String(value || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (parts.length === 0) return "Sem cliente";
-
-  return parts.slice(0, 2).join(" ");
+  const normalized = String(value || "").trim();
+  return normalized || "Sem cliente";
 };
 
 const formatSaleStatusLabel = (value?: string | null) => {
@@ -308,8 +302,8 @@ export default function SalesPage() {
         </div>
       ) : null}
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 w-full border-separate border-spacing-y-2">
+      <div className="hidden w-full overflow-x-auto md:block">
+        <table className="mt-2 min-w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">

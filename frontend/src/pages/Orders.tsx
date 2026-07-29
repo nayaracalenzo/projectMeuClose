@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Printer } from "lucide-react";
 import { Button } from "../components/Button";
@@ -77,14 +77,20 @@ const toInputDate = (value: Date) => {
 };
 
 const formatCustomerName = (value?: string | null) => {
-  const parts = String(value || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+  const normalized = String(value || "").trim();
+  return normalized || "Sem cliente";
+};
 
-  if (parts.length === 0) return "Sem cliente";
+const formatProductionType = (item: ProductOrderRow) => {
+  const normalizedProductType = String(item.productType || "").trim().toLowerCase();
 
-  return parts.slice(0, 2).join(" ");
+  if (normalizedProductType === "roupa pronta") return "Pronta";
+  if (normalizedProductType === "roupa sob medida") return "Sob medida";
+  if (normalizedProductType === "sob medida") return "Sob medida";
+  if (normalizedProductType === "ajuste") return "Ajuste";
+  if (normalizedProductType === "reforma") return "Reforma";
+
+  return item.productType || "-";
 };
 
 const getProductionStatusBadgeClassName = (status?: string | null) => {
@@ -493,12 +499,15 @@ export default function Orders() {
         </div>
       </CustomerModal>
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 w-full border-separate border-spacing-y-2">
+      <div className="hidden w-full overflow-x-auto md:block">
+        <table className="mt-2 min-w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Descrição
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Tipo
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Cliente
@@ -521,7 +530,7 @@ export default function Orders() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando produção...
@@ -530,7 +539,7 @@ export default function Orders() {
             ) : productionItems.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhum item em produção cadastrado
@@ -545,6 +554,9 @@ export default function Orders() {
                 >
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {order.description || "-"}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] font-semibold uppercase text-neutral-700">
+                    {formatProductionType(order)}
                   </td>
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {formatCustomerName(order.customer)}
@@ -596,6 +608,9 @@ export default function Orders() {
               </p>
               <p className="text-sm font-semibold uppercase text-primary">
                 {formatCustomerName(order.customer)}
+              </p>
+              <p className="text-xs font-semibold uppercase text-neutral-700">
+                Tipo produção: {formatProductionType(order)}
               </p>
               <p className="text-xs text-neutral-700">
                 Data Prova: {formatDate(order.testDate)}
