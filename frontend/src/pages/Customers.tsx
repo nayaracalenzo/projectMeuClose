@@ -30,7 +30,6 @@ const PAGE_SIZE = 10;
 export default function CustomersPage() {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<CustomerRow[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
@@ -98,15 +97,6 @@ export default function CustomersPage() {
     fetchCustomers();
   }, [currentPage, deferredSearch, statusFilter]);
 
-  const catchIdFromTable = (id: number) => {
-    if (selectedId === id) {
-      setSelectedId(null);
-      return;
-    }
-
-    setSelectedId(id);
-  };
-
   return (
     <div className="w-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
       {loading && customers.length === 0 ? (
@@ -128,17 +118,6 @@ export default function CustomersPage() {
                   onClick={() => navigate("/novo-cliente")}
                 >
                   + Novo Cliente
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={!selectedId}
-                  size="md"
-                  className="px-5"
-                  onClick={() =>
-                    selectedId && navigate(`/cliente/${selectedId}`)
-                  }
-                >
-                  Mostrar Detalhes
                 </Button>
               </div>
             </div>
@@ -209,12 +188,8 @@ export default function CustomersPage() {
                 {customers.map((customer) => (
                   <tr
                     key={customer.id}
-                    onClick={() => catchIdFromTable(customer.id)}
-                    className={`cursor-pointer transition-colors ${
-                      selectedId === customer.id
-                        ? "bg-surface"
-                        : "bg-surface-lowest hover:bg-surface"
-                    }`}
+                    onClick={() => navigate(`/cliente/${customer.id}`)}
+                    className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
