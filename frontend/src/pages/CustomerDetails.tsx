@@ -772,7 +772,7 @@ export default function CustomerDetails() {
                 id="profession-name-edit"
                 value={professionName}
                 onChange={(event) => setProfessionName(event.target.value)}
-                className="h-10 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526] shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
+                className="h-10 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526] uppercase shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
                 autoFocus
                 required
               />

@@ -336,7 +336,7 @@ export default function NewCustomer() {
             value={professionName}
             onChange={(event) => setProfessionName(event.target.value)}
             placeholder="Nome da profissao"
-            className="h-11 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-sm text-[#2a2526] outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
+            className="h-11 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-sm text-[#2a2526] uppercase outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
           />
           {professionError ? (
             <p className="text-sm text-[#8f1515]">{professionError}</p>

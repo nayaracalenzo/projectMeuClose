@@ -798,7 +798,7 @@ export default function CustomMadeClothing({
                 value={quickCreateValue}
                 onChange={(event) => setQuickCreateValue(event.target.value)}
                 placeholder={`Digite o ${quickCreateConfig[quickCreateResource].label}`}
-                className={fieldClassName}
+                className={`${fieldClassName} uppercase`}
                 autoFocus
                 required
               />

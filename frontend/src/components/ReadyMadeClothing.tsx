@@ -408,7 +408,7 @@ export default function ReadyMadeClothing({
                 value={quickCreateValue}
                 onChange={(event) => setQuickCreateValue(event.target.value)}
                 placeholder="Digite o tamanho"
-                className={fieldClassName}
+                className={`${fieldClassName} uppercase`}
                 autoFocus
                 required
               />
