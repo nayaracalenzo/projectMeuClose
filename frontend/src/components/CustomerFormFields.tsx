@@ -65,6 +65,10 @@ export default function CustomerFormFields({
     "h-10 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526] shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]";
   const readOnlyClass =
     "flex min-h-10 w-full items-center rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526]";
+  const shouldUppercaseField = (field: FieldConfig) =>
+    !["document", "birthDate", "phone", "email", "zipCode", "number"].includes(
+      field.key,
+    );
 
   const professionOptions = useMemo(
     () =>
@@ -203,7 +207,7 @@ export default function CustomerFormFields({
           type={field.type === "date" ? "date" : "text"}
           value={String(form[field.key] ?? "")}
           onChange={(e) => onFieldChange(field.key, e.target.value)}
-          className={baseClass}
+          className={`${baseClass} ${shouldUppercaseField(field) ? "uppercase" : ""}`}
           placeholder={field.key === "birthDate" ? "DD/MM/AAAA" : undefined}
           inputMode={field.key === "birthDate" ? "numeric" : undefined}
           maxLength={field.key === "birthDate" ? 10 : undefined}
@@ -290,7 +294,7 @@ export default function CustomerFormFields({
         <textarea
           value={form.comment}
           onChange={(e) => onFieldChange("comment", e.target.value)}
-          className="min-h-24 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 py-2 text-[#2a2526] shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
+          className="min-h-24 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 py-2 text-[#2a2526] uppercase shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
           readOnly={readOnly}
         />
       </div>

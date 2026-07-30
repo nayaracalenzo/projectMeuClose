@@ -18,6 +18,11 @@ function normalizeText(value) {
   return normalized || null;
 }
 
+function normalizeUppercaseText(value) {
+  const normalized = normalizeText(value);
+  return normalized ? normalized.toUpperCase() : null;
+}
+
 function normalizeDigits(value) {
   const digits = String(value || "").replace(/\D/g, "");
   return digits || null;
@@ -113,6 +118,28 @@ function sanitizePayload(resource, body = {}) {
   }
 
   return payload;
+}
+
+function normalizeCatalogPayload(resource, payload = {}) {
+  const nextPayload = { ...payload };
+
+  if (
+    resource === "colors" ||
+    resource === "clothings-types" ||
+    resource === "fabrics" ||
+    resource === "sizes" ||
+    resource === "products-types"
+  ) {
+    if ("desc" in nextPayload) {
+      nextPayload.desc = normalizeUppercaseText(nextPayload.desc);
+    }
+  }
+
+  if (resource === "financial-categories" && "description" in nextPayload) {
+    nextPayload.description = normalizeUppercaseText(nextPayload.description);
+  }
+
+  return nextPayload;
 }
 
 function validatePayload(resource, payload, isCreate) {
@@ -231,7 +258,7 @@ async function createResource(resource, body) {
     throw createAdminResourceError("Recurso administrativo somente leitura.");
   }
 
-  const payload = sanitizePayload(resource, body);
+  const payload = normalizeCatalogPayload(resource, sanitizePayload(resource, body));
   validatePayload(resource, payload, true);
 
   if (resource === "measurement-definitions") {
@@ -326,7 +353,7 @@ async function updateResource(resource, id, body) {
     throw createAdminResourceError("Recurso administrativo somente leitura.");
   }
 
-  const payload = sanitizePayload(resource, body);
+  const payload = normalizeCatalogPayload(resource, sanitizePayload(resource, body));
   validatePayload(resource, payload, false);
 
   if (

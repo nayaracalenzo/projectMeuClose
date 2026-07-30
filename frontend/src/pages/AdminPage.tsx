@@ -339,6 +339,34 @@ export default function AdminPage() {
     () => resourceConfigList.find((item) => item.key === selectedResource)!,
     [selectedResource],
   );
+  const shouldUppercaseSimpleInput =
+    selectedResource === "colors" ||
+    selectedResource === "sizes" ||
+    selectedResource === "clothings-types" ||
+    selectedResource === "fabrics" ||
+    selectedResource === "financial-categories";
+  const simpleInputClassName = `h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary${
+    shouldUppercaseSimpleInput ? " uppercase" : ""
+  }`;
+  const shouldUppercaseAdminField = (field: string) =>
+    ![
+      "document",
+      "rg",
+      "zipCode",
+      "number",
+      "primaryPhone",
+      "secondaryPhone",
+      "phoneCommercial1",
+      "phoneCommercial2",
+      "phoneMobile",
+      "fax",
+      "email",
+      "birthDate",
+    ].includes(field);
+  const getAdminInputClassName = (field: string) =>
+    `h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary${
+      shouldUppercaseAdminField(field) ? " uppercase" : ""
+    }`;
 
   const currentRows = useMemo(
     () => resourceRows[selectedResource] ?? [],
@@ -1466,7 +1494,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Nome completo"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("fullName")}
                   required
                 />
                 <input
@@ -1478,7 +1506,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Nome curto"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("shortName")}
                   required
                 />
                 <select
@@ -1509,7 +1537,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="CPF/CNPJ"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("document")}
                   />
                   <input
                     value={employeeForm.rg}
@@ -1520,7 +1548,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="RG"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("rg")}
                   />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1533,7 +1561,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Telefone principal"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("primaryPhone")}
                   />
                   <input
                     value={employeeForm.secondaryPhone}
@@ -1544,7 +1572,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Telefone secundario"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("secondaryPhone")}
                   />
                 </div>
                 <input
@@ -1556,7 +1584,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Email"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("email")}
                 />
                 <input
                   type="date"
@@ -1567,7 +1595,7 @@ export default function AdminPage() {
                       birthDate: e.target.value,
                     }))
                   }
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("birthDate")}
                 />
                 <div className="grid gap-3 md:grid-cols-2">
                   <input
@@ -1579,7 +1607,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="CEP"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("zipCode")}
                   />
                   <input
                     value={employeeForm.state}
@@ -1590,7 +1618,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="UF"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("state")}
                   />
                 </div>
                 <input
@@ -1602,7 +1630,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Endereco"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("street")}
                 />
                 <div className="grid gap-3 md:grid-cols-2">
                   <input
@@ -1614,7 +1642,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Numero"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("number")}
                   />
                   <input
                     value={employeeForm.complement}
@@ -1625,7 +1653,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Complemento"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("complement")}
                   />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1638,7 +1666,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Bairro"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("neighborhood")}
                   />
                   <input
                     value={employeeForm.city}
@@ -1649,7 +1677,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Cidade"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("city")}
                   />
                 </div>
                 <input
@@ -1661,7 +1689,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Dados bancarios / Pix"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("bankData")}
                 />
                 <textarea
                   value={employeeForm.comment}
@@ -1672,7 +1700,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Observacoes"
-                  className="min-h-24 w-full border border-outline-variant/50 bg-white px-3 py-2 text-sm text-primary"
+                  className="min-h-24 w-full border border-outline-variant/50 bg-white px-3 py-2 text-sm text-primary uppercase"
                 />
                 <label className="flex items-center gap-2 text-sm text-primary">
                   <input
@@ -1699,7 +1727,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Nome completo / razão social"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("fullName")}
                   required
                 />
                 <input
@@ -1723,7 +1751,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Contato"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("contactName")}
                   />
                   <input
                     value={supplierForm.email}
@@ -1734,7 +1762,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Email"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("email")}
                   />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1747,7 +1775,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="CPF/CNPJ"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("document")}
                   />
                   <input
                     value={supplierForm.rg}
@@ -1758,7 +1786,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="RG/IE"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("rg")}
                   />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1771,7 +1799,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Telefone comercial 1"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("phoneCommercial1")}
                   />
                   <input
                     value={supplierForm.phoneCommercial2}
@@ -1782,7 +1810,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Telefone comercial 2"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("phoneCommercial2")}
                   />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1795,7 +1823,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Celular"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("phoneMobile")}
                   />
                   <input
                     value={supplierForm.fax}
@@ -1806,7 +1834,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Fax"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("fax")}
                   />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -1819,7 +1847,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="CEP"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("zipCode")}
                   />
                   <input
                     value={supplierForm.state}
@@ -1830,7 +1858,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="UF"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("state")}
                   />
                 </div>
                 <input
@@ -1842,7 +1870,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Endereco"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={getAdminInputClassName("street")}
                 />
                 <div className="grid gap-3 md:grid-cols-2">
                   <input
@@ -1854,7 +1882,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Bairro"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("neighborhood")}
                   />
                   <input
                     value={supplierForm.city}
@@ -1865,7 +1893,7 @@ export default function AdminPage() {
                       }))
                     }
                     placeholder="Cidade"
-                    className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                    className={getAdminInputClassName("city")}
                   />
                 </div>
                 <textarea
@@ -1877,7 +1905,7 @@ export default function AdminPage() {
                     }))
                   }
                   placeholder="Observacoes"
-                  className="min-h-24 w-full border border-outline-variant/50 bg-white px-3 py-2 text-sm text-primary"
+                  className="min-h-24 w-full border border-outline-variant/50 bg-white px-3 py-2 text-sm text-primary uppercase"
                 />
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 text-sm text-primary">
@@ -1903,7 +1931,7 @@ export default function AdminPage() {
                     setSimpleForm((prev) => ({ ...prev, desc: e.target.value }))
                   }
                   placeholder="Descrição"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={simpleInputClassName}
                   required
                 />
                 <label className="flex items-center gap-2 text-sm text-primary">
@@ -1928,7 +1956,7 @@ export default function AdminPage() {
                     setSimpleForm((prev) => ({ ...prev, desc: e.target.value }))
                   }
                   placeholder="Descrição"
-                  className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                  className={simpleInputClassName}
                   required
                 />
                 <label className="flex items-center gap-2 text-sm text-primary">
@@ -2008,7 +2036,7 @@ export default function AdminPage() {
                   }))
                 }
                 placeholder="DescriÃ§Ã£o"
-                className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                className={simpleInputClassName}
                 required
               />
             ) : selectedResource === "measurement-definitions" ? (
@@ -2031,7 +2059,7 @@ export default function AdminPage() {
                   setSimpleForm((prev) => ({ ...prev, desc: e.target.value }))
                 }
                 placeholder="Descrição"
-                className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
+                className={simpleInputClassName}
                 required
               />
             )}
