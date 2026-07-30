@@ -317,8 +317,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className=" p-5 bg-white md:bg-surface-low">
-      <h1 className="mb-5 font-editorial text-4xl font-extralight leading-none tracking-tight text-primary">
+    <div className="bg-white p-3 xs:p-5 md:bg-surface-low">
+      <h1 className="mb-5 pr-2 font-editorial text-3xl font-extralight leading-tight tracking-tight text-primary sm:text-4xl">
         Olá, Lia. Bem-vinda de volta!
       </h1>
 
@@ -328,8 +328,8 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      <div className="mb-8 grid min-h-0 w-full grid-rows-[12rem_minmax(0,1fr)] gap-4">
-        <div className="grid w-full gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid min-h-0 w-full gap-4">
+        <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
             <h2 className="text-[1.1rem] font-semibold text-neutral-700">Pedidos Pendentes</h2>
             <p className="font-editorial text-[2.5rem] leading-none text-primary">
@@ -398,13 +398,13 @@ export default function Dashboard() {
             </p>
           </div>
 
-          <div className="flex h-full flex-col justify-between bg-surface-low p-5 shadow-md">
+          <div className="flex h-full flex-col justify-between bg-surface-low p-5 shadow-md sm:col-span-2 xl:col-span-1">
             <h2 className="mb-3 text-lg font-semibold text-gray-700">Ações Rápidas</h2>
             <div className="grid gap-2">
               <Button
                 variant="primary"
                 size="md"
-                className="px-5"
+                className="w-full px-5"
                 onClick={() => navigate("/nova-venda")}
               >
                 + Nova Venda
@@ -412,7 +412,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => navigate("/novo-cliente")}
-                className="rounded border border-gray-300 bg-white px-5 py-2 text-center text-black shadow transition hover:cursor-pointer"
+                className="w-full rounded border border-gray-300 bg-white px-5 py-2 text-center text-black shadow transition hover:cursor-pointer"
               >
                 Novo Cliente
               </button>
@@ -420,10 +420,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.95fr)]">
+        <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.95fr)]">
           <div className="min-h-0 bg-surface-low p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-editorial text-4xl font-semibold text-primary">
+            <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <h2 className="font-editorial text-3xl font-semibold text-primary sm:text-4xl">
                 Próximas Provas
               </h2>
               <button
@@ -444,23 +444,25 @@ export default function Dashboard() {
                 Nenhuma prova cadastrada para os próximos dias.
               </div>
             ) : (
-              <div className="overflow-hidden bg-surface-lowest">
-                <div className="grid grid-cols-[minmax(0,1.3fr)_6rem_6rem] gap-3 border-b border-outline-variant/25 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
-                  <span>Cliente</span>
-                  <span>Peças</span>
-                  <span>Data</span>
-                </div>
-                <div className="divide-y divide-outline-variant/20">
-                  {visibleUpcomingFittings.map((item, index) => (
-                    <div
-                      key={`${item.customer}-${item.testDate}-${index}`}
-                      className="grid grid-cols-[minmax(0,1.3fr)_6rem_6rem] gap-3 px-4 py-3 text-sm text-neutral-800"
-                    >
-                      <span className="truncate uppercase">{item.customer}</span>
-                      <span>{item.piecesCount}</span>
-                      <span>{formatDay(item.testDate)}</span>
-                    </div>
-                  ))}
+              <div className="overflow-x-auto bg-surface-lowest">
+                <div className="min-w-[24rem]">
+                  <div className="grid grid-cols-[minmax(12rem,1.3fr)_5rem_5rem] gap-3 border-b border-outline-variant/25 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                    <span>Cliente</span>
+                    <span>Peças</span>
+                    <span>Data</span>
+                  </div>
+                  <div className="divide-y divide-outline-variant/20">
+                    {visibleUpcomingFittings.map((item, index) => (
+                      <div
+                        key={`${item.customer}-${item.testDate}-${index}`}
+                        className="grid grid-cols-[minmax(12rem,1.3fr)_5rem_5rem] gap-3 px-4 py-3 text-sm text-neutral-800"
+                      >
+                        <span className="truncate uppercase">{item.customer}</span>
+                        <span>{item.piecesCount}</span>
+                        <span>{formatDay(item.testDate)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -468,8 +470,8 @@ export default function Dashboard() {
 
           <div className="grid min-h-0 gap-4">
             <aside className="min-h-0 border border-[#fee9ef] bg-surface-low p-5 shadow-md">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="font-editorial text-3xl font-semibold text-primary">
+              <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                <h2 className="font-editorial text-2xl font-semibold text-primary sm:text-3xl">
                   Aniversariantes da Semana
                 </h2>
                 <span className="rounded-full bg-background px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-600">
@@ -489,10 +491,10 @@ export default function Dashboard() {
                     return (
                       <div
                         key={`${client.source}-${client.id}`}
-                        className="flex items-center justify-between rounded-lg bg-background/90 px-4 py-3"
+                        className="flex items-center justify-between gap-3 rounded-lg bg-background/90 px-4 py-3"
                       >
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm font-medium uppercase text-neutral-800">
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <span className="truncate text-sm font-medium uppercase text-neutral-800">
                             {client.fullName}
                           </span>
                           <span className="text-[10px] uppercase tracking-[0.12em] text-neutral-500">
@@ -511,8 +513,8 @@ export default function Dashboard() {
             </aside>
 
             <section className="min-h-0 bg-surface-low p-5 shadow-md">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="font-editorial text-3xl font-semibold text-primary">
+              <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                <h2 className="font-editorial text-2xl font-semibold text-primary sm:text-3xl">
                   Pendências de Compras
                 </h2>
                 <span className="rounded-full bg-background px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-600">
@@ -520,7 +522,7 @@ export default function Dashboard() {
                 </span>
               </div>
 
-              <div className="mb-4 flex gap-2">
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row">
                 <input
                   type="text"
                   value={newPendingTitle}
@@ -537,6 +539,7 @@ export default function Dashboard() {
                 <Button
                   variant="primary"
                   size="sm"
+                  className="w-full sm:w-auto"
                   onClick={() => void handleCreatePending()}
                   disabled={purchaseLoading || !newPendingTitle.trim()}
                 >
@@ -581,12 +584,13 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      <div className="flex gap-2 self-end">
+                      <div className="flex w-full flex-col gap-2 self-end sm:w-auto sm:flex-row">
                         {editingId === item.id ? (
                           <>
                             <Button
                               variant="primary"
                               size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => void handleSaveEdit(item.id)}
                               disabled={purchaseLoading || !editingTitle.trim()}
                             >
@@ -595,6 +599,7 @@ export default function Dashboard() {
                             <Button
                               variant="secondary"
                               size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => {
                                 setEditingId(null);
                                 setEditingTitle("");
@@ -609,6 +614,7 @@ export default function Dashboard() {
                             <Button
                               variant="secondary"
                               size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => handleStartEdit(item)}
                               disabled={purchaseLoading}
                             >
@@ -617,6 +623,7 @@ export default function Dashboard() {
                             <Button
                               variant="danger"
                               size="sm"
+                              className="w-full sm:w-auto"
                               onClick={() => void handleDeletePending(item.id)}
                               disabled={purchaseLoading}
                             >
