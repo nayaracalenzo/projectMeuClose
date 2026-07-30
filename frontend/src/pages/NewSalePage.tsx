@@ -2497,7 +2497,7 @@ export default function NewSalePage() {
   return (
     <div className="w-full min-w-0 min-h-full bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5">
-        <h1 className="pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">
+        <h1 className="pb-4 pt-8 text-4xl font-semibold text-primary md:text-[2rem]">
           Nova Venda/Orçamento
         </h1>
         <SaleStepper step={step} />

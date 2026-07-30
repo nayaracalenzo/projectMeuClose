@@ -363,7 +363,7 @@ export default function BankPage() {
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-      <h1 className="mb-5 pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">
+      <h1 className="mb-3 pb-1 pt-8 font-editorial text-[2rem] font-extralight leading-[0.98] tracking-tight text-primary md:text-[2.35rem] md:leading-tight">
         Banco
       </h1>
 

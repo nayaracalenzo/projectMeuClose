@@ -317,8 +317,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="bg-white p-3 xs:p-5 md:bg-surface-low">
-      <h1 className="mb-5 pr-2 font-editorial text-3xl font-extralight leading-tight tracking-tight text-primary sm:text-4xl">
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden bg-white p-2.5 sm:p-5 md:bg-surface-low">
+      <h1 className="mb-4 pr-1 font-editorial text-[1.75rem] font-extralight leading-[0.98] tracking-tight text-primary sm:mb-5 sm:max-w-none sm:pr-2 sm:text-4xl sm:leading-tight">
         Olá, Lia. Bem-vinda de volta!
       </h1>
 
@@ -328,21 +328,21 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      <div className="mb-8 grid min-h-0 w-full gap-4">
-        <div className="grid w-full gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
-            <h2 className="text-[1.1rem] font-semibold text-neutral-700">Pedidos Pendentes</h2>
-            <p className="font-editorial text-[2.5rem] leading-none text-primary">
+      <div className="mb-6 grid min-h-0 w-full min-w-0 gap-2.5 sm:mb-8 sm:gap-4">
+        <div className="grid w-full min-w-0 gap-2.5 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+          <div className="flex min-w-0 h-full flex-col gap-2 bg-surface-low p-3 shadow-md sm:gap-3 sm:p-5">
+            <h2 className="text-base font-semibold text-neutral-700 sm:text-[1.1rem]">Pedidos Pendentes</h2>
+            <p className="font-editorial text-[2rem] leading-none text-primary sm:text-[2.5rem]">
               {loading ? "-" : summary.pendingOrders}
             </p>
-            <p className="text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
+            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-500 sm:text-xs">
               Itens a produzir
             </p>
           </div>
 
-          <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-[1.1rem] font-semibold text-neutral-700">
+          <div className="flex min-w-0 h-full flex-col gap-2 bg-surface-low p-3 shadow-md sm:gap-3 sm:p-5">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <h2 className="min-w-0 text-base font-semibold text-neutral-700 sm:text-[1.1rem]">
                 Contas a Receber
               </h2>
               <button
@@ -351,12 +351,12 @@ export default function Dashboard() {
                   showFinancialValues ? "Ocultar valores" : "Mostrar valores"
                 }
                 onClick={() => setShowFinancialValues((current) => !current)}
-                className="text-neutral-600 transition hover:text-primary"
+                className="shrink-0 text-neutral-600 transition hover:text-primary"
               >
                 {showFinancialValues ? <Eye size={18} /> : <EyeClosed size={18} />}
               </button>
             </div>
-            <p className="font-editorial text-[2rem] leading-none text-primary">
+            <p className="min-w-0 break-all font-editorial text-[1.55rem] leading-none text-primary sm:break-words sm:text-[2rem]">
               {loading
                 ? "-"
                 : showFinancialValues
@@ -364,14 +364,14 @@ export default function Dashboard() {
                   : HIDDEN_VALUE}
             </p>
           
-            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-500">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-500 sm:text-[11px]">
               {loading ? "-" : formatReferenceMonth(summary.monthlyReceivables.referenceMonth)}
             </p>
           </div>
 
-          <div className="flex h-full flex-col gap-3 bg-surface-low p-5 shadow-md">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-[1.1rem] font-semibold text-neutral-700">
+          <div className="flex min-w-0 h-full flex-col gap-2 bg-surface-low p-3 shadow-md sm:gap-3 sm:p-5">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <h2 className="min-w-0 text-base font-semibold text-neutral-700 sm:text-[1.1rem]">
                 Contas a Pagar
               </h2>
               <button
@@ -380,12 +380,12 @@ export default function Dashboard() {
                   showFinancialValues ? "Ocultar valores" : "Mostrar valores"
                 }
                 onClick={() => setShowFinancialValues((current) => !current)}
-                className="text-neutral-600 transition hover:text-primary"
+                className="shrink-0 text-neutral-600 transition hover:text-primary"
               >
                 {showFinancialValues ? <Eye size={18} /> : <EyeClosed size={18} />}
               </button>
             </div>
-            <p className="font-editorial text-[2rem] leading-none text-primary">
+            <p className="min-w-0 break-all font-editorial text-[1.55rem] leading-none text-primary sm:break-words sm:text-[2rem]">
               {loading
                 ? "-"
                 : showFinancialValues
@@ -393,13 +393,13 @@ export default function Dashboard() {
                   : HIDDEN_VALUE}
             </p>
             
-            <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-500">
+            <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-neutral-500 sm:text-[11px]">
               {loading ? "-" : formatReferenceMonth(summary.monthlyPayables.referenceMonth)}
             </p>
           </div>
 
-          <div className="flex h-full flex-col justify-between bg-surface-low p-5 shadow-md sm:col-span-2 xl:col-span-1">
-            <h2 className="mb-3 text-lg font-semibold text-gray-700">Ações Rápidas</h2>
+          <div className="flex min-w-0 h-full flex-col justify-between bg-surface-low p-3 shadow-md sm:col-span-2 sm:p-5 xl:col-span-1">
+            <h2 className="mb-3 text-base font-semibold text-gray-700 sm:text-lg">Ações Rápidas</h2>
             <div className="grid gap-2">
               <Button
                 variant="primary"
@@ -420,10 +420,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.95fr)]">
-          <div className="min-h-0 bg-surface-low p-5">
+        <div className="grid min-h-0 min-w-0 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.95fr)]">
+          <div className="min-h-0 min-w-0 bg-surface-low p-3 sm:p-5">
             <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-              <h2 className="font-editorial text-3xl font-semibold text-primary sm:text-4xl">
+              <h2 className="font-editorial text-[2rem] font-semibold text-primary sm:text-4xl">
                 Próximas Provas
               </h2>
               <button
@@ -445,8 +445,8 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="overflow-x-auto bg-surface-lowest">
-                <div className="min-w-[24rem]">
-                  <div className="grid grid-cols-[minmax(12rem,1.3fr)_5rem_5rem] gap-3 border-b border-outline-variant/25 px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">
+                <div className="min-w-[20rem] sm:min-w-[22rem]">
+                  <div className="grid grid-cols-[minmax(8.5rem,1.3fr)_4rem_4rem] gap-2 border-b border-outline-variant/25 px-3 py-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-neutral-500 sm:grid-cols-[minmax(12rem,1.3fr)_5rem_5rem] sm:gap-3 sm:px-4 sm:text-xs">
                     <span>Cliente</span>
                     <span>Peças</span>
                     <span>Data</span>
@@ -455,7 +455,7 @@ export default function Dashboard() {
                     {visibleUpcomingFittings.map((item, index) => (
                       <div
                         key={`${item.customer}-${item.testDate}-${index}`}
-                        className="grid grid-cols-[minmax(12rem,1.3fr)_5rem_5rem] gap-3 px-4 py-3 text-sm text-neutral-800"
+                        className="grid grid-cols-[minmax(8.5rem,1.3fr)_4rem_4rem] gap-2 px-3 py-3 text-[13px] text-neutral-800 sm:grid-cols-[minmax(12rem,1.3fr)_5rem_5rem] sm:gap-3 sm:px-4 sm:text-sm"
                       >
                         <span className="truncate uppercase">{item.customer}</span>
                         <span>{item.piecesCount}</span>
@@ -468,10 +468,10 @@ export default function Dashboard() {
             )}
           </div>
 
-          <div className="grid min-h-0 gap-4">
-            <aside className="min-h-0 border border-[#fee9ef] bg-surface-low p-5 shadow-md">
+          <div className="grid min-h-0 min-w-0 gap-4">
+            <aside className="min-h-0 min-w-0 border border-[#fee9ef] bg-surface-low p-3 shadow-md sm:p-5">
               <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-                <h2 className="font-editorial text-2xl font-semibold text-primary sm:text-3xl">
+                <h2 className="font-editorial text-[1.8rem] font-semibold text-primary sm:text-3xl">
                   Aniversariantes da Semana
                 </h2>
                 <span className="rounded-full bg-background px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-600">
@@ -491,10 +491,10 @@ export default function Dashboard() {
                     return (
                       <div
                         key={`${client.source}-${client.id}`}
-                        className="flex items-center justify-between gap-3 rounded-lg bg-background/90 px-4 py-3"
+                        className="flex items-center justify-between gap-3 rounded-lg bg-background/90 px-3 py-3 sm:px-4"
                       >
                         <div className="flex min-w-0 flex-col gap-1">
-                          <span className="truncate text-sm font-medium uppercase text-neutral-800">
+                          <span className="truncate text-[13px] font-medium uppercase text-neutral-800 sm:text-sm">
                             {client.fullName}
                           </span>
                           <span className="text-[10px] uppercase tracking-[0.12em] text-neutral-500">
@@ -502,7 +502,7 @@ export default function Dashboard() {
                           </span>
                         </div>
 
-                        <span className="font-editorial text-2xl leading-none text-primary">
+                        <span className="shrink-0 font-editorial text-[1.6rem] leading-none text-primary sm:text-2xl">
                           {day}
                         </span>
                       </div>
@@ -512,9 +512,9 @@ export default function Dashboard() {
               )}
             </aside>
 
-            <section className="min-h-0 bg-surface-low p-5 shadow-md">
+            <section className="min-h-0 min-w-0 bg-surface-low p-3 shadow-md sm:p-5">
               <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-                <h2 className="font-editorial text-2xl font-semibold text-primary sm:text-3xl">
+                <h2 className="font-editorial text-[1.8rem] font-semibold text-primary sm:text-3xl">
                   Pendências de Compras
                 </h2>
                 <span className="rounded-full bg-background px-3 py-1 text-[11px] font-medium uppercase tracking-[0.12em] text-neutral-600">
@@ -534,7 +534,7 @@ export default function Dashboard() {
                     }
                   }}
                   placeholder="Adicionar item para comprar..."
-                  className="h-10 flex-1 rounded border border-outline-variant/45 bg-white px-3 text-sm text-primary outline-none focus:border-primary"
+                  className="flex-1 rounded border border-outline-variant/45 bg-white px-3 py-3 text-sm text-primary outline-none focus:border-primary"
                 />
                 <Button
                   variant="primary"
@@ -556,7 +556,7 @@ export default function Dashboard() {
                   {purchasePendings.map((item) => (
                     <div
                       key={item.id}
-                      className="flex flex-col gap-3 rounded bg-surface-lowest px-4 py-3"
+                      className="flex flex-col gap-3 rounded bg-surface-lowest px-3 py-3 sm:px-4"
                     >
                       <div className="flex items-start gap-3">
                         <input

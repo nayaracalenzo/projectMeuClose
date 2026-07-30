@@ -9,9 +9,7 @@ export default function DashboardLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Header />
-        <main
-          className="h-full min-h-0 overflow-y-auto  pb-20 md:pb-0"
-        >
+        <main className="h-full min-h-0 overflow-y-auto pt-[4.75rem] md:pt-0">
           <Outlet />
         </main>
       </div>

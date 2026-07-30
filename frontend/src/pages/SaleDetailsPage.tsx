@@ -628,7 +628,7 @@ export default function SaleDetailsPage() {
             >
               Voltar para vendas
             </button>
-            <h1 className="font-editorial text-5xl text-primary md:text-4xl">
+            <h1 className="font-editorial text-[2rem] text-primary md:text-[1.85rem]">
               {isBudgetSale ? "Detalhes do Orçamento" : "Detalhes da Venda"}
             </h1>
             <p className="mt-2 text-sm text-neutral-700">

@@ -645,7 +645,7 @@ export default function CustomerDetails() {
   if (error || !client) {
     return (
       <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-        <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">
+        <h1 className="pt-8 pb-4 text-4xl font-semibold text-primary md:text-[2rem]">
           Detalhe do Cliente
         </h1>
         <p className="mb-4 text-neutral-700">
@@ -667,7 +667,7 @@ export default function CustomerDetails() {
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5 flex items-center justify-between gap-3">
-        <h1 className="pt-12 pb-6 text-6xl font-semibold text-primary md:text-4xl">
+        <h1 className="pt-8 pb-4 text-4xl font-semibold text-primary md:text-[2rem]">
           Detalhe do Cliente
         </h1>
         <div className="hidden gap-2 md:flex">
