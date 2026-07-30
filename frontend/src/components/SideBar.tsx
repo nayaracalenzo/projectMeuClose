@@ -1,4 +1,4 @@
-﻿import {
+import {
   ArrowDownCircle,
   ArrowUpCircle,
   Banknote,
@@ -6,7 +6,6 @@
   LogOut,
   Menu,
   Package,
-  Plus,
   UserLock,
   Users,
   Wallet,
@@ -26,8 +25,7 @@ type NavItem = {
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navigation: NavItem[] = useMemo(
     () => [
@@ -42,15 +40,6 @@ export default function Sidebar() {
       { title: "Administração", path: "/admin", icon: UserLock },
     ],
     [],
-  );
-
-  const primaryMobileItems = {
-    home: navigation.find((item) => item.path === "/home")!,
-    clients: navigation.find((item) => item.path === "/clientes")!,
-  };
-
-  const secondaryMobileItems = navigation.filter(
-    (item) => item.path !== "/home" && item.path !== "/clientes",
   );
 
   const requestNavigation = (path: string) => {
@@ -81,8 +70,8 @@ export default function Sidebar() {
           <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-neutral-700">
             Ateliê
           </p>
-        
-          <ul className="flex-1 space-y-1 mt-3">
+
+          <ul className="mt-3 flex-1 space-y-1">
             {navigation.map((item) => {
               const Icon = item.icon;
 
@@ -134,111 +123,104 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-outline-variant/30 bg-surface-lowest py-3 backdrop-blur-3xl md:hidden">
-        {isQuickCreateOpen && (
-          <div className="absolute bottom-full left-1/2 mb-2 w-44 -translate-x-1/2 bg-surface-lowest p-2 shadow-(--ambient-shadow)">
-            <button
-              type="button"
-              onClick={() => {
-                setIsQuickCreateOpen(false);
-                requestNavigation(primaryMobileItems.clients.path);
-              }}
-              className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
-            >
-              Novo cliente
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setIsQuickCreateOpen(false);
-                requestNavigation("/nova-venda");
-              }}
-              className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
-            >
-              Nova venda
-            </button>
-          </div>
-        )}
-
-        {isMoreMenuOpen && (
-          <div className="absolute bottom-full right-2 mb-2 w-52 bg-surface-lowest p-2 shadow-(--ambient-shadow)">
-            {secondaryMobileItems.map((item) => (
-              <button
-                key={item.path}
-                type="button"
-                onClick={() => {
-                  setIsMoreMenuOpen(false);
-                  requestNavigation(item.path);
-                }}
-                className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
-              >
-                {item.title}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                setIsMoreMenuOpen(false);
-                logoutAndRedirect("logged_out");
-              }}
-              className="w-full px-3 py-2 text-left text-[13px] font-medium text-primary hover:bg-surface"
-            >
-              Sair
-            </button>
-          </div>
-        )}
-
-        <div className="grid h-16 grid-cols-3 items-center px-2">
+      <div className="fixed top-0 left-0 right-0 z-50 border-b border-outline-variant/30 bg-surface-lowest/95 backdrop-blur-sm md:hidden">
+        <div className="flex items-center justify-between gap-3 px-3 py-3">
           <button
             type="button"
-            onClick={() => {
-              setIsQuickCreateOpen(false);
-              setIsMoreMenuOpen(false);
-              requestNavigation(primaryMobileItems.home.path);
-            }}
-            className={`flex flex-col items-center justify-center gap-1 ${
-              location.pathname === primaryMobileItems.home.path
-                ? "text-primary"
-                : "text-neutral-700"
-            }`}
+            onClick={() => requestNavigation("/home")}
+            className="min-w-0 text-left"
           >
-            <Home size={30} strokeWidth={2} />
-            <span className="text-[18px] uppercase tracking-[0.12em]">Início</span>
+            <span className="block font-editorial text-[1.65rem] uppercase leading-none tracking-[0.06em] text-primary">
+              Meu Close
+            </span>
+            <span className="block pt-1 text-[10px] uppercase tracking-[0.18em] text-neutral-700">
+              Ateliê
+            </span>
           </button>
 
           <button
             type="button"
-            onClick={() => {
-              setIsQuickCreateOpen((prev) => !prev);
-              setIsMoreMenuOpen(false);
-            }}
-            className={`flex flex-col items-center justify-center gap-1 ${
-              isQuickCreateOpen ? "text-primary" : "text-neutral-700"
-            }`}
+            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+            className="shrink-0 p-1 text-neutral-700 transition hover:text-primary"
+            aria-expanded={isMobileMenuOpen}
+            aria-label="Abrir menu"
           >
-            {isQuickCreateOpen ? (
-              <X size={30} strokeWidth={2} />
+            {isMobileMenuOpen ? (
+              <X size={22} strokeWidth={2} />
             ) : (
-              <Plus size={30} strokeWidth={2} />
+              <Menu size={22} strokeWidth={2} />
             )}
-            <span className="text-[18px] uppercase tracking-[0.12em]">Novo</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setIsMoreMenuOpen((prev) => !prev);
-              setIsQuickCreateOpen(false);
-            }}
-            className={`flex flex-col items-center justify-center gap-1 ${
-              isMoreMenuOpen ? "text-primary" : "text-neutral-700"
-            }`}
-          >
-            <Menu size={30} strokeWidth={2} />
-            <span className="text-[18px] uppercase tracking-[0.12em]">Menu</span>
           </button>
         </div>
-      </nav>
+
+      </div>
+
+      {isMobileMenuOpen ? (
+        <div className="fixed inset-0 z-[60] md:hidden ">
+          <button
+            type="button"
+            aria-label="Fechar menu"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="absolute inset-0 bg-black/28"
+          />
+
+          <div className="relative z-10 h-full w-[min(20rem,86vw)] overflow-y-auto border-r border-outline-variant/25 bg-surface px-3 pb-4 pt-[2.1rem] shadow-(--ambient-shadow)">
+            <div className="mb-3 border-b border-outline-variant/20 px-3 pb-4">
+              <span className="block font-editorial text-[1.9rem] uppercase leading-none tracking-[0.06em] text-primary">
+                Meu Close
+              </span>
+              <span className="block pt-1 text-[10px] uppercase tracking-[0.18em] text-neutral-700">
+                Ateliê
+              </span>
+            </div>
+            <div className="grid gap-1">
+              {navigation.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path;
+
+                return (
+                  <button
+                    key={item.path}
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      requestNavigation(item.path);
+                    }}
+                    className={`flex w-full items-center gap-3 rounded px-3 py-3 text-left transition ${
+                      isActive
+                        ? "bg-surface text-primary"
+                        : "text-neutral-700 hover:bg-surface hover:text-primary"
+                    }`}
+                  >
+                    <Icon size={16} strokeWidth={2} />
+                    <span
+                      className={`text-[13px] uppercase tracking-[0.12em] ${
+                        isActive ? "font-semibold" : "font-medium"
+                      }`}
+                    >
+                      {item.title}
+                    </span>
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  logoutAndRedirect("logged_out");
+                }}
+                className="mt-2 flex w-full items-center gap-3 border-t border-outline-variant/25 px-3 py-3 text-left text-neutral-700 transition hover:bg-surface hover:text-primary"
+              >
+                <LogOut size={16} strokeWidth={2} />
+                <span className="text-[13px] font-medium uppercase tracking-[0.12em]">
+                  Sair
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

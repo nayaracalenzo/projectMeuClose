@@ -106,8 +106,8 @@ export default function CustomersPage() {
       ) : (
         <>
           <div>
-            <div className="mb-5 flex justify-center gap-4 md:justify-between">
-              <h1 className="pb-6 pt-12 text-6xl font-semibold text-primary md:text-4xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <h1 className="pb-1 pt-8 font-editorial text-[2rem] font-extralight leading-[0.98] tracking-tight text-primary md:text-[2.35rem] md:leading-tight">
                 Clientes
               </h1>
               <div className="hidden gap-2 md:flex">

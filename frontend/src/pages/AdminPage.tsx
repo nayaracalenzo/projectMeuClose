@@ -1297,7 +1297,7 @@ export default function AdminPage() {
   return (
     <div className="w-full min-h-full bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-6 flex items-center gap-3 pt-12">
-        <h1 className="text-6xl font-semibold text-primary md:text-4xl">
+        <h1 className="text-4xl font-semibold text-primary md:text-[2rem]">
           Administração
         </h1>
       </div>

@@ -315,7 +315,7 @@ export default function OrderDetails() {
             >
               Voltar para produção
             </button>
-            <h1 className="font-editorial text-5xl text-primary md:text-4xl">
+            <h1 className="font-editorial text-[2rem] text-primary md:text-[1.85rem]">
               Detalhes do Produto
             </h1>
           </div>

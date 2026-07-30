@@ -319,9 +319,9 @@ export default function Orders() {
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-      <div className="mb-5 flex justify-center gap-4 md:justify-between">
-        <div>
-          <h1 className="pb-2 pt-12 text-6xl font-semibold text-primary md:text-4xl">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="min-w-0 text-left">
+          <h1 className="pb-1 pt-8 font-editorial text-[2rem] font-extralight leading-[0.98] tracking-tight text-primary md:text-[2.35rem] md:leading-tight">
             Produção
           </h1>
           <p className="text-sm text-neutral-700">{headingText}</p>

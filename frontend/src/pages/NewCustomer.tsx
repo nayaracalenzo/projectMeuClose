@@ -294,7 +294,7 @@ export default function NewCustomer() {
     <div className="w-full min-w-0 bg-white p-3 sm:p-5 md:bg-white/80">
       <div className=" bg-surface-lowest p-6 shadow-sm">
         <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-4xl font-semibold text-primary">Novo Cliente</h1>
+          <h1 className="text-[1.75rem] font-semibold text-primary sm:text-[2rem]">Novo Cliente</h1>
           <Button variant="secondary" onClick={() => navigate(-1)}>
             Voltar
           </Button>
