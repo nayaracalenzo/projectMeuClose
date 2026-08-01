@@ -11,6 +11,7 @@ router.use(authMiddleware);
 router.get("/session-status", cashSessionController.getStoreSessionStatusController);
 router.get("/account-options", controller.listCashAccountOptionsController);
 router.post("/sessions/open", cashSessionController.openStoreSessionController);
+router.post("/sessions/rollover", cashSessionController.rolloverStoreSessionController);
 router.post(
   "/sessions/current/close",
   cashSessionController.closeCurrentStoreSessionController,

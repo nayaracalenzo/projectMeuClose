@@ -135,6 +135,8 @@ const formatDate = (value?: string | null) => {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 };
 
+const getCurrentDateInputValue = () => toIsoDate(new Date());
+
 const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
   `${account.label} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
 
@@ -215,9 +217,7 @@ export default function ReceivablesPage() {
   const [cashSessionStatus, setCashSessionStatus] =
     useState<CashSessionStatusResponse | null>(null);
   const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
-  const [closeCashModalOpen, setCloseCashModalOpen] = useState(false);
-  const [openingBalanceInput, setOpeningBalanceInput] = useState("");
-  const [countedBalanceInput, setCountedBalanceInput] = useState("");
+  const [rolloverCashModalOpen, setRolloverCashModalOpen] = useState(false);
   const [cashSessionNotes, setCashSessionNotes] = useState("");
   const [cashSessionLoading, setCashSessionLoading] = useState(false);
   const [reverseReceiptModalOpen, setReverseReceiptModalOpen] = useState(false);
@@ -226,6 +226,10 @@ export default function ReceivablesPage() {
     InstallmentReceiptOption[]
   >([]);
   const [reverseReceiptId, setReverseReceiptId] = useState("");
+  const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
+  const previousCashLaunchDateLabel = cashSessionStatus?.currentSession
+    ? formatDate(cashSessionStatus.currentSession.openedAt)
+    : "-";
 
   useEffect(() => {
     setPage(1);
@@ -652,15 +656,11 @@ export default function ReceivablesPage() {
 
       if (parsed?.currentSession?.pendingPreviousDay) {
         setCashSessionNotes(parsed.currentSession.notes || "");
-        setCountedBalanceInput(formatCurrencyInput("0"));
-        setCloseCashModalOpen(true);
+        setRolloverCashModalOpen(true);
         return false;
       }
 
       if (!parsed?.hasOpenSession) {
-        setOpeningBalanceInput(
-          formatCurrency(parsed?.lastClosedSession?.expectedBalance ?? 0),
-        );
         setCashSessionNotes("");
         setOpenCashModalOpen(true);
         return false;
@@ -682,32 +682,31 @@ export default function ReceivablesPage() {
     }
   };
 
-  const handleClosePreviousCashSession = async () => {
+  const handleRolloverCashSession = async () => {
     try {
       setCashSessionLoading(true);
-      await postRequest("/cash/sessions/current/close", {
-        countedBalance: parseCurrencyToNumber(countedBalanceInput),
+      await postRequest("/cash/sessions/rollover", {
         notes: cashSessionNotes.trim() || null,
       });
 
       const updated = await getRequest("/cash/session-status");
       setCashSessionStatus((updated as CashSessionStatusResponse) || null);
-      setCloseCashModalOpen(false);
+      setRolloverCashModalOpen(false);
       setToast({
         open: true,
         tone: "success",
-        title: "Caixa fechado",
+        title: "Caixa atualizado",
         message:
-          "O caixa pendente foi fechado. Agora voce pode continuar com a quitacao.",
+          "O caixa pendente foi encerrado e o caixa do dia foi aberto. Agora voce pode continuar com a quitacao.",
       });
     } catch (error: unknown) {
       setToast({
         open: true,
         tone: "error",
-        title: "Nao foi possivel fechar",
+        title: "Nao foi possivel atualizar",
         message: getUserFacingApiErrorMessage(
           error,
-          "Nao foi possivel fechar o caixa.",
+          "Nao foi possivel encerrar e abrir o caixa.",
         ),
       });
     } finally {
@@ -719,7 +718,6 @@ export default function ReceivablesPage() {
     try {
       setCashSessionLoading(true);
       await postRequest("/cash/sessions/open", {
-        openingBalance: parseCurrencyToNumber(openingBalanceInput),
         notes: cashSessionNotes.trim() || null,
       });
 
@@ -1563,21 +1561,14 @@ export default function ReceivablesPage() {
         open={openCashModalOpen}
         onClose={() => setOpenCashModalOpen(false)}
         title="Abrir Caixa"
-        subtitle="Informe o saldo inicial para iniciar a sessao de caixa."
+        subtitle="Confirme a abertura do caixa usando o saldo esperado."
       >
         <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-primary">
-              Saldo inicial
-            </label>
-            <input
-              value={openingBalanceInput}
-              onChange={(e) =>
-                setOpeningBalanceInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
+          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+            <p>
+              O caixa sera aberto automaticamente com o saldo esperado da ultima
+              sessao fechada.
+            </p>
           </div>
 
           <div>
@@ -1611,9 +1602,9 @@ export default function ReceivablesPage() {
       </CustomerModal>
 
       <CustomerModal
-        open={closeCashModalOpen}
-        onClose={() => setCloseCashModalOpen(false)}
-        title="Fechar Caixa"
+        open={rolloverCashModalOpen}
+        onClose={() => setRolloverCashModalOpen(false)}
+        title="Encerrar e abrir caixa"
         subtitle={
           cashSessionStatus?.currentSession
             ? `Existe um caixa pendente aberto em ${formatDate(
@@ -1626,55 +1617,28 @@ export default function ReceivablesPage() {
           {cashSessionStatus?.currentSession ? (
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
               <p>
-                Data do caixa pendente:{" "}
-                {formatDate(cashSessionStatus.currentSession.openedAt)}
+                Data do lançamento: {currentCashLaunchDateLabel} é maior que a
+                data do último lançamento: {previousCashLaunchDateLabel}.
               </p>
-              <p>
-                Saldo esperado:{" "}
-                {formatCurrency(
-                  cashSessionStatus.currentSession.expectedBalance,
-                )}
+              <p className="mt-3">
+                Confirma encerramento do(s) caixa\banco(s) anteriores ao dia{" "}
+                {currentCashLaunchDateLabel}?
               </p>
             </div>
           ) : null}
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-primary">
-              Saldo contado
-            </label>
-            <input
-              value={countedBalanceInput}
-              onChange={(e) =>
-                setCountedBalanceInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-primary">
-              Observacoes
-            </label>
-            <textarea
-              value={cashSessionNotes}
-              onChange={(e) => setCashSessionNotes(e.target.value)}
-              className="min-h-24 w-full rounded-lg border border-outline-variant/60 bg-white px-3 py-2 text-[15px] text-primary"
-            />
-          </div>
-
           <div className="flex gap-2">
             <Button
               type="button"
-              onClick={handleClosePreviousCashSession}
+              onClick={handleRolloverCashSession}
               isLoading={cashSessionLoading}
             >
-              Confirmar fechamento
+              Confirmar
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setCloseCashModalOpen(false)}
+              onClick={() => setRolloverCashModalOpen(false)}
             >
               Voltar
             </Button>

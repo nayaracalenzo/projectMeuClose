@@ -27,8 +27,18 @@ async function closeCurrentStoreSessionController(req, res, next) {
   }
 }
 
+async function rolloverStoreSessionController(req, res, next) {
+  try {
+    const data = await service.rolloverStoreSession(req.body, req.user);
+    return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 module.exports = {
   getStoreSessionStatusController,
   openStoreSessionController,
   closeCurrentStoreSessionController,
+  rolloverStoreSessionController,
 };
