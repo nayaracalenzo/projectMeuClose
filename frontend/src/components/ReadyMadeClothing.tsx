@@ -230,7 +230,7 @@ export default function ReadyMadeClothing({
 
   return (
     <div className="rounded border border-outline-variant/50 bg-white p-4">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-700">
           Dados da roupa pronta
         </p>
@@ -242,7 +242,7 @@ export default function ReadyMadeClothing({
             key={product.id}
             className="rounded border border-outline-variant/50 bg-surface-lowest p-4"
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-primary">
                 Produto pronto {index + 1}
               </p>
@@ -281,7 +281,7 @@ export default function ReadyMadeClothing({
                 >
                   Tamanho
                 </label>
-                <div className="grid grid-cols-[1fr_42px] gap-3">
+                <div className="grid grid-cols-[minmax(0,1fr)_42px] gap-3">
                   <select
                     id={`ready-size-${product.id}`}
                     value={product.size}
@@ -319,7 +319,7 @@ export default function ReadyMadeClothing({
                   min={1}
                   value={product.quantity}
                   onChange={(e) => updateProduct(product.id, "quantity", e.target.value)}
-                  className={`${fieldClassName} max-w-28`}
+                  className={fieldClassName}
                 />
               </div>
 

@@ -531,7 +531,7 @@ export default function CustomMadeClothing({
 
   return (
     <div className="bg-white">
-      <div className="mb-1 flex items-center justify-between">
+      <div className="mb-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-700">
           Dados da peça sob medida
         </p>
@@ -543,7 +543,7 @@ export default function CustomMadeClothing({
             key={product.id}
             className="rounded border border-outline-variant/50 bg-surface-lowest p-4"
           >
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-primary">Produto {index + 1}</p>
               {products.length > 1 && (
                 <button
@@ -556,7 +556,7 @@ export default function CustomMadeClothing({
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[90px_1fr_42px] md:items-center">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[90px_minmax(0,1fr)_42px] md:items-center">
               <label htmlFor={`type-${product.id}`} className="text-sm text-primary">
                 Tipo
               </label>
@@ -671,7 +671,7 @@ export default function CustomMadeClothing({
                   value={product.price}
                   onChange={(e) => handlePriceChange(product.id, e.target.value)}
                   placeholder="R$ 0,00"
-                  className={`${fieldClassName} max-w-55`}
+                  className={`${fieldClassName} md:max-w-55`}
                 />
               </div>
               <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[110px_1fr] md:items-center">
@@ -687,7 +687,7 @@ export default function CustomMadeClothing({
                   value={product.discountPercent}
                   onChange={(e) => updateProduct(product.id, "discountPercent", e.target.value)}
                   placeholder="0"
-                  className={`${fieldClassName} max-w-55`}
+                  className={`${fieldClassName} md:max-w-55`}
                 />
               </div>
             </div>

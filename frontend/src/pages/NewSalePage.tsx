@@ -2508,15 +2508,15 @@ export default function NewSalePage() {
           </div>
         ) : null}
 
-        <div className="mt-5 grid grid-cols-3 gap-6">
-          <div className="col-span-2 bg-surface-low p-6 shadow-sm">
+        <div className="mt-5 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+          <div className="min-w-0 bg-surface-low p-4 shadow-sm sm:p-6">
             {step === 1 && (
               <div className="flex flex-col gap-5">
                 <p className="text-md font-semibold text-primary">
                   Passo 1: Escolha o cliente
                 </p>
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="text-sm text-neutral-700">
                     Selecione um cliente para continuar a venda.
                   </p>
@@ -2600,6 +2600,7 @@ export default function NewSalePage() {
                 <div className="flex justify-end">
                   <Button
                     type="button"
+                    className="w-full sm:w-auto"
                     disabled={!selectedCustomer}
                     onClick={() => setStep(2)}
                   >
@@ -2654,9 +2655,7 @@ export default function NewSalePage() {
                         <option value="CUSTOM_REFORM">Reforma</option>
                       </select>
                     </div>
-                  ) : (
-                    <div />
-                  )}
+                  ) : null}
 
                   <div className="flex items-end">
                     <Button
@@ -2673,9 +2672,10 @@ export default function NewSalePage() {
                 </div>
 
                 <div className="flex justify-start">
-                  <div className="flex gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                     <Button
                       type="button"
+                      className="w-full sm:w-auto"
                       variant="secondary"
                       onClick={handleBackToStart}
                     >
@@ -2732,9 +2732,7 @@ export default function NewSalePage() {
                         <option value="CUSTOM_REFORM">Reforma</option>
                       </select>
                     </div>
-                  ) : (
-                    <div />
-                  )}
+                  ) : null}
 
                   <div className="flex items-end">
                     <Button
@@ -2753,7 +2751,7 @@ export default function NewSalePage() {
                 {tableItems.length > 0 && (
                   <>
                     <div className="overflow-x-auto rounded-lg border border-outline-variant/45 bg-white">
-                      <table className="min-w-full text-sm">
+                      <table className="min-w-[720px] w-full text-sm">
                         <thead className="bg-surface-low">
                           <tr>
                             <th className="px-3 py-2 text-left font-semibold text-primary">
@@ -2807,9 +2805,10 @@ export default function NewSalePage() {
                                 {formatCurrency(item.finalValue)}
                               </td>
                               <td className="px-3 py-2">
-                                <div className="flex justify-end gap-2">
+                                <div className="flex flex-col justify-end gap-2 sm:flex-row">
                                   <Button
                                     type="button"
+                                    className="w-full sm:w-auto"
                                     variant="secondary"
                                     onClick={() => handleEditTableItem(item)}
                                   >
@@ -2817,6 +2816,7 @@ export default function NewSalePage() {
                                   </Button>
                                   <Button
                                     type="button"
+                                    className="w-full sm:w-auto"
                                     variant="tertiary"
                                     onClick={() => handleRemoveTableItem(item)}
                                   >
@@ -2833,18 +2833,20 @@ export default function NewSalePage() {
                 )}
 
                 <div className="flex w-full">
-                  <div className="flex w-full justify-between gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <Button
                       type="button"
+                      className="w-full sm:w-auto"
                       variant="secondary"
                       onClick={handleBackToStart}
                     >
                       Voltar
                     </Button>
-                    <div className="flex gap-2">
+                    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                       <Button
                         variant="tertiary"
                         type="button"
+                        className="w-full sm:w-auto"
                         onClick={handleCreateQuote}
                         disabled={!canCreateQuote}
                       >
@@ -2858,6 +2860,7 @@ export default function NewSalePage() {
                       </Button>
                       <Button
                         type="button"
+                        className="w-full sm:w-auto"
                         onClick={handleOpenPaymentStep}
                         disabled={!canCreateQuote}
                       >
@@ -3287,7 +3290,7 @@ export default function NewSalePage() {
                       </div>
 
                       <div className="mt-4 overflow-x-auto">
-                        <table className="min-w-full border-separate border-spacing-y-2 text-sm">
+                        <table className="min-w-[420px] w-full border-separate border-spacing-y-2 text-sm">
                           <thead className="bg-[#dbd1d1] rounded-t-md">
                             <tr className="text-left">
                               <th className="px-3 py-2 font-semibold text-primary">
@@ -3424,9 +3427,10 @@ export default function NewSalePage() {
                 </div>
 
                 <div className="flex justify-start">
-                  <div className="flex gap-2">
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
                     <Button
                       type="button"
+                      className="w-full sm:w-auto"
                       variant="secondary"
                       onClick={() => setStep(3)}
                     >
@@ -3434,6 +3438,7 @@ export default function NewSalePage() {
                     </Button>
                     <Button
                       type="button"
+                      className="w-full sm:w-auto"
                       onClick={handleCompleteSale}
                       disabled={!canSaveSale}
                     >
@@ -3445,7 +3450,7 @@ export default function NewSalePage() {
             )}
           </div>
 
-          <div className="bg-surface-low p-6 shadow-sm">
+          <div className="h-fit bg-surface-low p-4 shadow-sm sm:p-6 xl:sticky xl:top-4">
             <p className="mb-2 font-semibold text-primary">Resumo</p>
             <p className="text-sm text-neutral-700">
               Cliente: {selectedCustomer?.name ?? "Não selecionado"}
@@ -3494,8 +3499,8 @@ export default function NewSalePage() {
         </div>
       </div>
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="max-h-[95vh] w-[50%] max-w-6xl overflow-y-auto rounded-xl bg-white p-3 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 sm:p-4">
+          <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-xl bg-white p-3 shadow-lg sm:w-[92%] lg:w-[78%] xl:w-[65%]">
             {modalType === "Roupa pronta" ? (
               <ReadyMadeClothing
                 key={`ready-${modalSessionKey}`}
@@ -3522,12 +3527,18 @@ export default function NewSalePage() {
               />
             )}
 
-            <div className="mt-3 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={closeModal}>
+            <div className="mt-3 flex flex-col justify-end gap-2 sm:flex-row">
+              <Button
+                type="button"
+                className="w-full sm:w-auto"
+                variant="secondary"
+                onClick={closeModal}
+              >
                 Cancelar
               </Button>
               <Button
                 type="button"
+                className="w-full sm:w-auto"
                 onClick={addModalItemsToTable}
                 disabled={!modalItems.length}
               >
@@ -3579,9 +3590,10 @@ export default function NewSalePage() {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
+              className="w-full sm:w-auto"
               onClick={handleOpenCashSession}
               isLoading={cashSessionLoading}
             >
@@ -3589,6 +3601,7 @@ export default function NewSalePage() {
             </Button>
             <Button
               type="button"
+              className="w-full sm:w-auto"
               variant="secondary"
               onClick={() => setOpenCashModalOpen(false)}
             >
@@ -3651,9 +3664,10 @@ export default function NewSalePage() {
             />
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
+              className="w-full sm:w-auto"
               onClick={handleClosePreviousCashSession}
               isLoading={cashSessionLoading}
             >
@@ -3661,6 +3675,7 @@ export default function NewSalePage() {
             </Button>
             <Button
               type="button"
+              className="w-full sm:w-auto"
               variant="secondary"
               onClick={() => setCloseCashModalOpen(false)}
             >
@@ -3682,9 +3697,10 @@ export default function NewSalePage() {
             descartar esta venda em andamento?
           </p>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
+              className="w-full sm:w-auto"
               variant="primary"
               onClick={handleContinueOpenSale}
             >
@@ -3692,6 +3708,7 @@ export default function NewSalePage() {
             </Button>
             <Button
               type="button"
+              className="w-full sm:w-auto"
               onClick={() => void handleSaveQuoteAndExit()}
               disabled={!canCreateQuote || isSaving}
             >
@@ -3699,6 +3716,7 @@ export default function NewSalePage() {
             </Button>
             <Button
               type="button"
+              className="w-full sm:w-auto"
               variant="secondary"
               onClick={() => void handleDiscardOpenSale()}
               disabled={isSaving}

@@ -116,7 +116,7 @@ export default function GeneralCatalogItems({
 
   return (
     <div className="rounded border border-outline-variant/50 bg-white p-4">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-700">
           {title}
         </p>
@@ -128,7 +128,7 @@ export default function GeneralCatalogItems({
             key={product.id}
             className="rounded border border-outline-variant/50 bg-surface-lowest p-4"
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-primary">
                 {itemLabel} {index + 1}
               </p>
@@ -143,7 +143,7 @@ export default function GeneralCatalogItems({
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_80px_1fr_1fr_1fr]">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_minmax(120px,0.7fr)_1fr_1fr_1fr]">
               <div>
                 <label
                   htmlFor={`general-name-${product.id}`}
@@ -173,7 +173,7 @@ export default function GeneralCatalogItems({
                   min={1}
                   value={product.quantity}
                   onChange={(event) => updateProduct(product.id, "quantity", event.target.value)}
-                  className={`${fieldClassName} max-w-20`}
+                  className={fieldClassName}
                 />
               </div>
 
