@@ -10,6 +10,8 @@ import {
   downloadWeeklyOrdersPdf,
   type PrintableOrder,
 } from "../utils/ordersWeeklyPdf";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 
 interface ProductOrderRow {
   id: number;
@@ -120,11 +122,19 @@ const getProductionStatusBadgeClassName = (status?: string | null) => {
 export default function Orders() {
   const pageSize = 10;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [productionItems, setProductionItems] = useState<ProductOrderRow[]>([]);
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
-  const [statusFilter, setStatusFilter] = useState("todos");
-  const [dateOrder, setDateOrder] = useState("createdAtDesc");
-  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState(
+    () => searchParams.get("status") || "todos",
+  );
+  const [dateOrder, setDateOrder] = useState(
+    () => searchParams.get("sortBy") || "createdAtDesc",
+  );
+  const [page, setPage] = useState(() => {
+    const parsedPage = Number(searchParams.get("page") || "1");
+    return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  });
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -136,6 +146,20 @@ export default function Orders() {
     "withoutValue" | "withValue"
   >("withoutValue");
   const [error, setError] = useState("");
+  const productionReturnTo = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+
+    if (statusFilter !== "todos") {
+      params.set("status", statusFilter);
+    }
+
+    if (dateOrder !== "createdAtDesc") {
+      params.set("sortBy", dateOrder);
+    }
+
+    return `/producao?${params.toString()}`;
+  }, [dateOrder, page, statusFilter]);
 
   useEffect(() => {
     const fetchStatuses = async () => {
@@ -151,8 +175,19 @@ export default function Orders() {
   }, []);
 
   useEffect(() => {
-    setPage(1);
-  }, [statusFilter, dateOrder]);
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+
+    if (statusFilter !== "todos") {
+      params.set("status", statusFilter);
+    }
+
+    if (dateOrder !== "createdAtDesc") {
+      params.set("sortBy", dateOrder);
+    }
+
+    setSearchParams(params, { replace: true });
+  }, [dateOrder, page, setSearchParams, statusFilter]);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -368,7 +403,10 @@ export default function Orders() {
           <select
             id="orders-status-filter"
             value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
+            onChange={(event) => {
+              setStatusFilter(event.target.value);
+              setPage(1);
+            }}
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           >
             <option value="todos">Todos</option>
@@ -390,7 +428,10 @@ export default function Orders() {
           <select
             id="orders-date-order"
             value={dateOrder}
-            onChange={(event) => setDateOrder(event.target.value)}
+            onChange={(event) => {
+              setDateOrder(event.target.value);
+              setPage(1);
+            }}
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           >
             <option value="createdAtDesc">Pedidos mais recentes</option>
@@ -500,28 +541,28 @@ export default function Orders() {
       </CustomerModal>
 
       <div className="hidden w-full overflow-x-auto md:block">
-        <table className="mt-2 min-w-[1180px] border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-[1180px] w-full table-fixed border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
-              <th className="w-[280px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[27%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Descrição
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[10%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Tipo
               </th>
-              <th className="w-[260px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[24%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Cliente
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[10%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Data Prova
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[9%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Costureira
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[12%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Status
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary text-right">
+              <th className="w-[8%] px-4 pt-2 font-editorial text-[1.2rem] text-primary text-right">
                 Valor
               </th>
             </tr>
@@ -550,7 +591,13 @@ export default function Orders() {
                 <tr
                   key={order.id}
                   className="cursor-pointer bg-surface-lowest transition-colors hover:bg-surface"
-                  onClick={() => navigate(`/pedido/${order.id}`)}
+                  onClick={() =>
+                    navigate(
+                      `/pedido/${order.id}?returnTo=${encodeURIComponent(
+                        productionReturnTo,
+                      )}`,
+                    )
+                  }
                 >
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     <div
@@ -574,8 +621,13 @@ export default function Orders() {
                   <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(order.testDate)}
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-[14px] uppercase text-neutral-700">
-                    {order.seamstress || "-"}
+                  <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
+                    <div
+                      className="truncate whitespace-nowrap"
+                      title={order.seamstress || "-"}
+                    >
+                      {order.seamstress || "-"}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     <span
@@ -611,7 +663,13 @@ export default function Orders() {
               key={order.id}
               type="button"
               className="w-full px-4 py-4 text-left"
-              onClick={() => navigate(`/pedido/${order.id}`)}
+              onClick={() =>
+                navigate(
+                  `/pedido/${order.id}?returnTo=${encodeURIComponent(
+                    productionReturnTo,
+                  )}`,
+                )
+              }
             >
               <p className="text-xs uppercase text-neutral-700">
                 Descrição: {order.description || "-"}
@@ -650,7 +708,32 @@ export default function Orders() {
         <p className="text-sm text-neutral-700">
           Página {page} de {totalPages}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="production-page-select"
+              className="text-sm text-neutral-700"
+            >
+              Ir para:
+            </label>
+            <select
+              id="production-page-select"
+              value={String(page)}
+              onChange={(e) => setPage(Number(e.target.value))}
+              disabled={loading || totalPages <= 1}
+              className="h-9 rounded border border-outline-variant/50 bg-white px-3 text-sm text-primary disabled:opacity-60"
+            >
+              {Array.from({ length: totalPages }, (_, index) => {
+                const pageOption = index + 1;
+                return (
+                  <option key={pageOption} value={pageOption}>
+                    Página {pageOption}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+          <div className="flex gap-2">
           <Button
             variant="secondary"
             size="sm"
@@ -669,6 +752,7 @@ export default function Orders() {
           >
             Próxima
           </Button>
+          </div>
         </div>
       </div>
     </div>

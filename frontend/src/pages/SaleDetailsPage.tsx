@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
@@ -287,6 +287,7 @@ function isProductionItem(item?: SaleDetailItem | null) {
 export default function SaleDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sale, setSale] = useState<SaleDetailsResponse | null>(null);
@@ -314,6 +315,10 @@ export default function SaleDetailsPage() {
     getTodayIsoDate(),
   );
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
+  const returnTo = useMemo(
+    () => searchParams.get("returnTo") || "/vendas",
+    [searchParams],
+  );
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -605,7 +610,7 @@ export default function SaleDetailsPage() {
         <div className="mx-auto max-w-5xl rounded-2xl border border-[#c76767] bg-[#fdecec] px-6 py-8 text-center text-sm text-[#7a1717]">
           <p>{error}</p>
           <div className="mt-4 flex justify-center gap-3">
-            <Button variant="secondary" onClick={() => navigate("/vendas")}>
+            <Button variant="secondary" onClick={() => navigate(returnTo)}>
               Voltar para vendas
             </Button>
           </div>
@@ -623,7 +628,7 @@ export default function SaleDetailsPage() {
           <div>
             <button
               type="button"
-              onClick={() => navigate("/vendas")}
+              onClick={() => navigate(returnTo)}
               className="mb-4 text-sm text-neutral-700 underline-offset-2 hover:underline"
             >
               Voltar para vendas

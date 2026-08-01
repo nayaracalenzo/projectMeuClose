@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import NoticeToast from "../components/NoticeToast";
 import { getRequest, updateRequest } from "../services/request";
@@ -176,6 +178,7 @@ function formatMeasurementsList(
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -184,6 +187,10 @@ export default function OrderDetails() {
   const [employeeOptions, setEmployeeOptions] = useState<SelectOption[]>([]);
   const [statusOptions, setStatusOptions] = useState<SelectOption[]>([]);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
+  const returnTo = useMemo(
+    () => searchParams.get("returnTo") || "/producao",
+    [searchParams],
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -290,7 +297,7 @@ export default function OrderDetails() {
         <div className="mx-auto max-w-4xl rounded-2xl border border-[#c76767] bg-[#fdecec] px-6 py-8 text-center text-sm text-[#7a1717]">
           <p>{error}</p>
           <div className="mt-4 flex justify-center gap-3">
-            <Button variant="secondary" onClick={() => navigate("/producao")}>
+            <Button variant="secondary" onClick={() => navigate(returnTo)}>
               Voltar para produção
             </Button>
           </div>
@@ -310,7 +317,7 @@ export default function OrderDetails() {
           <div>
             <button
               type="button"
-              onClick={() => navigate("/producao")}
+              onClick={() => navigate(returnTo)}
               className="mb-4 text-sm text-neutral-700 underline-offset-2 hover:underline"
             >
               Voltar para produção

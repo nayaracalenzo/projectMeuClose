@@ -84,10 +84,14 @@ export default function SalesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get("tab");
   const [viewMode, setViewMode] = useState<SalesViewMode>("orders");
-  const [statusFilter, setStatusFilter] =
-    useState<SalesStatusFilter>("DEFAULT");
+  const [statusFilter, setStatusFilter] = useState<SalesStatusFilter>(
+    () => (searchParams.get("statusFilter") as SalesStatusFilter) || "DEFAULT",
+  );
   const [sales, setSales] = useState<SaleRow[]>([]);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => {
+    const parsedPage = Number(searchParams.get("page") || "1");
+    return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  });
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -113,9 +117,30 @@ export default function SalesPage() {
   }, [requestedTab]);
 
   useEffect(() => {
-    setPage(1);
     setStatusFilter("DEFAULT");
   }, [viewMode]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("tab", viewMode);
+    params.set("page", String(page));
+
+    if (statusFilter !== "DEFAULT") {
+      params.set("statusFilter", statusFilter);
+    }
+
+    if (highlightedSaleId) {
+      params.set("highlight", String(highlightedSaleId));
+    }
+
+    setSearchParams(params, { replace: true });
+  }, [
+    highlightedSaleId,
+    page,
+    setSearchParams,
+    statusFilter,
+    viewMode,
+  ]);
 
   const effectiveStatus =
     statusFilter === "DEFAULT"
@@ -123,6 +148,17 @@ export default function SalesPage() {
         ? "BUDGET"
         : "NON_BUDGET"
       : statusFilter;
+  const salesReturnTo = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("tab", viewMode);
+    params.set("page", String(page));
+
+    if (statusFilter !== "DEFAULT") {
+      params.set("statusFilter", statusFilter);
+    }
+
+    return `/vendas?${params.toString()}`;
+  }, [page, statusFilter, viewMode]);
   const statusOptions =
     viewMode === "budgets"
       ? []
@@ -219,6 +255,8 @@ export default function SalesPage() {
   const changeTab = (nextTab: SalesViewMode) => {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("tab", nextTab);
+    nextParams.set("page", "1");
+    nextParams.delete("statusFilter");
 
     if (nextTab !== "budgets") {
       nextParams.delete("highlight");
@@ -281,9 +319,10 @@ export default function SalesPage() {
             <span>Status</span>
             <select
               value={statusFilter}
-              onChange={(event) =>
-                setStatusFilter(event.target.value as SalesStatusFilter)
-              }
+              onChange={(event) => {
+                setStatusFilter(event.target.value as SalesStatusFilter);
+                setPage(1);
+              }}
               className="h-11 rounded border border-outline-variant bg-white px-3 text-sm text-primary outline-none transition-colors focus:border-primary"
             >
               {statusOptions.map((option) => (
@@ -354,7 +393,13 @@ export default function SalesPage() {
                   className={`cursor-pointer bg-surface-lowest transition-colors hover:bg-surface ${
                     highlightedSaleId === sale.id ? "ring-2 ring-secondary" : ""
                   }`}
-                  onClick={() => navigate(`/venda/${sale.id}`)}
+                  onClick={() =>
+                    navigate(
+                      `/venda/${sale.id}?returnTo=${encodeURIComponent(
+                        salesReturnTo,
+                      )}`,
+                    )
+                  }
                 >
                   <td className="px-4 py-3 text-[14px] font-medium text-primary">
                     #{sale.id}
@@ -406,7 +451,13 @@ export default function SalesPage() {
               className={`w-full px-4 py-4 text-left ${
                 highlightedSaleId === sale.id ? "bg-secondary/15" : ""
               }`}
-              onClick={() => navigate(`/venda/${sale.id}`)}
+              onClick={() =>
+                navigate(
+                  `/venda/${sale.id}?returnTo=${encodeURIComponent(
+                    salesReturnTo,
+                  )}`,
+                )
+              }
             >
               <p className="text-xs text-neutral-700">
                 {viewMode === "budgets" ? "Orçamento" : "Pedido"} #{sale.id}
@@ -442,7 +493,32 @@ export default function SalesPage() {
         <p className="text-sm text-neutral-700">
           Página {page} de {totalPages}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="sales-page-select"
+              className="text-sm text-neutral-700"
+            >
+              Ir para:
+            </label>
+            <select
+              id="sales-page-select"
+              value={String(page)}
+              onChange={(e) => setPage(Number(e.target.value))}
+              disabled={loading || totalPages <= 1}
+              className="h-9 rounded border border-outline-variant/50 bg-white px-3 text-sm text-primary disabled:opacity-60"
+            >
+              {Array.from({ length: totalPages }, (_, index) => {
+                const pageOption = index + 1;
+                return (
+                  <option key={pageOption} value={pageOption}>
+                    Página {pageOption}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+          <div className="flex gap-2">
           <Button
             variant="secondary"
             size="sm"
@@ -461,6 +537,7 @@ export default function SalesPage() {
           >
             Próxima
           </Button>
+          </div>
         </div>
       </div>
     </div>
