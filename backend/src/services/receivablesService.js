@@ -21,6 +21,16 @@ function createReceivablesValidationError(message, statusCode = 400) {
   return error;
 }
 
+function normalizeUppercaseLabel(value, fallback = null) {
+  const normalized = String(value || "").trim();
+
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized.toUpperCase();
+}
+
 function normalizeAmount(value, fieldName) {
   const normalized = Number(value);
 
@@ -213,7 +223,10 @@ function annotateLegacyMixedPaymentLabels(items) {
 
 function resolveReceivableOrigin({ debtorType, operatorLabel, supplier, customer }) {
   const supplierName = supplier?.tradeName || supplier?.fullName || null;
-  const customerName = customer?.fullName || customer?.companyName || null;
+  const customerName = normalizeUppercaseLabel(
+    customer?.fullName || customer?.companyName,
+    null,
+  );
 
   if (debtorType === "CARD_OPERATOR") {
     return {
@@ -291,7 +304,7 @@ function buildReceivableFinancialMovementDescription({
   customerName,
   paymentTypeName,
 }) {
-  const resolvedCustomerName = String(customerName || "").trim() || "Cliente";
+  const resolvedCustomerName = normalizeUppercaseLabel(customerName, "CLIENTE");
   const resolvedPaymentTypeName = String(paymentTypeName || "").trim() || null;
 
   if (saleId) {
@@ -603,10 +616,16 @@ async function listInstallments({
       supplierId: null,
       debtorType: "CUSTOMER",
       operatorLabel: null,
-      customerName: customer?.fullName || customer?.companyName || "Cliente",
+      customerName: normalizeUppercaseLabel(
+        customer?.fullName || customer?.companyName,
+        "CLIENTE",
+      ),
       supplierName: null,
       originType: "CUSTOMER",
-      originName: customer?.fullName || customer?.companyName || "Cliente",
+      originName: normalizeUppercaseLabel(
+        customer?.fullName || customer?.companyName,
+        "CLIENTE",
+      ),
       parcela: receipt.receiptType === "ENTRY" ? "ENTRADA" : "A VISTA",
       installmentNumber: null,
       totalInstallments: null,
@@ -675,9 +694,11 @@ async function registerReceipt(installmentId, body = {}) {
   }
 
   const customerName =
-    installment.Receivable?.Customer?.fullName ||
-    installment.Receivable?.Customer?.companyName ||
-    null;
+    normalizeUppercaseLabel(
+      installment.Receivable?.Customer?.fullName ||
+        installment.Receivable?.Customer?.companyName,
+      null,
+    );
   const saleId = installment.Receivable?.saleId || null;
   const financialAccount = await getFinancialAccountOrDefault({
     idFinancialAccount: body.financialAccountId,
@@ -795,9 +816,11 @@ async function deleteReceivable(installmentId, user) {
   ensureReceivableCanBeManaged(installment);
 
   const customerName =
-    installment.Receivable?.Customer?.fullName ||
-    installment.Receivable?.Customer?.companyName ||
-    "Cliente";
+    normalizeUppercaseLabel(
+      installment.Receivable?.Customer?.fullName ||
+        installment.Receivable?.Customer?.companyName,
+      "CLIENTE",
+    );
   const amount = Number(installment.amount || 0).toFixed(2);
   const dueDate = installment.dueDate
     ? new Date(installment.dueDate).toISOString().slice(0, 10)

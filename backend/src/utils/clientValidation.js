@@ -14,6 +14,11 @@ function normalizeText(value) {
   return normalized ? normalized : null;
 }
 
+function normalizeUppercaseText(value) {
+  const normalized = normalizeText(value);
+  return normalized ? normalized.toUpperCase() : null;
+}
+
 function normalizeDigits(value) {
   const digits = String(value || "").replace(/\D/g, "");
   return digits ? digits : null;
@@ -24,10 +29,10 @@ function normalizeClientInput(body = {}) {
     typeCustomer: normalizeText(body.typeCustomer),
     document: normalizeDigits(body.document),
     rg: normalizeText(body.rg),
-    fullName: normalizeText(body.fullName),
+    fullName: normalizeUppercaseText(body.fullName),
     birthDate: body.birthDate,
-    companyName: normalizeText(body.companyName),
-    tradeName: normalizeText(body.tradeName),
+    companyName: normalizeUppercaseText(body.companyName),
+    tradeName: normalizeUppercaseText(body.tradeName),
     phone: normalizeDigits(body.phone),
     email: normalizeText(body.email),
     zipCode: normalizeDigits(body.zipCode),

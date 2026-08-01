@@ -281,6 +281,11 @@ function normalizePaymentTypeName(value: string | null | undefined) {
     .toUpperCase();
 }
 
+function normalizeCustomerDisplayName(value: string | null | undefined) {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized.toUpperCase() : "SEM NOME";
+}
+
 function getCurrentDateInputValue() {
   return formatDateInputValue(new Date());
 }
@@ -618,7 +623,9 @@ export default function NewSalePage() {
         const items = Array.isArray(data?.items) ? data.items : [];
         const parsedCustomers = items.map((customer: ICustomer) => ({
           id: Number(customer.id),
-          name: customer.fullName || customer.companyName || "Sem nome",
+          name: normalizeCustomerDisplayName(
+            customer.fullName || customer.companyName,
+          ),
         }));
 
         setCustomers(parsedCustomers);
@@ -807,11 +814,11 @@ export default function NewSalePage() {
           data.customer
             ? {
                 id: data.customer.id,
-                name: data.customer.name,
+                name: normalizeCustomerDisplayName(data.customer.name),
               }
             : null,
         );
-        setSearch(data.customer?.name || "");
+        setSearch(normalizeCustomerDisplayName(data.customer?.name));
         applyDraftCollections(hydrateDraftCollectionsFromQuote(data));
         paymentDraftHydrationRef.current = true;
         setPaymentTypeId(

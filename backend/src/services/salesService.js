@@ -91,6 +91,16 @@ function normalizeOptionalText(value) {
   return normalized || null;
 }
 
+function normalizeUppercaseLabel(value, fallback = null) {
+  const normalized = String(value || "").trim();
+
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized.toUpperCase();
+}
+
 function normalizeUserId(user) {
   const normalized = Number(user?.id ?? user?.idUser);
   return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
@@ -1307,7 +1317,10 @@ function buildSalePaymentSummary(sale) {
 function resolveReceivableOrigin(receivable, customer) {
   const supplier = receivable?.Supplier || receivable?.Suppliers || null;
   const supplierName = supplier?.tradeName || supplier?.fullName || null;
-  const customerName = customer?.fullName || customer?.companyName || null;
+  const customerName = normalizeUppercaseLabel(
+    customer?.fullName || customer?.companyName,
+    null,
+  );
 
   if (receivable?.debtorType === "CARD_OPERATOR") {
     return {
@@ -1381,7 +1394,10 @@ function mapSaleDetails(sale) {
     customer: customer
       ? {
         id: customer.idCustomer,
-        name: customer.fullName || customer.companyName || "Sem cliente",
+        name: normalizeUppercaseLabel(
+          customer.fullName || customer.companyName,
+          "SEM CLIENTE",
+        ),
       }
       : null,
     user: user
@@ -1423,7 +1439,12 @@ function mapSaleDetails(sale) {
         supplierName: receivableOrigin?.supplierName || null,
         originType: receivableOrigin?.originType || "CUSTOMER",
         originLabel: receivableOrigin?.originLabel || "Cliente",
-        originName: receivableOrigin?.originName || customer?.fullName || customer?.companyName || "Cliente",
+        originName:
+          receivableOrigin?.originName ||
+          normalizeUppercaseLabel(
+            customer?.fullName || customer?.companyName,
+            "CLIENTE",
+          ),
         originalAmount: Number(receivable.originalAmount || 0),
         openAmount: Number(receivable.openAmount || 0),
         status: receivable.status,
@@ -1500,7 +1521,10 @@ function mapSaleListItem(sale) {
     debtExemptionLabel: sale.doesNotGenerateDebt
       ? "Esta venda não gera débitos"
       : null,
-    customerName: customer?.fullName || customer?.companyName || "Sem cliente",
+    customerName: normalizeUppercaseLabel(
+      customer?.fullName || customer?.companyName,
+      "SEM CLIENTE",
+    ),
     paymentTypeName: buildSalePaymentSummary(sale),
     itemsCount: items.length,
     firstItemDescription: items[0]?.description || null,

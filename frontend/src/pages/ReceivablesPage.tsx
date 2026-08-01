@@ -142,8 +142,15 @@ const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
 
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
 
+const normalizeCustomerDisplayName = (value: string | null | undefined) => {
+  const normalized = String(value || "").trim();
+  return normalized ? normalized.toUpperCase() : "SEM NOME";
+};
+
 const getReceivableOriginName = (row: ReceivableRow) =>
-  row.originName || row.supplierName || row.operatorLabel || row.customerName;
+  normalizeCustomerDisplayName(
+    row.originName || row.supplierName || row.operatorLabel || row.customerName,
+  );
 
 const renderStatus = (row: ReceivableRow) => {
   if (row.status === "CANCELLED") return "Cancelada";
@@ -309,7 +316,9 @@ export default function ReceivablesPage() {
         setCustomers(
           items.map((item) => ({
             id: Number(item.id),
-            name: item.fullName || item.companyName || `Cliente ${item.id}`,
+            name: normalizeCustomerDisplayName(
+              item.fullName || item.companyName || `Cliente ${item.id}`,
+            ),
           })),
         );
       } catch (error) {
