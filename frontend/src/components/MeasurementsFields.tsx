@@ -34,7 +34,7 @@ function MeasurementsFieldsComponent({
         <p className="text-sm font-semibold text-primary">Medidas</p>
       </div>
 
-      <div className="mb-3 flex gap-5 items-center">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-5">
         <label
           htmlFor={`measurement-select-${productId}`}
           className="mb-1 text-sm text-primary text-nowrap"
@@ -63,7 +63,8 @@ function MeasurementsFieldsComponent({
             },
           }}
           sx={{
-            width: 220,
+            width: "100%",
+            maxWidth: 320,
             height: 40,
             backgroundColor: "white",
             color: "#1A1A1A",

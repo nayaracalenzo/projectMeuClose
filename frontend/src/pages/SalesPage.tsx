@@ -229,18 +229,18 @@ export default function SalesPage() {
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-      <div className="mb-5 flex items-start justify-between gap-4">
+      <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 text-left">
           <h1 className="pb-1 pt-8 font-editorial text-[2rem] font-extralight leading-[0.98] tracking-tight text-primary md:text-[2.35rem] md:leading-tight">
             Vendas
           </h1>
           <p className="text-sm text-neutral-700">{headingText}</p>
         </div>
-        <div className="hidden gap-2 md:flex">
+        <div className="flex w-full gap-2 sm:w-auto">
           <Button
             variant="primary"
             size="md"
-            className="px-5"
+            className="w-full px-5 sm:w-auto"
             onClick={() => navigate("/nova-venda")}
           >
             + Nova Venda/Orçamento
