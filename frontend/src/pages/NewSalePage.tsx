@@ -273,8 +273,27 @@ function buildCustomMadeDescription(product: {
   return parts.length ? parts.join(" - ") : "Sob medida";
 }
 
+function normalizePaymentTypeName(value: string | null | undefined) {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+}
+
 function getCurrentDateInputValue() {
-  return new Date().toISOString().slice(0, 10);
+  return formatDateInputValue(new Date());
+}
+
+function getDueDateInputValue(daysToAdd = 30) {
+  return formatDateInputValue(addDays(new Date(), daysToAdd));
+}
+
+function formatDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function getDateFromInputValue(value: string) {
@@ -539,7 +558,7 @@ export default function NewSalePage() {
     useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [installmentIntervalDays, setInstallmentIntervalDays] = useState("30");
-  const [dueDate, setDueDate] = useState(() => getCurrentDateInputValue());
+  const [dueDate, setDueDate] = useState(() => getDueDateInputValue());
   const [entryAmount, setEntryAmount] = useState("");
   const [entryPaymentTypeId, setEntryPaymentTypeId] = useState("");
   const [entryFinancialAccountId, setEntryFinancialAccountId] = useState("");
@@ -549,9 +568,7 @@ export default function NewSalePage() {
   const [cashSessionStatus, setCashSessionStatus] =
     useState<CashSessionStatusResponse | null>(null);
   const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
-  const [closeCashModalOpen, setCloseCashModalOpen] = useState(false);
-  const [openingBalanceInput, setOpeningBalanceInput] = useState("");
-  const [countedBalanceInput, setCountedBalanceInput] = useState("");
+  const [rolloverCashModalOpen, setRolloverCashModalOpen] = useState(false);
   const [cashSessionNotes, setCashSessionNotes] = useState("");
   const [cashSessionLoading, setCashSessionLoading] = useState(false);
   const [cancelSaleModalOpen, setCancelSaleModalOpen] = useState(false);
@@ -569,13 +586,17 @@ export default function NewSalePage() {
   const [pendingExitPath, setPendingExitPath] = useState<string | null>(null);
 
   const formatDate = (dateString: string) =>
-    new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
+    new Intl.DateTimeFormat("pt-BR").format(getDateFromInputValue(dateString));
 
   const formatDateTime = (dateString: string) =>
     new Intl.DateTimeFormat("pt-BR", {
       dateStyle: "short",
       timeStyle: "short",
     }).format(new Date(dateString));
+  const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
+  const previousCashLaunchDateLabel = cashSessionStatus?.currentSession
+    ? formatDate(cashSessionStatus.currentSession.openedAt)
+    : "";
 
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -811,7 +832,7 @@ export default function NewSalePage() {
             ? String(data.paymentDraft.dueDate).slice(0, 10)
             : data.dueDate
               ? String(data.dueDate).slice(0, 10)
-              : getCurrentDateInputValue(),
+              : getDueDateInputValue(),
         );
         setReceiptFinancialAccountId(
           data.paymentDraft?.receiptFinancialAccountId
@@ -951,22 +972,33 @@ export default function NewSalePage() {
     [entryPaymentTypeId, paymentTypes],
   );
   const isPixPayment = useMemo(
-    () =>
-      String(selectedPaymentType?.name || "")
-        .trim()
-        .toUpperCase() === "PIX",
+    () => normalizePaymentTypeName(selectedPaymentType?.name) === "PIX",
     [selectedPaymentType],
+  );
+  const isDebitPayment = useMemo(
+    () => normalizePaymentTypeName(selectedPaymentType?.name) === "DEBITO",
+    [selectedPaymentType],
+  );
+  const isPixOrDebitPayment = useMemo(
+    () => isPixPayment || isDebitPayment,
+    [isDebitPayment, isPixPayment],
+  );
+  const shouldAllowEntryAmount = useMemo(
+    () =>
+      Boolean(selectedPaymentType?.allowsEntryAmount) &&
+      !isPixOrDebitPayment,
+    [isPixOrDebitPayment, selectedPaymentType],
   );
   const shouldShowInstallmentVisualization = useMemo(
     () =>
       !doesNotGenerateDebt &&
       Boolean(selectedPaymentType) &&
       !isImmediateCashPayment &&
-      !isPixPayment,
+      !isPixOrDebitPayment,
     [
       doesNotGenerateDebt,
       isImmediateCashPayment,
-      isPixPayment,
+      isPixOrDebitPayment,
       selectedPaymentType,
     ],
   );
@@ -1097,10 +1129,6 @@ export default function NewSalePage() {
     () => !isDebtExemptionActive && tableItems.length > 0,
     [isDebtExemptionActive, tableItems.length],
   );
-  const expectedOpenCashBalance = useMemo(
-    () => Number(parseCurrencyToNumber(openingBalanceInput).toFixed(2)),
-    [openingBalanceInput],
-  );
   const previewInstallmentCount = useMemo(() => {
     if (!selectedPaymentType) return 1;
     if (selectedPaymentType.allowsInstallments) {
@@ -1145,13 +1173,13 @@ export default function NewSalePage() {
       installmentNumber: index + 1,
       totalInstallments: installmentPreview.length,
       amount,
-      dueDate: addDays(
-        baseDate,
-        parsedInstallmentIntervalDays *
-          (selectedPaymentType?.requiresDueDate ? index : index + 1),
-      )
-        .toISOString()
-        .slice(0, 10),
+      dueDate: formatDateInputValue(
+        addDays(
+          baseDate,
+          parsedInstallmentIntervalDays *
+            (selectedPaymentType?.requiresDueDate ? index : index + 1),
+        ),
+      ),
     }));
   }, [
     dueDate,
@@ -1173,7 +1201,7 @@ export default function NewSalePage() {
       !selectedPaymentType?.requiresDueDate ||
       !!dueDate) &&
     (isDebtExemptionActive ||
-      !selectedPaymentType?.allowsEntryAmount ||
+      !shouldAllowEntryAmount ||
       parsedEntryAmount <= 0 ||
       (!!entryPaymentTypeId && !!entryFinancialAccountId)) &&
     (isDebtExemptionActive ||
@@ -1225,7 +1253,7 @@ export default function NewSalePage() {
         : null,
     entryAmount:
       !doesNotGenerateDebt &&
-      selectedPaymentType?.allowsEntryAmount &&
+      shouldAllowEntryAmount &&
       parsedEntryAmount > 0
         ? parsedEntryAmount
         : null,
@@ -1418,16 +1446,12 @@ export default function NewSalePage() {
 
       if (parsed?.currentSession?.pendingPreviousDay) {
         setCashSessionNotes(parsed.currentSession.notes || "");
-        setCountedBalanceInput(formatCurrencyInput("0"));
-        setCloseCashModalOpen(true);
+        setRolloverCashModalOpen(true);
         setSaveMessage("");
         return false;
       }
 
       if (!parsed?.hasOpenSession) {
-        setOpeningBalanceInput(
-          formatCurrency(parsed?.lastClosedSession?.expectedBalance ?? 0),
-        );
         setCashSessionNotes("");
         setOpenCashModalOpen(true);
         setSaveMessage("");
@@ -1502,10 +1526,10 @@ export default function NewSalePage() {
     setInstallmentIntervalDays("30");
 
     if (!selectedPaymentType.requiresDueDate) {
-      setDueDate(getCurrentDateInputValue());
+      setDueDate(getDueDateInputValue());
     }
 
-    if (!selectedPaymentType.allowsEntryAmount) {
+    if (!shouldAllowEntryAmount) {
       setEntryAmount("");
       setEntryPaymentTypeId("");
       setEntryFinancialAccountId("");
@@ -1519,7 +1543,12 @@ export default function NewSalePage() {
     if (!isImmediateCashPayment) {
       setCashReceivedAmount("");
     }
-  }, [isImmediateCashPayment, isImmediateCheckPayment, selectedPaymentType]);
+  }, [
+    isImmediateCashPayment,
+    isImmediateCheckPayment,
+    selectedPaymentType,
+    shouldAllowEntryAmount,
+  ]);
 
   useEffect(() => {
     if (!doesNotGenerateDebt) {
@@ -1530,7 +1559,7 @@ export default function NewSalePage() {
     setReceiptFinancialAccountId("");
     setInstallmentCount("1");
     setInstallmentIntervalDays("30");
-    setDueDate(getCurrentDateInputValue());
+    setDueDate(getDueDateInputValue());
     setEntryAmount("");
     setEntryPaymentTypeId("");
     setEntryFinancialAccountId("");
@@ -1890,7 +1919,7 @@ export default function NewSalePage() {
           ? Number(receiptFinancialAccountId)
           : null,
         entryAmount:
-          selectedPaymentType?.allowsEntryAmount && parsedEntryAmount > 0
+          shouldAllowEntryAmount && parsedEntryAmount > 0
             ? parsedEntryAmount
             : null,
         entryPaymentTypeId: entryPaymentTypeId
@@ -1926,7 +1955,7 @@ export default function NewSalePage() {
       setReceiptFinancialAccountId("");
       setInstallmentCount("1");
       setInstallmentIntervalDays("30");
-      setDueDate(getCurrentDateInputValue());
+      setDueDate(getDueDateInputValue());
       setEntryAmount("");
       setEntryPaymentTypeId("");
       setEntryFinancialAccountId("");
@@ -1961,33 +1990,32 @@ export default function NewSalePage() {
     setSelectedClothingSubtype("");
   };
 
-  const handleClosePreviousCashSession = async () => {
+  const handleRolloverCashSession = async () => {
     try {
       setCashSessionLoading(true);
-      await postRequest("/cash/sessions/current/close", {
-        countedBalance: parseCurrencyToNumber(countedBalanceInput),
+      await postRequest("/cash/sessions/rollover", {
         notes: cashSessionNotes.trim() || null,
       });
 
       const updated = await getRequest("/cash/session-status");
       setCashSessionStatus((updated as CashSessionStatusResponse) || null);
-      setCloseCashModalOpen(false);
+      setRolloverCashModalOpen(false);
       setToast({
         open: true,
         tone: "success",
-        title: "Caixa fechado",
+        title: "Caixa atualizado",
         message:
-          "O caixa pendente foi fechado. Agora voce pode continuar com o pedido.",
+          "O caixa pendente foi encerrado e o caixa do dia foi aberto. Agora voce pode continuar com o pedido.",
       });
       setSaveMessage("");
     } catch (error: unknown) {
       setToast({
         open: true,
         tone: "error",
-        title: "Nao foi possivel fechar",
+        title: "Nao foi possivel atualizar",
         message: getUserFacingApiErrorMessage(
           error,
-          "Nao foi possivel fechar o caixa.",
+          "Nao foi possivel encerrar e abrir o caixa.",
         ),
       });
     } finally {
@@ -1999,7 +2027,6 @@ export default function NewSalePage() {
     try {
       setCashSessionLoading(true);
       await postRequest("/cash/sessions/open", {
-        openingBalance: parseCurrencyToNumber(openingBalanceInput),
         notes: cashSessionNotes.trim() || null,
       });
 
@@ -2167,7 +2194,7 @@ export default function NewSalePage() {
           : null,
       entryAmount:
         !doesNotGenerateDebt &&
-        selectedPaymentType?.allowsEntryAmount &&
+        shouldAllowEntryAmount &&
         parsedEntryAmount > 0
           ? parsedEntryAmount
           : null,
@@ -2215,7 +2242,7 @@ export default function NewSalePage() {
     setReceiptFinancialAccountId("");
     setInstallmentCount("1");
     setInstallmentIntervalDays("30");
-    setDueDate(getCurrentDateInputValue());
+    setDueDate(getDueDateInputValue());
     setEntryAmount("");
     setEntryPaymentTypeId("");
     setEntryFinancialAccountId("");
@@ -3076,7 +3103,7 @@ export default function NewSalePage() {
                 )}
 
                 {!doesNotGenerateDebt &&
-                  selectedPaymentType?.allowsEntryAmount && (
+                  shouldAllowEntryAmount && (
                     <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
@@ -3145,70 +3172,38 @@ export default function NewSalePage() {
                   )}
 
                 {!doesNotGenerateDebt && selectedPaymentType ? (
-                  <div
-                    className={`grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 ${
-                      selectedPaymentType.requiresDueDate ||
-                      shouldShowInstallmentVisualization
-                        ? "md:grid-cols-2"
-                        : "md:grid-cols-1"
-                    }`}
-                  >
-                    {selectedPaymentType.allowsInstallments ? (
+                  isPixOrDebitPayment ? (
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
-                          Parcelas
+                          Saldo
                         </label>
                         <input
-                          type="number"
-                          min={1}
-                          max={selectedPaymentType.maxInstallments || undefined}
-                          value={installmentCount}
-                          onChange={(e) => setInstallmentCount(e.target.value)}
-                          className={paymentFieldClassName}
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Parcelas previstas
-                        </label>
-                        <input
-                          value={String(previewInstallmentCount)}
+                          value={formatCurrency(remainingAmount)}
                           disabled
                           className={paymentReadonlyFieldClassName}
                         />
                       </div>
-                    )}
-
-                    {selectedPaymentType.requiresDueDate ? (
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
-                          Primeiro vencimento
+                          Desconto
                         </label>
                         <input
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                          className={paymentFieldClassName}
+                          value={formatCurrency(discountAmount)}
+                          disabled
+                          className={paymentReadonlyFieldClassName}
                         />
                       </div>
-                    ) : shouldShowInstallmentVisualization ? (
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
-                          Intervalo entre parcelas (dias)
+                          Valor final
                         </label>
                         <input
-                          type="number"
-                          min={1}
-                          value={installmentIntervalDays}
-                          onChange={(e) =>
-                            setInstallmentIntervalDays(e.target.value)
-                          }
-                          className={paymentFieldClassName}
+                          value={formatCurrency(discountedTotalValue)}
+                          disabled
+                          className={paymentReadonlyFieldClassName}
                         />
                       </div>
-                    ) : selectedPaymentType.financialFlow ===
-                      "IMMEDIATE_CASH" ? (
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
                           Recebido em
@@ -3228,19 +3223,105 @@ export default function NewSalePage() {
                           ))}
                         </select>
                       </div>
-                    ) : (
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Destino do recebimento
-                        </label>
-                        <input
-                          value={immediateReceiptDestinationLabel}
-                          disabled
-                          className={paymentReadonlyFieldClassName}
-                        />
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                  ) : (
+                    <div
+                      className={`grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 ${
+                        selectedPaymentType.requiresDueDate ||
+                        shouldShowInstallmentVisualization
+                          ? "md:grid-cols-2"
+                          : "md:grid-cols-1"
+                      }`}
+                    >
+                      {selectedPaymentType.allowsInstallments ? (
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Parcelas
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={selectedPaymentType.maxInstallments || undefined}
+                            value={installmentCount}
+                            onChange={(e) => setInstallmentCount(e.target.value)}
+                            className={paymentFieldClassName}
+                          />
+                        </div>
+                      ) : !isImmediateCashPayment ? (
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Parcelas previstas
+                          </label>
+                          <input
+                            value={String(previewInstallmentCount)}
+                            disabled
+                            className={paymentReadonlyFieldClassName}
+                          />
+                        </div>
+                      ) : null}
+
+                      {selectedPaymentType.requiresDueDate ? (
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Primeiro vencimento
+                          </label>
+                          <input
+                            type="date"
+                            value={dueDate}
+                            onChange={(e) => setDueDate(e.target.value)}
+                            className={paymentFieldClassName}
+                          />
+                        </div>
+                      ) : shouldShowInstallmentVisualization ? (
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Intervalo entre parcelas (dias)
+                          </label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={installmentIntervalDays}
+                            onChange={(e) =>
+                              setInstallmentIntervalDays(e.target.value)
+                            }
+                            className={paymentFieldClassName}
+                          />
+                        </div>
+                      ) : selectedPaymentType.financialFlow ===
+                        "IMMEDIATE_CASH" ? (
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Recebido em
+                          </label>
+                          <select
+                            value={receiptFinancialAccountId}
+                            onChange={(e) =>
+                              setReceiptFinancialAccountId(e.target.value)
+                            }
+                            className={paymentFieldClassName}
+                          >
+                            <option value="">Selecione...</option>
+                            {saleReceiptAccountOptions.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-primary">
+                            Destino do recebimento
+                          </label>
+                          <input
+                            value={immediateReceiptDestinationLabel}
+                            disabled
+                            className={paymentReadonlyFieldClassName}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )
                 ) : null}
 
                 {!doesNotGenerateDebt &&
@@ -3327,104 +3408,6 @@ export default function NewSalePage() {
                       </div>
                     </div>
                   )}
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-primary">
-                      Subtotal dos itens
-                    </label>
-                    <input
-                      value={formatCurrency(totalValue)}
-                      disabled
-                      className={paymentReadonlyFieldClassName}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-primary">
-                      Desconto dos itens
-                    </label>
-                    <input
-                      value={formatCurrency(discountAmount)}
-                      disabled
-                      className={paymentReadonlyFieldClassName}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-primary">
-                      Valor final dos itens
-                    </label>
-                    <input
-                      value={formatCurrency(discountedTotalValue)}
-                      disabled
-                      className={paymentReadonlyFieldClassName}
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-outline-variant/45 bg-white p-4 text-sm text-neutral-700">
-                  <p>Subtotal: {formatCurrency(totalValue)}</p>
-                  <p>Desconto: {formatCurrency(discountAmount)}</p>
-                  <p>Valor final: {formatCurrency(discountedTotalValue)}</p>
-                  {doesNotGenerateDebt ? (
-                    <p>Esta venda não gera débitos.</p>
-                  ) : (
-                    <p>
-                      Credito aplicado: {formatCurrency(customerCreditToApply)}
-                    </p>
-                  )}
-                  {!doesNotGenerateDebt && isImmediateCashPayment && (
-                    <>
-                      <p>
-                        Valor recebido:{" "}
-                        {formatCurrency(parsedCashReceivedAmount)}
-                      </p>
-                      <p>Troco: {formatCurrency(changeAmount)}</p>
-                    </>
-                  )}
-                  {!doesNotGenerateDebt &&
-                    isImmediateCheckPayment &&
-                    paymentReferenceCode.trim() && (
-                      <p>Cheque: {paymentReferenceCode.trim()}</p>
-                    )}
-                  {!doesNotGenerateDebt ? (
-                    <>
-                      <p>Entrada: {formatCurrency(parsedEntryAmount)}</p>
-                      <p>Saldo: {formatCurrency(remainingAmount)}</p>
-                      <p>
-                        Destino do saldo:{" "}
-                        {selectedPaymentType?.financialFlow ===
-                        "FUTURE_CUSTOMER"
-                          ? "A receber"
-                          : "Caixa/Banco"}
-                      </p>
-                      <p>Parcelas previstas: {previewInstallmentCount}</p>
-                    </>
-                  ) : null}
-                  {doesNotGenerateDebt && internalReason.trim() ? (
-                    <p>Motivo interno: {internalReason.trim()}</p>
-                  ) : null}
-                  {!doesNotGenerateDebt &&
-                    shouldShowInstallmentVisualization &&
-                    remainingAmount > 0 && (
-                      <p>
-                        {selectedPaymentType?.requiresDueDate
-                          ? `Primeiro vencimento: ${formatDate(
-                              paymentInstallmentPreview[0]?.dueDate || dueDate,
-                            )}`
-                          : `Intervalo entre parcelas: ${parsedInstallmentIntervalDays} dias`}
-                      </p>
-                    )}
-                  {!doesNotGenerateDebt &&
-                    installmentPreview.length > 0 &&
-                    remainingAmount > 0 && (
-                      <p>
-                        Valor presumido:{" "}
-                        {installmentPreview
-                          .map((item) => formatCurrency(item))
-                          .join(" / ")}
-                      </p>
-                    )}
-                </div>
 
                 <div className="flex justify-start">
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -3553,30 +3536,18 @@ export default function NewSalePage() {
         open={openCashModalOpen}
         onClose={() => setOpenCashModalOpen(false)}
         title="Abrir Caixa da Loja"
-        subtitle="Nao existe caixa da loja aberto no dia. A venda só será finalizada com o caixa aberto."
+        subtitle="Nao existe caixa da loja aberto no dia. A venda so sera finalizada com o caixa aberto."
       >
         <div className="space-y-4">
           <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
             <p>
               Valor esperado do caixa:{" "}
               <span className="font-semibold text-primary">
-                {formatCurrency(expectedOpenCashBalance)}
+                {formatCurrency(
+                  cashSessionStatus?.lastClosedSession?.expectedBalance ?? 0,
+                )}
               </span>
             </p>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-primary">
-              Saldo inicial
-            </label>
-            <input
-              value={openingBalanceInput}
-              onChange={(e) =>
-                setOpeningBalanceInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
           </div>
 
           <div>
@@ -3612,9 +3583,9 @@ export default function NewSalePage() {
       </CustomerModal>
 
       <CustomerModal
-        open={closeCashModalOpen}
-        onClose={() => setCloseCashModalOpen(false)}
-        title="Fechar Caixa da Loja"
+        open={rolloverCashModalOpen}
+        onClose={() => setRolloverCashModalOpen(false)}
+        title="Encerrar e abrir caixa da loja"
         subtitle={
           cashSessionStatus?.currentSession
             ? `Existe um caixa pendente aberto em ${formatDateTime(
@@ -3627,57 +3598,30 @@ export default function NewSalePage() {
           {cashSessionStatus?.currentSession ? (
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
               <p>
-                Data do caixa pendente:{" "}
-                {formatDate(cashSessionStatus.currentSession.openedAt)}
+                Data do lançamento: {currentCashLaunchDateLabel} é maior que a
+                data do último lançamento: {previousCashLaunchDateLabel}.
               </p>
-              <p>
-                Saldo esperado:{" "}
-                {formatCurrency(
-                  cashSessionStatus.currentSession.expectedBalance,
-                )}
+              <p className="mt-3">
+                Confirma encerramento do(s) caixa\banco(s) anteriores ao dia{" "}
+                {currentCashLaunchDateLabel}?
               </p>
             </div>
           ) : null}
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-primary">
-              Saldo contado
-            </label>
-            <input
-              value={countedBalanceInput}
-              onChange={(e) =>
-                setCountedBalanceInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-primary">
-              Observacoes
-            </label>
-            <textarea
-              value={cashSessionNotes}
-              onChange={(e) => setCashSessionNotes(e.target.value)}
-              className="min-h-24 w-full rounded-lg border border-outline-variant/60 bg-white px-3 py-2 text-[15px] text-primary"
-            />
-          </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               type="button"
               className="w-full sm:w-auto"
-              onClick={handleClosePreviousCashSession}
+              onClick={handleRolloverCashSession}
               isLoading={cashSessionLoading}
             >
-              Confirmar fechamento
+              Confirmar
             </Button>
             <Button
               type="button"
               className="w-full sm:w-auto"
               variant="secondary"
-              onClick={() => setCloseCashModalOpen(false)}
+              onClick={() => setRolloverCashModalOpen(false)}
             >
               Voltar
             </Button>

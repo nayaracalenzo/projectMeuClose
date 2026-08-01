@@ -98,12 +98,6 @@ const getCurrentDateInputValue = () => formatDateInputValue(new Date());
 const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
 
-const formatDateTime = (dateString: string) =>
-  new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(new Date(dateString));
-
 export default function Registers() {
   const pageSize = 10;
   const [search, setSearch] = useState("");
@@ -128,13 +122,10 @@ export default function Registers() {
   const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionActionLoading, setSessionActionLoading] = useState(false);
   const [openSessionModal, setOpenSessionModal] = useState(false);
-  const [closeSessionModal, setCloseSessionModal] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
   const [reverseReason, setReverseReason] = useState("");
-  const [openingBalanceInput, setOpeningBalanceInput] = useState("");
-  const [countedBalanceInput, setCountedBalanceInput] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [transferDate, setTransferDate] = useState(getCurrentDateInputValue());
@@ -168,7 +159,6 @@ export default function Registers() {
   );
 
   const currentSession = sessionStatus?.currentSession || null;
-  const previousDayWarningVisible = Boolean(currentSession?.pendingPreviousDay);
   const requiresOpenStoreSession = !currentSession;
   const canOpenTransferModal =
     !requiresOpenStoreSession && bankAccountOptions.length > 0;
@@ -274,15 +264,8 @@ export default function Registers() {
   }, [accountFilter, categoryFilter, endDate, page, search, startDate]);
 
   const resetOpenModal = () => {
-    setOpeningBalanceInput("");
     setSessionNotes("");
     setOpenSessionModal(false);
-  };
-
-  const resetCloseModal = () => {
-    setCountedBalanceInput("");
-    setSessionNotes("");
-    setCloseSessionModal(false);
   };
 
   const resetTransferModal = () => {
@@ -322,7 +305,6 @@ export default function Registers() {
     try {
       setSessionActionLoading(true);
       await postRequest("/cash/sessions/open", {
-        openingBalance: parseCurrencyToNumber(openingBalanceInput),
         notes: sessionNotes.trim() || null,
       });
       resetOpenModal();
@@ -341,36 +323,6 @@ export default function Registers() {
         message: getUserFacingApiErrorMessage(
           err,
           "Nao foi possivel abrir o caixa.",
-        ),
-      });
-    } finally {
-      setSessionActionLoading(false);
-    }
-  }
-
-  async function handleCloseSession() {
-    try {
-      setSessionActionLoading(true);
-      await postRequest("/cash/sessions/current/close", {
-        countedBalance: parseCurrencyToNumber(countedBalanceInput),
-        notes: sessionNotes.trim() || null,
-      });
-      resetCloseModal();
-      await refreshData();
-      setToast({
-        open: true,
-        tone: "success",
-        title: "Caixa fechado",
-        message: "O caixa da loja foi fechado com sucesso.",
-      });
-    } catch (err: unknown) {
-      setToast({
-        open: true,
-        tone: "error",
-        title: "Nao foi possivel fechar",
-        message: getUserFacingApiErrorMessage(
-          err,
-          "Nao foi possivel fechar o caixa.",
         ),
       });
     } finally {
@@ -494,87 +446,37 @@ export default function Registers() {
         Caixa
       </h1>
 
-      <section className="mb-5 space-y-4">
-          <div className="flex flex-col gap-3 rounded-xl border border-outline-variant/35 bg-white p-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
-                Sessao do Caixa
+      <section className="mb-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="bg-surface-lowest p-4">
+            <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+              Saldo geral do caixa
+            </p>
+            {sessionLoading ? (
+              <p className="mt-2 text-sm text-neutral-700">Carregando sessao...</p>
+            ) : (
+              <p className="mt-2 text-[1.3rem] leading-none text-primary md:text-[1.5rem]">
+                {formatCurrency(currentSession?.expectedBalance ?? 0)}
               </p>
-              {sessionLoading ? (
-                <p className="mt-1 text-sm text-neutral-700">
-                  Carregando sessao...
-                </p>
-              ) : currentSession ? (
-                <>
-                  <p className="mt-1 text-sm font-semibold text-primary">
-                    Aberto em {formatDateTime(currentSession.openedAt)}
-                  </p>
-                  <p className="text-sm text-neutral-700">
-                    Saldo inicial:{" "}
-                    {formatCurrency(currentSession.openingBalance)} | Entradas:{" "}
-                    {formatCurrency(currentSession.totalIn)} | Saidas:{" "}
-                    {formatCurrency(currentSession.totalOut)}
-                  </p>
-                  <p className="text-sm text-neutral-700">
-                    Saldo esperado:{" "}
-                    {formatCurrency(currentSession.expectedBalance)}
-                  </p>
-                </>
-              ) : (
-                <p className="mt-1 text-sm text-neutral-700">
-                  Nenhum caixa aberto no momento.
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {!currentSession ? (
-                <button
-                  type="button"
-                  onClick={() => setOpenSessionModal(true)}
-                  className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
-                >
-                  Abrir Caixa
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCountedBalanceInput(formatCurrencyInput("0"));
-                    setSessionNotes(currentSession.notes || "");
-                    setCloseSessionModal(true);
-                  }}
-                  className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
-                >
-                  Fechar Caixa
-                </button>
-              )}
-            </div>
+            )}
           </div>
+        </div>
+      </section>
 
-          {previousDayWarningVisible ? (
-            <div className="rounded-xl border border-[#c6a33a] bg-[#fff8df] px-4 py-3 text-sm text-[#6d5600]">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  O caixa iniciado em{" "}
-                  {formatDate(currentSession!.openedAt)} ainda nao foi fechado.
-                  Deseja fechar esse caixa agora?
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCountedBalanceInput(formatCurrencyInput("0"));
-                    setSessionNotes(currentSession?.notes || "");
-                    setCloseSessionModal(true);
-                  }}
-                  className="rounded border border-[#c6a33a] bg-white px-4 py-2 text-sm font-medium text-[#6d5600]"
-                >
-                  Fechar caixa de {formatDate(currentSession!.openedAt)}
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </section>
+      {!currentSession ? (
+        <div className="mb-5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setSessionNotes("");
+              setOpenSessionModal(true);
+            }}
+            className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+          >
+            Abrir Caixa
+          </button>
+        </div>
+      ) : null}
 
       <div className="mb-5 flex flex-wrap gap-2">
         <button
@@ -685,19 +587,19 @@ export default function Registers() {
 
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Entradas</p>
+          <p className="text-xs uppercase text-neutral-700">Entradas do dia</p>
           <p className="text-lg font-semibold text-primary">
             {formatCurrency(summary.totalIn)}
           </p>
         </div>
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Saidas</p>
+          <p className="text-xs uppercase text-neutral-700">Saidas do dia</p>
           <p className="text-lg font-semibold text-primary">
             {formatCurrency(summary.totalOut)}
           </p>
         </div>
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Saldo</p>
+          <p className="text-xs uppercase text-neutral-700">Saldo do dia</p>
           <p className="text-lg font-semibold text-primary">
             {formatCurrency(summary.balance)}
           </p>
@@ -1198,21 +1100,14 @@ export default function Registers() {
         open={openSessionModal}
         onClose={resetOpenModal}
         title="Abrir Caixa"
-        subtitle="Informe o saldo inicial para iniciar a sessao de caixa."
+        subtitle="Confirme a abertura do caixa usando o saldo esperado."
       >
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Saldo inicial
-            </label>
-            <input
-              value={openingBalanceInput}
-              onChange={(e) =>
-                setOpeningBalanceInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
+          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+            <p>
+              O caixa sera aberto automaticamente com o saldo esperado da ultima
+              sessao fechada.
+            </p>
           </div>
           <div>
             <label className="mb-2 block text-sm font-semibold text-primary">
@@ -1236,72 +1131,6 @@ export default function Registers() {
             <button
               type="button"
               onClick={resetOpenModal}
-              className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </CustomerModal>
-
-      <CustomerModal
-        open={closeSessionModal}
-        onClose={resetCloseModal}
-        title="Fechar Caixa"
-        subtitle={
-          currentSession
-            ? `Sessao aberta em ${formatDateTime(currentSession.openedAt)}.`
-            : "Confirme o fechamento do caixa."
-        }
-      >
-        <div className="space-y-4">
-          {currentSession ? (
-            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
-              <p>
-                Saldo inicial: {formatCurrency(currentSession.openingBalance)}
-              </p>
-              <p>Entradas: {formatCurrency(currentSession.totalIn)}</p>
-              <p>Saidas: {formatCurrency(currentSession.totalOut)}</p>
-              <p className="font-semibold text-primary">
-                Saldo esperado: {formatCurrency(currentSession.expectedBalance)}
-              </p>
-            </div>
-          ) : null}
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Saldo contado
-            </label>
-            <input
-              value={countedBalanceInput}
-              onChange={(e) =>
-                setCountedBalanceInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Observacoes
-            </label>
-            <textarea
-              value={sessionNotes}
-              onChange={(e) => setSessionNotes(e.target.value)}
-              className="min-h-24 w-full rounded border border-outline-variant/50 bg-white px-4 py-3 text-[15px] text-primary"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleCloseSession}
-              disabled={sessionActionLoading}
-              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {sessionActionLoading ? "Fechando..." : "Confirmar fechamento"}
-            </button>
-            <button
-              type="button"
-              onClick={resetCloseModal}
               className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
             >
               Cancelar

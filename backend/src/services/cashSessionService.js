@@ -1,4 +1,9 @@
-const { conflictError, notFoundError, validationError } = require("../errors/AppError");
+const {
+  conflictError,
+  notFoundError,
+  validationError,
+} = require("../errors/AppError");
+const { sequelize } = require("../models");
 const repository = require("../repositories/cashSessionsRepository");
 
 function roundCurrency(value) {
@@ -9,6 +14,13 @@ function startOfToday() {
   const date = new Date();
   date.setHours(0, 0, 0, 0);
   return date;
+}
+
+function isPreviousDay(dateValue) {
+  const openedAt = new Date(dateValue);
+  const openedDay = new Date(openedAt);
+  openedDay.setHours(0, 0, 0, 0);
+  return openedDay.getTime() < startOfToday().getTime();
 }
 
 function normalizeAmount(value, fieldName) {
@@ -33,11 +45,6 @@ async function buildSessionSummary(session) {
   const { totalIn, totalOut } = await repository.sumSessionEntries(session.idCashSession);
   const openingBalance = Number(session.openingBalance || 0);
   const expectedBalance = roundCurrency(openingBalance + totalIn - totalOut);
-  const openedAt = new Date(session.openedAt);
-  const today = startOfToday();
-  const openedDay = new Date(openedAt);
-  openedDay.setHours(0, 0, 0, 0);
-
   return {
     id: session.idCashSession,
     status: session.status,
@@ -58,7 +65,7 @@ async function buildSessionSummary(session) {
     notes: session.notes || null,
     openedByUserId: session.openedByUserId || null,
     closedByUserId: session.closedByUserId || null,
-    pendingPreviousDay: openedDay.getTime() < today.getTime(),
+    pendingPreviousDay: isPreviousDay(session.openedAt),
   };
 }
 
@@ -83,10 +90,20 @@ async function openStoreSession(body = {}, user = {}) {
     throw conflictError("Ja existe um caixa da loja aberto.");
   }
 
+  const lastClosedSession = await repository.findLatestClosedSession();
+  const defaultOpeningBalance = lastClosedSession
+    ? Number(lastClosedSession.expectedBalance || lastClosedSession.countedBalance || 0)
+    : 0;
+
   const created = await repository.createSession({
     status: "OPEN",
     openedAt: new Date(),
-    openingBalance: normalizeAmount(body.openingBalance, "Saldo inicial"),
+    openingBalance:
+      body.openingBalance === null ||
+      body.openingBalance === undefined ||
+      body.openingBalance === ""
+        ? roundCurrency(defaultOpeningBalance)
+        : normalizeAmount(body.openingBalance, "Saldo inicial"),
     notes: normalizeNotes(body.notes),
     openedByUserId: user.id || null,
   });
@@ -103,8 +120,13 @@ async function closeCurrentStoreSession(body = {}, user = {}) {
     throw notFoundError("Nenhum caixa da loja aberto.");
   }
 
-  const countedBalance = normalizeAmount(body.countedBalance, "Saldo contado");
   const summary = await buildSessionSummary(session);
+  const countedBalance =
+    body.countedBalance === null ||
+    body.countedBalance === undefined ||
+    body.countedBalance === ""
+      ? summary.expectedBalance
+      : normalizeAmount(body.countedBalance, "Saldo contado");
   const differenceAmount = roundCurrency(countedBalance - summary.expectedBalance);
 
   await repository.updateSession(session, {
@@ -123,8 +145,58 @@ async function closeCurrentStoreSession(body = {}, user = {}) {
   };
 }
 
+async function rolloverStoreSession(body = {}, user = {}) {
+  return sequelize.transaction(async (transaction) => {
+    const session = await repository.findOpenStoreSession(transaction);
+    if (!session) {
+      throw notFoundError("Nenhum caixa da loja aberto.");
+    }
+
+    if (!isPreviousDay(session.openedAt)) {
+      throw conflictError(
+        "Nao existe caixa pendente de dia anterior para encerrar.",
+      );
+    }
+
+    const summary = await buildSessionSummary(session);
+    const carriedBalance = summary.expectedBalance;
+
+    await repository.updateSession(
+      session,
+      {
+        status: "CLOSED",
+        closedAt: new Date(),
+        expectedBalance: summary.expectedBalance,
+        countedBalance: carriedBalance,
+        differenceAmount: 0,
+        notes: normalizeNotes(body.notes) ?? session.notes,
+        closedByUserId: user.id || null,
+      },
+      transaction,
+    );
+
+    const newSession = await repository.createSession(
+      {
+        status: "OPEN",
+        openedAt: new Date(),
+        openingBalance: carriedBalance,
+        notes: normalizeNotes(body.notes) ?? session.notes ?? null,
+        openedByUserId: user.id || null,
+      },
+      transaction,
+    );
+
+    return {
+      message: "Caixa anterior encerrado e caixa do dia aberto com sucesso.",
+      previousSession: await buildSessionSummary(session),
+      currentSession: await buildSessionSummary(newSession),
+    };
+  });
+}
+
 module.exports = {
   getStoreSessionStatus,
   openStoreSession,
   closeCurrentStoreSession,
+  rolloverStoreSession,
 };
