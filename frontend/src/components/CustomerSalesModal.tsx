@@ -17,6 +17,16 @@ type SalesResponse = {
   items: SaleListRow[];
 };
 
+type ReceivableRow = {
+  saleId: number | null;
+  parcela: string;
+  amount: number;
+};
+
+type ReceivablesResponse = {
+  items: ReceivableRow[];
+};
+
 type SaleDetailItem = {
   id: number;
   description: string;
@@ -52,6 +62,7 @@ type SaleDetailsResponse = {
   createdAt: string;
   items: SaleDetailItem[];
   receipts: SaleReceipt[];
+  netReceivedAmount?: number;
   receivable: {
     originalAmount: number;
   } | null;
@@ -68,7 +79,6 @@ type SaleRow = {
   valorPrazo: string;
   totalVenda: string;
   descProd: string;
-  descSubtotal: string;
   details: SaleDetailsResponse;
 };
 
@@ -91,7 +101,10 @@ const normalizeText = (value?: string | null, fallback = "-") => {
 
 const sumImmediateReceipts = (receipts: SaleReceipt[] = []) =>
   receipts.reduce((acc, receipt) => {
-    if (receipt.receiptType === "INSTALLMENT") {
+    if (
+      receipt.receiptType === "INSTALLMENT" ||
+      receipt.receiptType === "CUSTOMER_CREDIT"
+    ) {
       return acc;
     }
 
@@ -128,18 +141,80 @@ function CustomerSalesModalComponent({
           pageSize: "100",
           customerId: String(clientId),
         });
+        const receivablesParams = new URLSearchParams({
+          page: "1",
+          pageSize: "500",
+          customerId: String(clientId),
+          status: "TODAS",
+        });
 
-        const data = (await getRequest(`/sales?${params.toString()}`)) as SalesResponse;
+        const [data, receivablesData] = await Promise.all([
+          getRequest(`/sales?${params.toString()}`) as Promise<SalesResponse>,
+          getRequest(
+            `/receivables?${receivablesParams.toString()}`,
+          ) as Promise<ReceivablesResponse>,
+        ]);
         const items = Array.isArray(data.items) ? data.items : [];
+        const receivableItems = Array.isArray(receivablesData.items)
+          ? receivablesData.items
+          : [];
+        const receivablesBySaleId = new Map<
+          number,
+          { valorVista: number; valorPrazo: number }
+        >();
+
+        receivableItems.forEach((item) => {
+          const saleId = Number(item.saleId || 0);
+          if (!saleId) return;
+
+          const current = receivablesBySaleId.get(saleId) || {
+            valorVista: 0,
+            valorPrazo: 0,
+          };
+          const parcela = String(item.parcela || "").trim().toUpperCase();
+          const amount = Number(item.amount || 0);
+
+          if (parcela === "ENTRADA" || parcela === "A VISTA") {
+            current.valorVista += amount;
+          } else {
+            current.valorPrazo += amount;
+          }
+
+          receivablesBySaleId.set(saleId, current);
+        });
+
         const detailsList = await Promise.all(
           items.map(async (item) => {
             const details = (await getRequest(
               `/sales/${item.id}`,
             )) as SaleDetailsResponse;
 
-            const valorVista = sumImmediateReceipts(details.receipts || []);
-            const valorPrazo = Number(details.receivable?.originalAmount || 0);
+            const paymentTypeName =
+              details.paymentType?.name || item.paymentTypeName || null;
+            const totalVenda = Number(details.finalAmount || item.finalAmount || 0);
+            const receivableBreakdown = receivablesBySaleId.get(item.id) || null;
+            let valorPrazo = Number(
+              receivableBreakdown?.valorPrazo ?? details.receivable?.originalAmount ?? 0,
+            );
+            let valorVista = sumImmediateReceipts(details.receipts || []);
             const itemDiscounts = sumItemDiscounts(details.items || []);
+            const netReceivedAmount = Number(details.netReceivedAmount || 0);
+
+            if (receivableBreakdown) {
+              valorVista = Number(receivableBreakdown.valorVista || 0);
+            }
+
+            if (valorVista <= 0 && netReceivedAmount > 0) {
+              valorVista = netReceivedAmount;
+            }
+
+            if (valorPrazo > 0) {
+              valorVista = Math.max(0, Number((totalVenda - valorPrazo).toFixed(2)));
+            }
+
+            if (valorVista <= 0 && valorPrazo <= 0) {
+              valorPrazo = totalVenda;
+            }
 
             return {
               id: item.id,
@@ -150,15 +225,11 @@ function CustomerSalesModalComponent({
                 "CLIENTE",
               ),
               usuario: normalizeText(details.user?.name, "-"),
-              formaPagto: normalizeText(
-                details.paymentType?.name || item.paymentTypeName,
-                "-",
-              ),
+              formaPagto: normalizeText(paymentTypeName, "-"),
               valorVista: formatCurrency(valorVista),
               valorPrazo: formatCurrency(valorPrazo),
-              totalVenda: formatCurrency(Number(details.finalAmount || item.finalAmount || 0)),
+              totalVenda: formatCurrency(totalVenda),
               descProd: formatCurrency(itemDiscounts),
-              descSubtotal: formatCurrency(Number(details.discountValue || 0)),
               details,
             } satisfies SaleRow;
           }),
@@ -197,7 +268,7 @@ function CustomerSalesModalComponent({
       onClose={onClose}
       title="Vendas do Cliente"
       subtitle={`Cliente: ${clientName}`}
-      size="lg"
+      size="xl"
     >
       {message ? (
         <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-3 py-2 text-sm text-[#7a1717]">
@@ -216,8 +287,8 @@ function CustomerSalesModalComponent({
         </Button>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1120px] border-separate border-spacing-y-2">
+      <div className="-mx-1 overflow-x-auto">
+        <table className="w-full min-w-[1040px] border-separate border-spacing-y-2">
           <thead className="rounded-t-md bg-[#dbd1d1]">
             <tr className="text-left">
               <th className="px-2 pt-2 text-center text-sm font-semibold text-primary">
@@ -232,14 +303,13 @@ function CustomerSalesModalComponent({
               <th className="px-3 pt-2 text-right text-sm font-semibold text-primary">Valor à prazo</th>
               <th className="px-3 pt-2 text-right text-sm font-semibold text-primary">Total venda</th>
               <th className="px-3 pt-2 text-right text-sm font-semibold text-primary">Desc. prod.</th>
-              <th className="px-3 pt-2 text-right text-sm font-semibold text-primary">Desc. subtotal</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr className="bg-surface-lowest">
                 <td
-                  colSpan={11}
+                  colSpan={10}
                   className="px-3 py-6 text-center text-sm text-neutral-700"
                 >
                   {loading
@@ -275,7 +345,6 @@ function CustomerSalesModalComponent({
                     <td className="px-3 py-2 text-right text-sm text-neutral-700">{row.valorPrazo}</td>
                     <td className="px-3 py-2 text-right text-sm text-neutral-700">{row.totalVenda}</td>
                     <td className="px-3 py-2 text-right text-sm text-neutral-700">{row.descProd}</td>
-                    <td className="px-3 py-2 text-right text-sm text-neutral-700">{row.descSubtotal}</td>
                   </tr>
                 );
               })
