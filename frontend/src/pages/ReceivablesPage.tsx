@@ -153,6 +153,9 @@ const getReceivableOriginName = (row: ReceivableRow) =>
     row.originName || row.supplierName || row.operatorLabel || row.customerName,
   );
 
+const getReceivableHistoryColumnValue = (row: ReceivableRow) =>
+  row.saleId ? `VENDA ${row.saleId}` : "-";
+
 const renderStatus = (row: ReceivableRow) => {
   if (row.status === "CANCELLED") return "Cancelada";
   if (row.filter === "RECEBIDAS") return "Recebida";
@@ -160,6 +163,22 @@ const renderStatus = (row: ReceivableRow) => {
   if (row.filter === "A_VENCER") return "A vencer";
   if (row.filter === "ATRASADAS") return "Atrasada";
   return "A receber";
+};
+
+const getStatusTagClassName = (row: ReceivableRow) => {
+  if (row.status === "CANCELLED") {
+    return "border border-neutral-300 bg-neutral-100 text-neutral-600";
+  }
+
+  if (row.filter === "RECEBIDAS") {
+    return "border border-[#B8D9C0] bg-[#E7F6EB] text-[#21663B]";
+  }
+
+  if (row.filter === "ATRASADAS") {
+    return "border border-[#E8B8BE] bg-[#FBE8EB] text-[#A12837]";
+  }
+
+  return "border border-[#B8D2F6] bg-[#E8F1FF] text-[#1E5AA5]";
 };
 
 const getHistoryLabel = (row: ReceivableRow) => {
@@ -1043,6 +1062,9 @@ export default function ReceivablesPage() {
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Histórico
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Origem
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
@@ -1071,13 +1093,13 @@ export default function ReceivablesPage() {
           <tbody>
             {loading ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={10} className="px-4 py-4 text-sm text-neutral-700">
                   Carregando...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={10} className="px-4 py-4 text-sm text-neutral-700">
                   Nenhum recebimento encontrado.
                 </td>
               </tr>
@@ -1103,6 +1125,9 @@ export default function ReceivablesPage() {
                     />
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {getReceivableHistoryColumnValue(row)}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {getReceivableOriginName(row)}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
@@ -1112,7 +1137,13 @@ export default function ReceivablesPage() {
                     {formatDate(row.dueDate)}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
-                    {renderStatus(row)}
+                    <span
+                      className={`inline-flex min-w-20 justify-center rounded-full px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getStatusTagClassName(
+                        row,
+                      )}`}
+                    >
+                      {renderStatus(row)}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {row.paymentTypeName || "-"}
