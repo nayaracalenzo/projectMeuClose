@@ -7,13 +7,14 @@ type CustomerModalProps = {
   subtitle?: string;
   onClose: () => void;
   children: ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 };
 
 const modalWidthClassName = {
   sm: "max-w-xl",
   md: "max-w-3xl",
   lg: "max-w-5xl",
+  xl: "max-w-7xl",
 };
 
 function CustomerModalComponent({
