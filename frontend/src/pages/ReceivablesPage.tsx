@@ -1061,7 +1061,7 @@ export default function ReceivablesPage() {
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="whitespace-nowrap px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Histórico
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
@@ -1124,7 +1124,7 @@ export default function ReceivablesPage() {
                       className="h-4 w-4 cursor-pointer rounded border border-outline-variant/60 accent-primary"
                     />
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {getReceivableHistoryColumnValue(row)}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
