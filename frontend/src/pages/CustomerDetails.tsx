@@ -7,7 +7,6 @@ import CustomerFormFields, {
 } from "../components/CustomerFormFields";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
-import CustomerReceivablesModal from "../components/CustomerReceivablesModal";
 import CustomerSalesModal from "../components/CustomerSalesModal";
 import { getRequest, postRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
@@ -277,7 +276,6 @@ export default function CustomerDetails() {
   const [professionSaving, setProfessionSaving] = useState(false);
   const [form, setForm] = useState<Partial<ClientDetails>>({});
   const [professions, setProfessions] = useState<ProfessionOption[]>([]);
-  const [isReceivablesModalOpen, setIsReceivablesModalOpen] = useState(false);
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
   const [notice, setNotice] = useState<NoticeState>(EMPTY_NOTICE);
   const [confirmationModal, setConfirmationModal] =
@@ -688,7 +686,13 @@ export default function CustomerDetails() {
           <Button
             variant="secondary"
             size="md"
-            onClick={() => setIsReceivablesModalOpen(true)}
+            onClick={() =>
+              navigate(
+                `/a-receber?search=${encodeURIComponent(
+                  String(client.fullName || client.companyName || "Cliente").trim(),
+                )}`,
+              )
+            }
           >
             A Receber
           </Button>
@@ -799,13 +803,6 @@ export default function CustomerDetails() {
           </form>
         </div>
       </CustomerModal>
-
-      <CustomerReceivablesModal
-        open={isReceivablesModalOpen}
-        clientId={client.id}
-        clientName={String(client.fullName || client.companyName || "Cliente")}
-        onClose={() => setIsReceivablesModalOpen(false)}
-      />
 
       <CustomerModal
         open={confirmationModal.open}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
@@ -182,8 +183,10 @@ const calculateOverdueDays = (dueDate: string, paymentDate: string) => {
 };
 
 export default function ReceivablesPage() {
+  const [searchParams] = useSearchParams();
+  const initialSearchParam = String(searchParams.get("search") || "").trim();
   const [filter, setFilter] = useState<ReceivableFilter>("A_RECEBER");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearchParam);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<ReceivableRow[]>([]);
@@ -237,6 +240,11 @@ export default function ReceivablesPage() {
   const previousCashLaunchDateLabel = cashSessionStatus?.currentSession
     ? formatDate(cashSessionStatus.currentSession.openedAt)
     : "-";
+
+  useEffect(() => {
+    const nextSearch = String(searchParams.get("search") || "").trim();
+    setSearch(nextSearch);
+  }, [searchParams]);
 
   useEffect(() => {
     setPage(1);
