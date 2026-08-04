@@ -124,9 +124,12 @@ export default function Registers() {
   const [openSessionModal, setOpenSessionModal] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
+  const [rolloverCashModalOpen, setRolloverCashModalOpen] = useState(false);
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
   const [reverseReason, setReverseReason] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
+  const [pendingCashActionAfterRollover, setPendingCashActionAfterRollover] =
+    useState<"manual-entry" | "transfer-to-bank" | null>(null);
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [transferDate, setTransferDate] = useState(getCurrentDateInputValue());
   const [transferDescription, setTransferDescription] = useState(
@@ -162,6 +165,10 @@ export default function Registers() {
   const requiresOpenStoreSession = !currentSession;
   const canOpenTransferModal =
     !requiresOpenStoreSession && bankAccountOptions.length > 0;
+  const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
+  const previousCashLaunchDateLabel = currentSession
+    ? formatDate(currentSession.openedAt)
+    : "-";
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
@@ -330,7 +337,42 @@ export default function Registers() {
     }
   }
 
+  async function ensureCashSessionBeforeFinalizingAction(
+    action: "manual-entry" | "transfer-to-bank",
+  ) {
+    try {
+      const data = await getRequest("/cash/session-status");
+      const parsed = (data as CashSessionStatusResponse) || null;
+      setSessionStatus(parsed);
+
+      if (parsed?.currentSession?.pendingPreviousDay) {
+        setPendingCashActionAfterRollover(action);
+        setRolloverCashModalOpen(true);
+        return false;
+      }
+
+      return true;
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel validar",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel validar o status do caixa.",
+        ),
+      });
+      return false;
+    }
+  }
+
   async function handleTransferToBank() {
+    if (
+      !(await ensureCashSessionBeforeFinalizingAction("transfer-to-bank"))
+    ) {
+      return;
+    }
+
     try {
       setSessionActionLoading(true);
       await postRequest("/cash/transfers/to-bank", {
@@ -366,6 +408,10 @@ export default function Registers() {
   }
 
   async function handleCreateManualEntry() {
+    if (!(await ensureCashSessionBeforeFinalizingAction("manual-entry"))) {
+      return;
+    }
+
     try {
       setSessionActionLoading(true);
       await postRequest("/cash/manual-entry", {
@@ -392,6 +438,45 @@ export default function Registers() {
         message: getUserFacingApiErrorMessage(
           err,
           "Nao foi possivel criar o lancamento manual.",
+        ),
+      });
+    } finally {
+      setSessionActionLoading(false);
+    }
+  }
+
+  async function handleRolloverCashSession() {
+    try {
+      setSessionActionLoading(true);
+      await postRequest("/cash/sessions/rollover", {
+        notes: null,
+      });
+
+      await refreshData();
+      setRolloverCashModalOpen(false);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Caixa atualizado",
+        message:
+          "O caixa pendente foi encerrado e o caixa do dia foi aberto.",
+      });
+
+      if (pendingCashActionAfterRollover === "manual-entry") {
+        setPendingCashActionAfterRollover(null);
+        await handleCreateManualEntry();
+      } else if (pendingCashActionAfterRollover === "transfer-to-bank") {
+        setPendingCashActionAfterRollover(null);
+        await handleTransferToBank();
+      }
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel atualizar",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel encerrar e abrir o caixa.",
         ),
       });
     } finally {
@@ -1134,6 +1219,58 @@ export default function Registers() {
               className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
             >
               Cancelar
+            </button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={rolloverCashModalOpen}
+        onClose={() => {
+          setRolloverCashModalOpen(false);
+          setPendingCashActionAfterRollover(null);
+        }}
+        title="Encerrar e abrir caixa da loja"
+        subtitle={
+          currentSession
+            ? `Existe um caixa pendente aberto em ${formatDate(
+                currentSession.openedAt,
+              )}.`
+            : "Feche o caixa da loja para continuar."
+        }
+      >
+        <div className="space-y-4">
+          {currentSession ? (
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p>
+                Data do lancamento: {currentCashLaunchDateLabel} e maior que a
+                data do ultimo lancamento: {previousCashLaunchDateLabel}.
+              </p>
+              <p className="mt-3">
+                Confirma encerramento do(s) caixa\banco(s) anteriores ao dia{" "}
+                {currentCashLaunchDateLabel}?
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRolloverCashSession}
+              disabled={sessionActionLoading}
+              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {sessionActionLoading ? "Confirmando..." : "Confirmar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRolloverCashModalOpen(false);
+                setPendingCashActionAfterRollover(null);
+              }}
+              className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
+            >
+              Voltar
             </button>
           </div>
         </div>
