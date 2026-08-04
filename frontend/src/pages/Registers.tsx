@@ -548,21 +548,6 @@ export default function Registers() {
         </div>
       </section>
 
-      {!currentSession ? (
-        <div className="mb-5 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setSessionNotes("");
-              setOpenSessionModal(true);
-            }}
-            className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
-          >
-            Abrir Caixa
-          </button>
-        </div>
-      ) : null}
-
       <div className="mb-5 flex flex-wrap gap-2">
         <button
           type="button"
