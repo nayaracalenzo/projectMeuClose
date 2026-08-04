@@ -141,6 +141,9 @@ export default function Orders() {
   const [productTypeOptions, setProductTypeOptions] = useState<CatalogOption[]>(
     [],
   );
+  const [clothingTypeOptions, setClothingTypeOptions] = useState<CatalogOption[]>(
+    [],
+  );
   const [employeeOptions, setEmployeeOptions] = useState<EmployeeOption[]>([]);
   const [fabricOptions, setFabricOptions] = useState<CatalogOption[]>([]);
   const [colorOptions, setColorOptions] = useState<CatalogOption[]>([]);
@@ -162,6 +165,9 @@ export default function Orders() {
   );
   const [productTypeFilter, setProductTypeFilter] = useState(
     () => searchParams.get("productTypeId") || "",
+  );
+  const [clothingTypeFilter, setClothingTypeFilter] = useState(
+    () => searchParams.get("clothingTypeId") || "",
   );
   const [employeeFilter, setEmployeeFilter] = useState(
     () => searchParams.get("employeeId") || "",
@@ -197,10 +203,9 @@ export default function Orders() {
         return (
           normalized === "ajuste" ||
           normalized === "reforma" ||
-          normalized === "sob medida" ||
-          normalized === "roupa sob medida"
+          normalized === "sob medida"
         );
-    }),
+      }),
     [productTypeOptions],
   );
   const seamstressOptions = useMemo(
@@ -246,6 +251,10 @@ export default function Orders() {
       params.set("productTypeId", productTypeFilter);
     }
 
+    if (clothingTypeFilter) {
+      params.set("clothingTypeId", clothingTypeFilter);
+    }
+
     if (employeeFilter) {
       params.set("employeeId", employeeFilter);
     }
@@ -265,6 +274,7 @@ export default function Orders() {
     return `/producao?${params.toString()}`;
   }, [
     colorFilter,
+    clothingTypeFilter,
     customerFilter,
     employeeFilter,
     endDateFilter,
@@ -281,6 +291,7 @@ export default function Orders() {
     setPage(1);
   }, [
     colorFilter,
+    clothingTypeFilter,
     customerFilter,
     employeeFilter,
     endDateFilter,
@@ -298,6 +309,7 @@ export default function Orders() {
         const [
           statuses,
           productTypes,
+          clothingTypes,
           employees,
           fabrics,
           colors,
@@ -305,6 +317,7 @@ export default function Orders() {
         ] = await Promise.all([
           getRequest("/products/status-options"),
           getRequest("/admin/products-types"),
+          getRequest("/admin/clothings-types"),
           getRequest("/admin/employees"),
           getRequest("/admin/fabrics"),
           getRequest("/admin/colors"),
@@ -312,6 +325,7 @@ export default function Orders() {
         ]);
         setStatusOptions(Array.isArray(statuses) ? statuses : []);
         setProductTypeOptions(Array.isArray(productTypes) ? productTypes : []);
+        setClothingTypeOptions(Array.isArray(clothingTypes) ? clothingTypes : []);
         setEmployeeOptions(Array.isArray(employees) ? employees : []);
         setFabricOptions(Array.isArray(fabrics) ? fabrics : []);
         setColorOptions(Array.isArray(colors) ? colors : []);
@@ -319,6 +333,7 @@ export default function Orders() {
       } catch {
         setStatusOptions([]);
         setProductTypeOptions([]);
+        setClothingTypeOptions([]);
         setEmployeeOptions([]);
         setFabricOptions([]);
         setColorOptions([]);
@@ -357,6 +372,10 @@ export default function Orders() {
       params.set("productTypeId", productTypeFilter);
     }
 
+    if (clothingTypeFilter) {
+      params.set("clothingTypeId", clothingTypeFilter);
+    }
+
     if (employeeFilter) {
       params.set("employeeId", employeeFilter);
     }
@@ -376,6 +395,7 @@ export default function Orders() {
     setSearchParams(params, { replace: true });
   }, [
     colorFilter,
+    clothingTypeFilter,
     customerFilter,
     employeeFilter,
     endDateFilter,
@@ -426,6 +446,10 @@ export default function Orders() {
           params.set("productTypeId", productTypeFilter);
         }
 
+        if (clothingTypeFilter) {
+          params.set("clothingTypeId", clothingTypeFilter);
+        }
+
         if (employeeFilter) {
           params.set("employeeId", employeeFilter);
         }
@@ -461,6 +485,7 @@ export default function Orders() {
     void fetchItems();
   }, [
     colorFilter,
+    clothingTypeFilter,
     customerFilter,
     employeeFilter,
     endDateFilter,
@@ -658,7 +683,29 @@ export default function Orders() {
           />
         </div>
 
-        <div className="flex flex-col gap-2 lg:col-span-3">
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-clothing-type-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Tipo de serviço
+          </label>
+          <select
+            id="orders-clothing-type-filter"
+            value={productTypeFilter}
+            onChange={(event) => setProductTypeFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="">Todos</option>
+            {filteredProductTypeOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {String(option.desc || "").trim().toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2 lg:col-span-2">
           <label
             htmlFor="orders-customer-filter"
             className="text-sm font-medium text-primary"
@@ -711,16 +758,16 @@ export default function Orders() {
             htmlFor="orders-product-type-filter"
             className="text-sm font-medium text-primary"
           >
-            Tipo
+            Tipo de roupa
           </label>
           <select
             id="orders-product-type-filter"
-            value={productTypeFilter}
-            onChange={(event) => setProductTypeFilter(event.target.value)}
+            value={clothingTypeFilter}
+            onChange={(event) => setClothingTypeFilter(event.target.value)}
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           >
             <option value="">Todos</option>
-            {filteredProductTypeOptions.map((option) => (
+            {clothingTypeOptions.map((option) => (
               <option key={option.id} value={option.id}>
                 {String(option.desc || "").trim().toUpperCase()}
               </option>
