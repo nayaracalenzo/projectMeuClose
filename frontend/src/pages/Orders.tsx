@@ -39,6 +39,19 @@ interface StatusOption {
   desc: string;
 }
 
+interface CatalogOption {
+  id: number;
+  desc: string;
+}
+
+interface EmployeeOption {
+  idEmployee: number;
+  shortName: string;
+  fullName: string;
+  roleId?: number | null;
+  active?: boolean;
+}
+
 interface ProductionResponse {
   items: ProductOrderRow[];
   total: number;
@@ -86,13 +99,13 @@ const formatCustomerName = (value?: string | null) => {
 const formatProductionType = (item: ProductOrderRow) => {
   const normalizedProductType = String(item.productType || "").trim().toLowerCase();
 
-  if (normalizedProductType === "roupa pronta") return "Pronta";
-  if (normalizedProductType === "roupa sob medida") return "Sob medida";
-  if (normalizedProductType === "sob medida") return "Sob medida";
-  if (normalizedProductType === "ajuste") return "Ajuste";
-  if (normalizedProductType === "reforma") return "Reforma";
+  if (normalizedProductType === "roupa pronta") return "PRONTA";
+  if (normalizedProductType === "roupa sob medida") return "SOB MEDIDA";
+  if (normalizedProductType === "sob medida") return "SOB MEDIDA";
+  if (normalizedProductType === "ajuste") return "AJUSTE";
+  if (normalizedProductType === "reforma") return "REFORMA";
 
-  return item.productType || "-";
+  return String(item.productType || "-").trim().toUpperCase() || "-";
 };
 
 const getProductionStatusBadgeClassName = (status?: string | null) => {
@@ -125,11 +138,42 @@ export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [productionItems, setProductionItems] = useState<ProductOrderRow[]>([]);
   const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
+  const [productTypeOptions, setProductTypeOptions] = useState<CatalogOption[]>(
+    [],
+  );
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeOption[]>([]);
+  const [fabricOptions, setFabricOptions] = useState<CatalogOption[]>([]);
+  const [colorOptions, setColorOptions] = useState<CatalogOption[]>([]);
+  const [sizeOptions, setSizeOptions] = useState<CatalogOption[]>([]);
   const [statusFilter, setStatusFilter] = useState(
     () => searchParams.get("status") || "todos",
   );
-  const [dateOrder, setDateOrder] = useState(
-    () => searchParams.get("sortBy") || "createdAtDesc",
+  const [productIdFilter, setProductIdFilter] = useState(
+    () => searchParams.get("productId") || "",
+  );
+  const [customerFilter, setCustomerFilter] = useState(
+    () => searchParams.get("customer") || "",
+  );
+  const [startDateFilter, setStartDateFilter] = useState(
+    () => searchParams.get("startDate") || "",
+  );
+  const [endDateFilter, setEndDateFilter] = useState(
+    () => searchParams.get("endDate") || "",
+  );
+  const [productTypeFilter, setProductTypeFilter] = useState(
+    () => searchParams.get("productTypeId") || "",
+  );
+  const [employeeFilter, setEmployeeFilter] = useState(
+    () => searchParams.get("employeeId") || "",
+  );
+  const [fabricFilter, setFabricFilter] = useState(
+    () => searchParams.get("fabricId") || "",
+  );
+  const [colorFilter, setColorFilter] = useState(
+    () => searchParams.get("colorId") || "",
+  );
+  const [sizeFilter, setSizeFilter] = useState(
+    () => searchParams.get("sizeId") || "",
   );
   const [page, setPage] = useState(() => {
     const parsedPage = Number(searchParams.get("page") || "1");
@@ -146,6 +190,34 @@ export default function Orders() {
     "withoutValue" | "withValue"
   >("withoutValue");
   const [error, setError] = useState("");
+  const filteredProductTypeOptions = useMemo(
+    () =>
+      productTypeOptions.filter((option) => {
+        const normalized = String(option.desc || "").trim().toLowerCase();
+        return (
+          normalized === "ajuste" ||
+          normalized === "reforma" ||
+          normalized === "sob medida" ||
+          normalized === "roupa sob medida"
+        );
+    }),
+    [productTypeOptions],
+  );
+  const seamstressOptions = useMemo(
+    () =>
+      employeeOptions
+        .filter((option) => {
+          const shortName = String(option.shortName || "").trim();
+          return Number(option.roleId) === 3 && option.active === true && Boolean(shortName);
+        })
+        .sort((left, right) =>
+          String(left.shortName || left.fullName || "").localeCompare(
+            String(right.shortName || right.fullName || ""),
+            "pt-BR",
+          ),
+        ),
+    [employeeOptions],
+  );
   const productionReturnTo = useMemo(() => {
     const params = new URLSearchParams();
     params.set("page", String(page));
@@ -154,24 +226,107 @@ export default function Orders() {
       params.set("status", statusFilter);
     }
 
-    if (dateOrder !== "createdAtDesc") {
-      params.set("sortBy", dateOrder);
+    if (productIdFilter.trim()) {
+      params.set("productId", productIdFilter.trim());
+    }
+
+    if (customerFilter.trim()) {
+      params.set("customer", customerFilter.trim());
+    }
+
+    if (startDateFilter) {
+      params.set("startDate", startDateFilter);
+    }
+
+    if (endDateFilter) {
+      params.set("endDate", endDateFilter);
+    }
+
+    if (productTypeFilter) {
+      params.set("productTypeId", productTypeFilter);
+    }
+
+    if (employeeFilter) {
+      params.set("employeeId", employeeFilter);
+    }
+
+    if (fabricFilter) {
+      params.set("fabricId", fabricFilter);
+    }
+
+    if (colorFilter) {
+      params.set("colorId", colorFilter);
+    }
+
+    if (sizeFilter) {
+      params.set("sizeId", sizeFilter);
     }
 
     return `/producao?${params.toString()}`;
-  }, [dateOrder, page, statusFilter]);
+  }, [
+    colorFilter,
+    customerFilter,
+    employeeFilter,
+    endDateFilter,
+    fabricFilter,
+    page,
+    productIdFilter,
+    productTypeFilter,
+    sizeFilter,
+    startDateFilter,
+    statusFilter,
+  ]);
 
   useEffect(() => {
-    const fetchStatuses = async () => {
+    setPage(1);
+  }, [
+    colorFilter,
+    customerFilter,
+    employeeFilter,
+    endDateFilter,
+    fabricFilter,
+    productIdFilter,
+    productTypeFilter,
+    sizeFilter,
+    startDateFilter,
+    statusFilter,
+  ]);
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
       try {
-        const data = await getRequest("/products/status-options");
-        setStatusOptions(Array.isArray(data) ? data : []);
+        const [
+          statuses,
+          productTypes,
+          employees,
+          fabrics,
+          colors,
+          sizes,
+        ] = await Promise.all([
+          getRequest("/products/status-options"),
+          getRequest("/admin/products-types"),
+          getRequest("/admin/employees"),
+          getRequest("/admin/fabrics"),
+          getRequest("/admin/colors"),
+          getRequest("/admin/sizes"),
+        ]);
+        setStatusOptions(Array.isArray(statuses) ? statuses : []);
+        setProductTypeOptions(Array.isArray(productTypes) ? productTypes : []);
+        setEmployeeOptions(Array.isArray(employees) ? employees : []);
+        setFabricOptions(Array.isArray(fabrics) ? fabrics : []);
+        setColorOptions(Array.isArray(colors) ? colors : []);
+        setSizeOptions(Array.isArray(sizes) ? sizes : []);
       } catch {
         setStatusOptions([]);
+        setProductTypeOptions([]);
+        setEmployeeOptions([]);
+        setFabricOptions([]);
+        setColorOptions([]);
+        setSizeOptions([]);
       }
     };
 
-    void fetchStatuses();
+    void fetchFilterOptions();
   }, []);
 
   useEffect(() => {
@@ -182,12 +337,57 @@ export default function Orders() {
       params.set("status", statusFilter);
     }
 
-    if (dateOrder !== "createdAtDesc") {
-      params.set("sortBy", dateOrder);
+    if (productIdFilter.trim()) {
+      params.set("productId", productIdFilter.trim());
+    }
+
+    if (customerFilter.trim()) {
+      params.set("customer", customerFilter.trim());
+    }
+
+    if (startDateFilter) {
+      params.set("startDate", startDateFilter);
+    }
+
+    if (endDateFilter) {
+      params.set("endDate", endDateFilter);
+    }
+
+    if (productTypeFilter) {
+      params.set("productTypeId", productTypeFilter);
+    }
+
+    if (employeeFilter) {
+      params.set("employeeId", employeeFilter);
+    }
+
+    if (fabricFilter) {
+      params.set("fabricId", fabricFilter);
+    }
+
+    if (colorFilter) {
+      params.set("colorId", colorFilter);
+    }
+
+    if (sizeFilter) {
+      params.set("sizeId", sizeFilter);
     }
 
     setSearchParams(params, { replace: true });
-  }, [dateOrder, page, setSearchParams, statusFilter]);
+  }, [
+    colorFilter,
+    customerFilter,
+    employeeFilter,
+    endDateFilter,
+    fabricFilter,
+    page,
+    productIdFilter,
+    productTypeFilter,
+    setSearchParams,
+    sizeFilter,
+    startDateFilter,
+    statusFilter,
+  ]);
 
   useEffect(() => {
     const fetchItems = async () => {
@@ -198,12 +398,48 @@ export default function Orders() {
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(pageSize),
-          sortBy: dateOrder,
+          sortBy: "createdAtDesc",
           productionOnly: "true",
         });
 
         if (statusFilter !== "todos") {
           params.set("statusId", statusFilter);
+        }
+
+        if (productIdFilter.trim()) {
+          params.set("productId", productIdFilter.trim());
+        }
+
+        if (customerFilter.trim()) {
+          params.set("customer", customerFilter.trim());
+        }
+
+        if (startDateFilter) {
+          params.set("startDate", startDateFilter);
+        }
+
+        if (endDateFilter) {
+          params.set("endDate", endDateFilter);
+        }
+
+        if (productTypeFilter) {
+          params.set("productTypeId", productTypeFilter);
+        }
+
+        if (employeeFilter) {
+          params.set("employeeId", employeeFilter);
+        }
+
+        if (fabricFilter) {
+          params.set("fabricId", fabricFilter);
+        }
+
+        if (colorFilter) {
+          params.set("colorId", colorFilter);
+        }
+
+        if (sizeFilter) {
+          params.set("sizeId", sizeFilter);
         }
 
         const data = (await getRequest(
@@ -223,7 +459,20 @@ export default function Orders() {
     };
 
     void fetchItems();
-  }, [dateOrder, page, pageSize, statusFilter]);
+  }, [
+    colorFilter,
+    customerFilter,
+    employeeFilter,
+    endDateFilter,
+    fabricFilter,
+    page,
+    pageSize,
+    productIdFilter,
+    productTypeFilter,
+    sizeFilter,
+    startDateFilter,
+    statusFilter,
+  ]);
 
   const handleOpenPdfModal = () => {
     const today = new Date();
@@ -392,7 +641,117 @@ export default function Orders() {
         </Button>
       </div>
 
-      <div className="mb-4 grid w-full max-w-2xl gap-4 md:grid-cols-2">
+      <div className="mb-4 grid w-full gap-4 rounded-xl bg-surface-lowest p-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-product-id-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Código
+          </label>
+          <input
+            id="orders-product-id-filter"
+            value={productIdFilter}
+            onChange={(event) => setProductIdFilter(event.target.value)}
+            placeholder="Id do produto"
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2 lg:col-span-3">
+          <label
+            htmlFor="orders-customer-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Cliente
+          </label>
+          <input
+            id="orders-customer-filter"
+            value={customerFilter}
+            onChange={(event) => setCustomerFilter(event.target.value)}
+            placeholder="Nome do cliente"
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-start-date-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Data da prova/produção
+          </label>
+          <input
+            id="orders-start-date-filter"
+            type="date"
+            value={startDateFilter}
+            onChange={(event) => setStartDateFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-end-date-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Até
+          </label>
+          <input
+            id="orders-end-date-filter"
+            type="date"
+            value={endDateFilter}
+            onChange={(event) => setEndDateFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-product-type-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Tipo
+          </label>
+          <select
+            id="orders-product-type-filter"
+            value={productTypeFilter}
+            onChange={(event) => setProductTypeFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="">Todos</option>
+            {filteredProductTypeOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {String(option.desc || "").trim().toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-employee-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Costureira
+          </label>
+          <select
+            id="orders-employee-filter"
+            value={employeeFilter}
+            onChange={(event) => setEmployeeFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="">Todas</option>
+            {seamstressOptions.map((option) => (
+              <option key={option.idEmployee} value={option.idEmployee}>
+                {String(option.shortName || option.fullName || "")
+                  .trim()
+                  .toUpperCase()}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div className="flex flex-col gap-2">
           <label
             htmlFor="orders-status-filter"
@@ -420,25 +779,70 @@ export default function Orders() {
 
         <div className="flex flex-col gap-2">
           <label
-            htmlFor="orders-date-order"
+            htmlFor="orders-fabric-filter"
             className="text-sm font-medium text-primary"
           >
-            Ordenar por data
+            Tecido
           </label>
           <select
-            id="orders-date-order"
-            value={dateOrder}
-            onChange={(event) => {
-              setDateOrder(event.target.value);
-              setPage(1);
-            }}
+            id="orders-fabric-filter"
+            value={fabricFilter}
+            onChange={(event) => setFabricFilter(event.target.value)}
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           >
-            <option value="createdAtDesc">Pedidos mais recentes</option>
-            <option value="testDateAsc">Data de prova mais antiga</option>
-            <option value="testDateDesc">Data de prova mais recente</option>
+            <option value="">Todos</option>
+            {fabricOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.desc}
+              </option>
+            ))}
           </select>
         </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-color-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Cor
+          </label>
+          <select
+            id="orders-color-filter"
+            value={colorFilter}
+            onChange={(event) => setColorFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="">Todas</option>
+            {colorOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.desc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-size-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Tam.
+          </label>
+          <select
+            id="orders-size-filter"
+            value={sizeFilter}
+            onChange={(event) => setSizeFilter(event.target.value)}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="">Todos</option>
+            {sizeOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.desc}
+              </option>
+            ))}
+          </select>
+        </div>
+
       </div>
 
       {error ? (
@@ -544,7 +948,10 @@ export default function Orders() {
         <table className="mt-2 min-w-[1180px] w-full table-fixed border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
-              <th className="w-[27%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[8%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Código
+              </th>
+              <th className="w-[23%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Descrição
               </th>
               <th className="w-[10%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
@@ -571,7 +978,7 @@ export default function Orders() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando produção...
@@ -580,7 +987,7 @@ export default function Orders() {
             ) : productionItems.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhum item em produção cadastrado
@@ -599,6 +1006,9 @@ export default function Orders() {
                     )
                   }
                 >
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] font-semibold text-primary">
+                    {order.id}
+                  </td>
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     <div
                       className="max-w-[280px] truncate whitespace-nowrap"
@@ -671,6 +1081,9 @@ export default function Orders() {
                 )
               }
             >
+              <p className="text-xs uppercase text-neutral-700">
+                Código: {order.id}
+              </p>
               <p className="text-xs uppercase text-neutral-700">
                 Descrição: {order.description || "-"}
               </p>

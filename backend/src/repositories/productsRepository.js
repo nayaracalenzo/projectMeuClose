@@ -107,7 +107,9 @@ function roundCurrency(value) {
   return Number(Number(value).toFixed(2));
 }
 
-function getProductInclude() {
+function getProductInclude(filters = {}) {
+  const normalizedCustomer = normalizeText(filters.customer);
+
   return [
     {
       model: SaleItems,
@@ -137,6 +139,23 @@ function getProductInclude() {
     },
     {
       model: Customers,
+      where: normalizedCustomer
+        ? {
+            [Op.or]: [
+              {
+                fullName: {
+                  [Op.iLike]: `%${normalizedCustomer}%`,
+                },
+              },
+              {
+                companyName: {
+                  [Op.iLike]: `%${normalizedCustomer}%`,
+                },
+              },
+            ],
+          }
+        : undefined,
+      required: Boolean(normalizedCustomer),
       attributes: ["idCustomer", "fullName", "companyName"],
     },
     {
@@ -277,6 +296,31 @@ async function listProducts(filters = {}) {
     filters.statusId === undefined || filters.statusId === null || filters.statusId === ""
       ? null
       : Number(filters.statusId);
+  const normalizedProductId =
+    filters.productId === undefined || filters.productId === null || filters.productId === ""
+      ? null
+      : Number(filters.productId);
+  const normalizedProductTypeId =
+    filters.productTypeId === undefined || filters.productTypeId === null || filters.productTypeId === ""
+      ? null
+      : Number(filters.productTypeId);
+  const normalizedEmployeeId =
+    filters.employeeId === undefined || filters.employeeId === null || filters.employeeId === ""
+      ? null
+      : Number(filters.employeeId);
+  const normalizedFabricId =
+    filters.fabricId === undefined || filters.fabricId === null || filters.fabricId === ""
+      ? null
+      : Number(filters.fabricId);
+  const normalizedColorId =
+    filters.colorId === undefined || filters.colorId === null || filters.colorId === ""
+      ? null
+      : Number(filters.colorId);
+  const normalizedSizeId =
+    filters.sizeId === undefined || filters.sizeId === null || filters.sizeId === ""
+      ? null
+      : Number(filters.sizeId);
+  const normalizedCustomer = normalizeText(filters.customer);
   const productionOnly =
     String(filters.productionOnly || "").trim().toLowerCase() === "true";
   const normalizedPage = Math.max(1, Number(filters.page) || 1);
@@ -292,6 +336,30 @@ async function listProducts(filters = {}) {
     dsbl: false,
     ...statusWhere,
   };
+
+  if (Number.isInteger(normalizedProductId) && normalizedProductId > 0) {
+    where.id = normalizedProductId;
+  }
+
+  if (Number.isInteger(normalizedProductTypeId) && normalizedProductTypeId > 0) {
+    where.productTypeId = normalizedProductTypeId;
+  }
+
+  if (Number.isInteger(normalizedEmployeeId) && normalizedEmployeeId > 0) {
+    where.employeeId = normalizedEmployeeId;
+  }
+
+  if (Number.isInteger(normalizedFabricId) && normalizedFabricId > 0) {
+    where.fabricId = normalizedFabricId;
+  }
+
+  if (Number.isInteger(normalizedColorId) && normalizedColorId > 0) {
+    where.colorId = normalizedColorId;
+  }
+
+  if (Number.isInteger(normalizedSizeId) && normalizedSizeId > 0) {
+    where.sizeId = normalizedSizeId;
+  }
 
   if (productionOnly) {
     where[Sequelize.Op.and] = [
@@ -347,7 +415,7 @@ async function listProducts(filters = {}) {
 
   return Products.findAndCountAll({
     where,
-    include: getProductInclude(),
+    include: getProductInclude(filters),
     order: orderMap[normalizedSortBy] || orderMap.createdAtDesc,
     limit: normalizedPageSize,
     offset: (normalizedPage - 1) * normalizedPageSize,
