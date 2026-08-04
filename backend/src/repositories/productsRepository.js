@@ -107,6 +107,33 @@ function roundCurrency(value) {
   return Number(Number(value).toFixed(2));
 }
 
+function buildLegacyDescriptionFilter(fieldName, id, optionDesc) {
+  const normalizedDesc = normalizeText(optionDesc);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return null;
+  }
+
+  if (!normalizedDesc) {
+    return {
+      [fieldName]: id,
+    };
+  }
+
+  return {
+    [Op.or]: [
+      {
+        [fieldName]: id,
+      },
+      {
+        desc: {
+          [Op.iLike]: `%${normalizedDesc}%`,
+        },
+      },
+    ],
+  };
+}
+
 function getProductInclude(filters = {}) {
   const normalizedCustomer = normalizeText(filters.customer);
 
@@ -332,6 +359,20 @@ async function listProducts(filters = {}) {
   const normalizedPage = Math.max(1, Number(filters.page) || 1);
   const normalizedPageSize = Math.min(100, Math.max(1, Number(filters.pageSize) || 20));
   const normalizedSortBy = String(filters.sortBy || "createdAtDesc");
+  const [selectedClothingType, selectedFabric, selectedColor, selectedSize] = await Promise.all([
+    Number.isInteger(normalizedClothingTypeId) && normalizedClothingTypeId > 0
+      ? ClothingsType.findByPk(normalizedClothingTypeId, { attributes: ["id", "desc"] })
+      : null,
+    Number.isInteger(normalizedFabricId) && normalizedFabricId > 0
+      ? Fabrics.findByPk(normalizedFabricId, { attributes: ["id", "desc"] })
+      : null,
+    Number.isInteger(normalizedColorId) && normalizedColorId > 0
+      ? Colors.findByPk(normalizedColorId, { attributes: ["id", "desc"] })
+      : null,
+    Number.isInteger(normalizedSizeId) && normalizedSizeId > 0
+      ? Sizes.findByPk(normalizedSizeId, { attributes: ["id", "desc"] })
+      : null,
+  ]);
   const statusWhere =
     normalizedStatusId && Number.isInteger(normalizedStatusId)
       ? normalizedStatusId === 1
@@ -342,6 +383,7 @@ async function listProducts(filters = {}) {
     dsbl: false,
     ...statusWhere,
   };
+  const andConditions = [];
 
   if (Number.isInteger(normalizedProductId) && normalizedProductId > 0) {
     where.id = normalizedProductId;
@@ -351,28 +393,48 @@ async function listProducts(filters = {}) {
     where.productTypeId = normalizedProductTypeId;
   }
 
-  if (Number.isInteger(normalizedClothingTypeId) && normalizedClothingTypeId > 0) {
-    where.clothingTypeId = normalizedClothingTypeId;
-  }
-
   if (Number.isInteger(normalizedEmployeeId) && normalizedEmployeeId > 0) {
     where.employeeId = normalizedEmployeeId;
   }
 
-  if (Number.isInteger(normalizedFabricId) && normalizedFabricId > 0) {
-    where.fabricId = normalizedFabricId;
+  const clothingTypeCondition = buildLegacyDescriptionFilter(
+    "clothingTypeId",
+    normalizedClothingTypeId,
+    selectedClothingType?.desc,
+  );
+  if (clothingTypeCondition) {
+    andConditions.push(clothingTypeCondition);
   }
 
-  if (Number.isInteger(normalizedColorId) && normalizedColorId > 0) {
-    where.colorId = normalizedColorId;
+  const fabricCondition = buildLegacyDescriptionFilter(
+    "fabricId",
+    normalizedFabricId,
+    selectedFabric?.desc,
+  );
+  if (fabricCondition) {
+    andConditions.push(fabricCondition);
   }
 
-  if (Number.isInteger(normalizedSizeId) && normalizedSizeId > 0) {
-    where.sizeId = normalizedSizeId;
+  const colorCondition = buildLegacyDescriptionFilter(
+    "colorId",
+    normalizedColorId,
+    selectedColor?.desc,
+  );
+  if (colorCondition) {
+    andConditions.push(colorCondition);
+  }
+
+  const sizeCondition = buildLegacyDescriptionFilter(
+    "sizeId",
+    normalizedSizeId,
+    selectedSize?.desc,
+  );
+  if (sizeCondition) {
+    andConditions.push(sizeCondition);
   }
 
   if (productionOnly) {
-    where[Sequelize.Op.and] = [
+    andConditions.push(
       Sequelize.literal(`
         EXISTS (
           SELECT 1
@@ -391,7 +453,7 @@ async function listProducts(filters = {}) {
             AND s."status" = 'BUDGET'
         )
       `),
-    ];
+    );
   }
 
   const orderMap = {
@@ -421,6 +483,10 @@ async function listProducts(filters = {}) {
     if (filters.endDate) {
       where.testDate[Sequelize.Op.lte] = filters.endDate;
     }
+  }
+
+  if (andConditions.length) {
+    where[Sequelize.Op.and] = andConditions;
   }
 
   return Products.findAndCountAll({
