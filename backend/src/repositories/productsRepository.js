@@ -304,6 +304,12 @@ async function listProducts(filters = {}) {
     filters.productTypeId === undefined || filters.productTypeId === null || filters.productTypeId === ""
       ? null
       : Number(filters.productTypeId);
+  const normalizedClothingTypeId =
+    filters.clothingTypeId === undefined ||
+    filters.clothingTypeId === null ||
+    filters.clothingTypeId === ""
+      ? null
+      : Number(filters.clothingTypeId);
   const normalizedEmployeeId =
     filters.employeeId === undefined || filters.employeeId === null || filters.employeeId === ""
       ? null
@@ -343,6 +349,10 @@ async function listProducts(filters = {}) {
 
   if (Number.isInteger(normalizedProductTypeId) && normalizedProductTypeId > 0) {
     where.productTypeId = normalizedProductTypeId;
+  }
+
+  if (Number.isInteger(normalizedClothingTypeId) && normalizedClothingTypeId > 0) {
+    where.clothingTypeId = normalizedClothingTypeId;
   }
 
   if (Number.isInteger(normalizedEmployeeId) && normalizedEmployeeId > 0) {
