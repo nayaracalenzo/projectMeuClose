@@ -16,6 +16,7 @@ import {
   formatCurrencyInput,
   parseCurrencyToNumber,
 } from "../utils/currency";
+import { maskLegacyShortDateInput } from "../utils/legacyDate";
 
 type Scope = "LOJA" | "PESSOAL";
 type SettlementTarget = "BANCO" | "CAIXA";
@@ -913,9 +914,11 @@ export default function PayablesPage() {
               De
             </label>
             <input
-              type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => setStartDate(maskLegacyShortDateInput(e.target.value))}
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
@@ -925,9 +928,11 @@ export default function PayablesPage() {
               Até
             </label>
             <input
-              type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => setEndDate(maskLegacyShortDateInput(e.target.value))}
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>

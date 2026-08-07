@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
+import {
+  formatLegacyShortDateInput,
+  maskLegacyShortDateInput,
+} from "../utils/legacyDate";
 import { getRequest, postRequest } from "../services/request";
 import MeasurementsFields from "./MeasurementsFields";
 import CustomerModal from "./CustomerModal";
@@ -205,6 +209,7 @@ export default function CustomMadeClothing({
       ? initialProducts.map((product, index) => ({
           ...product,
           id: product.id || index + 1,
+          fittingDate: formatLegacyShortDateInput(product.fittingDate),
           measurements: { ...product.measurements },
           selectedMeasurements: [...product.selectedMeasurements],
         }))
@@ -723,9 +728,17 @@ export default function CustomMadeClothing({
                   </label>
                   <input
                     id={`fittingDate-${product.id}`}
-                    type="date"
                     value={product.fittingDate}
-                    onChange={(e) => updateProduct(product.id, "fittingDate", e.target.value)}
+                    onChange={(e) =>
+                      updateProduct(
+                        product.id,
+                        "fittingDate",
+                        maskLegacyShortDateInput(e.target.value),
+                      )
+                    }
+                    inputMode="numeric"
+                    maxLength={8}
+                    placeholder="dd/mm/aa"
                     className={fieldClassName}
                   />
                 </div>

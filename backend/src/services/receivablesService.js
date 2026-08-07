@@ -11,6 +11,7 @@ const {
   buildPaymentTypeResponse,
   isImmediateCashPaymentType,
 } = require("../utils/paymentTypeRules");
+const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
 
 function createReceivablesValidationError(message, statusCode = 400) {
   const error = validationError(message, {
@@ -46,15 +47,39 @@ function normalizeDate(value, fieldName) {
     throw createReceivablesValidationError(`${fieldName} obrigatoria.`);
   }
 
-  const raw = String(value).trim();
-  const base = raw.includes("T") ? raw.split("T")[0] : raw;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  const normalized = normalizeShortOrIsoDateToIso(value);
 
-  if (!match) {
+  if (!normalized) {
     throw createReceivablesValidationError(`${fieldName} invalida.`);
   }
 
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
+
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
+}
+
+function normalizeOptionalDate(value, fieldName, options = {}) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeShortOrIsoDateToIso(value);
+
+  if (!normalized) {
+    throw createReceivablesValidationError(`${fieldName} invalida.`);
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
+
+  return new Date(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+    options.endOfDay ? 23 : 0,
+    options.endOfDay ? 59 : 0,
+    options.endOfDay ? 59 : 0,
+    options.endOfDay ? 999 : 0,
+  );
 }
 
 async function getFinancialAccountOrDefault({
@@ -252,28 +277,6 @@ function resolveReceivableOrigin({ debtorType, operatorLabel, supplier, customer
     supplierName,
     customerName,
   };
-}
-
-function normalizeOptionalDate(value, fieldName, options = {}) {
-  if (!value) return null;
-
-  const raw = String(value).trim();
-  const base = raw.includes("T") ? raw.split("T")[0] : raw;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
-
-  if (!match) {
-    throw createReceivablesValidationError(`${fieldName} invalida.`);
-  }
-
-  return new Date(
-    Number(match[1]),
-    Number(match[2]) - 1,
-    Number(match[3]),
-    options.endOfDay ? 23 : 0,
-    options.endOfDay ? 59 : 0,
-    options.endOfDay ? 59 : 0,
-    options.endOfDay ? 999 : 0,
-  );
 }
 
 function normalizePositiveInteger(value, fieldName) {

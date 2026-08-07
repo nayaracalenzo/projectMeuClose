@@ -1,5 +1,17 @@
 const repository = require("../repositories/productsRepository");
 const { notFoundError, validationError } = require("../errors/AppError");
+const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
+
+function normalizeLegacyTestDate(value) {
+  if (!value) return null;
+
+  const normalized = normalizeShortOrIsoDateToIso(value);
+  if (!normalized) {
+    throw validationError("Data de prova inválida.");
+  }
+
+  return normalized;
+}
 
 function normalizeMeasurementRows(rows = []) {
   if (!Array.isArray(rows) || !rows.length) {
@@ -265,10 +277,10 @@ function normalizeNullableDecimal(value, { min = 0, fieldLabel = "Valor" } = {})
 function normalizeNullableDate(value) {
   if (!value) return null;
 
-  const raw = String(value).trim();
-  if (!raw) return null;
+  const normalized = normalizeShortOrIsoDateToIso(value);
+  if (!normalized) return null;
 
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
   if (!match) {
     throw validationError("Data de prova inválida.");
   }
@@ -286,21 +298,21 @@ function normalizeNullableDate(value) {
     throw validationError("Data de prova invÃ¡lida.");
   }
 
-  return raw;
+  return normalized;
 }
 
 function normalizeFilterDate(value) {
   if (!value) return null;
 
-  const raw = String(value).trim();
-  if (!raw) return null;
+  const normalized = normalizeShortOrIsoDateToIso(value);
+  if (!normalized) return null;
 
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
   if (!match) {
     throw validationError("Filtro de data invÃ¡lido.");
   }
 
-  return raw;
+  return normalized;
 }
 
 function normalizeProductPayload(body = {}) {
@@ -348,7 +360,7 @@ function normalizeProductPayload(body = {}) {
     fabricId: normalizeNullableId(body.fabricId),
     sizeId: normalizeNullableId(body.sizeId),
     qtyStock,
-    testDate: normalizeNullableDate(body.testDate),
+    testDate: normalizeLegacyTestDate(body.testDate),
     dressmakerValue,
     finalValue,
     remainingValue: Number((finalValue - dressmakerValue).toFixed(2)),
