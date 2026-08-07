@@ -16,6 +16,9 @@ import {
   formatCurrencyInput,
   parseCurrencyToNumber,
 } from "../utils/currency";
+import {
+  maskLegacyShortDateInput,
+} from "../utils/legacyDate";
 
 type ReceivableFilter =
   | "A_RECEBER"
@@ -947,9 +950,11 @@ export default function ReceivablesPage() {
               De
             </label>
             <input
-              type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => setStartDate(maskLegacyShortDateInput(e.target.value))}
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
@@ -959,9 +964,11 @@ export default function ReceivablesPage() {
               Até
             </label>
             <input
-              type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => setEndDate(maskLegacyShortDateInput(e.target.value))}
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
@@ -1056,36 +1063,36 @@ export default function ReceivablesPage() {
         <p className="mb-4 text-sm text-neutral-700">{message}</p>
       ) : null}
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 w-full border-separate border-spacing-y-2">
+      <div className="hidden overflow-x-hidden md:block">
+        <table className="mt-2 w-full table-fixed border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="whitespace-nowrap px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[140px] whitespace-nowrap px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Histórico
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[24%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Origem
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[90px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Parcela
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[130px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Vencimento
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[120px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Status
               </th>
-              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-[100px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="w-[110px] px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Valor
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="w-[120px] px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Recebido
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="w-[120px] px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>
@@ -1128,7 +1135,9 @@ export default function ReceivablesPage() {
                     {getReceivableHistoryColumnValue(row)}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
-                    {getReceivableOriginName(row)}
+                    <span className="block overflow-hidden text-ellipsis whitespace-nowrap">
+                      {getReceivableOriginName(row)}
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {row.parcela}
@@ -1136,9 +1145,9 @@ export default function ReceivablesPage() {
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(row.dueDate)}
                   </td>
-                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     <span
-                      className={`inline-flex min-w-20 justify-center rounded-full px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getStatusTagClassName(
+                      className={`inline-flex min-w-20 whitespace-nowrap justify-center rounded-full px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getStatusTagClassName(
                         row,
                       )}`}
                     >

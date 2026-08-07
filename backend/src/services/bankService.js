@@ -5,6 +5,7 @@ const cashRepository = require("../repositories/cashRepository");
 const auditsRepository = require("../repositories/auditsRepository");
 const financialCategoriesRepository = require("../repositories/financialCategoriesRepository");
 const { createBankEntry, createCashEntry } = require("./financialEntriesService");
+const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
 
 function createBankValidationError(message, statusCode = 400) {
   const error = validationError(message, {
@@ -18,12 +19,13 @@ function createBankValidationError(message, statusCode = 400) {
 function normalizeDate(value, fieldName, options = {}) {
   if (!value) return null;
 
-  const base = String(value).trim().split("T")[0];
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  const normalized = normalizeShortOrIsoDateToIso(value);
 
-  if (!match) {
+  if (!normalized) {
     throw createBankValidationError(`${fieldName} invalida.`);
   }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
 
   return new Date(
     Number(match[1]),

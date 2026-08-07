@@ -19,6 +19,7 @@ const {
 const {
   LEGACY_MEASUREMENT_DEFINITIONS,
 } = require("../utils/measurementDefinitions");
+const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
 
 const MEASUREMENT_FIELDS = LEGACY_MEASUREMENT_DEFINITIONS.map((item) => item.key);
 const MEASUREMENT_DEFINITION_BY_KEY = new Map(
@@ -89,6 +90,26 @@ function normalizeRequiredText(value, fieldName) {
 function normalizeOptionalText(value) {
   const normalized = String(value || "").trim();
   return normalized || null;
+}
+
+function normalizeSaleItemMetadata(metadata = {}) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const normalizedMetadata = { ...metadata };
+
+  if (normalizedMetadata.fittingDate !== undefined && normalizedMetadata.fittingDate !== null) {
+    const normalizedFittingDate = normalizeShortOrIsoDateToIso(normalizedMetadata.fittingDate);
+
+    if (!normalizedFittingDate) {
+      throw createSalesValidationError("Data da prova invalida.");
+    }
+
+    normalizedMetadata.fittingDate = normalizedFittingDate;
+  }
+
+  return normalizedMetadata;
 }
 
 function normalizeUppercaseLabel(value, fallback = null) {
@@ -948,7 +969,7 @@ function normalizeSaleItem(item = {}) {
     productId: item.productId ? normalizeInteger(item.productId, "Produto") : null,
     itemType,
     description,
-    metadata: item.metadata || null,
+    metadata: normalizeSaleItemMetadata(item.metadata),
     quantity,
     unitPrice,
     discountType:

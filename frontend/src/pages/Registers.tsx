@@ -9,6 +9,10 @@ import {
   formatCurrencyInput,
   parseCurrencyToNumber,
 } from "../utils/currency";
+import {
+  formatLegacyShortDateInput,
+  maskLegacyShortDateInput,
+} from "../utils/legacyDate";
 
 interface CashRow {
   id: number;
@@ -94,6 +98,8 @@ const formatDateInputValue = (date: Date) => {
 };
 
 const getCurrentDateInputValue = () => formatDateInputValue(new Date());
+const getCurrentSearchDateInputValue = () =>
+  formatLegacyShortDateInput(getCurrentDateInputValue());
 
 const formatDate = (dateString: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
@@ -103,8 +109,8 @@ export default function Registers() {
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [startDate, setStartDate] = useState(getCurrentDateInputValue());
-  const [endDate, setEndDate] = useState(getCurrentDateInputValue());
+  const [startDate, setStartDate] = useState(getCurrentSearchDateInputValue());
+  const [endDate, setEndDate] = useState(getCurrentSearchDateInputValue());
   const [rows, setRows] = useState<CashRow[]>([]);
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
@@ -629,9 +635,11 @@ export default function Registers() {
               De
             </label>
             <input
-              type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => setStartDate(maskLegacyShortDateInput(e.target.value))}
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
             />
           </div>
@@ -640,9 +648,11 @@ export default function Registers() {
               Ate
             </label>
             <input
-              type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={(e) => setEndDate(maskLegacyShortDateInput(e.target.value))}
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
             />
           </div>

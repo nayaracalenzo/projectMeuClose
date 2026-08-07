@@ -7,6 +7,10 @@ import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 import {
+  formatLegacyShortDateInput,
+  maskLegacyShortDateInput,
+} from "../utils/legacyDate";
+import {
   downloadWeeklyOrdersPdf,
   type PrintableOrder,
 } from "../utils/ordersWeeklyPdf";
@@ -158,10 +162,10 @@ export default function Orders() {
     () => searchParams.get("customer") || "",
   );
   const [startDateFilter, setStartDateFilter] = useState(
-    () => searchParams.get("startDate") || "",
+    () => formatLegacyShortDateInput(searchParams.get("startDate")) || "",
   );
   const [endDateFilter, setEndDateFilter] = useState(
-    () => searchParams.get("endDate") || "",
+    () => formatLegacyShortDateInput(searchParams.get("endDate")) || "",
   );
   const [productTypeFilter, setProductTypeFilter] = useState(
     () => searchParams.get("productTypeId") || "",
@@ -730,9 +734,13 @@ export default function Orders() {
           </label>
           <input
             id="orders-start-date-filter"
-            type="date"
             value={startDateFilter}
-            onChange={(event) => setStartDateFilter(event.target.value)}
+            onChange={(event) =>
+              setStartDateFilter(maskLegacyShortDateInput(event.target.value))
+            }
+            inputMode="numeric"
+            maxLength={8}
+            placeholder="dd/mm/aa"
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           />
         </div>
@@ -746,9 +754,13 @@ export default function Orders() {
           </label>
           <input
             id="orders-end-date-filter"
-            type="date"
             value={endDateFilter}
-            onChange={(event) => setEndDateFilter(event.target.value)}
+            onChange={(event) =>
+              setEndDateFilter(maskLegacyShortDateInput(event.target.value))
+            }
+            inputMode="numeric"
+            maxLength={8}
+            placeholder="dd/mm/aa"
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           />
         </div>

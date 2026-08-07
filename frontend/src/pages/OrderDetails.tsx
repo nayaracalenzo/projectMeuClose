@@ -7,6 +7,10 @@ import NoticeToast from "../components/NoticeToast";
 import { getRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
+import {
+  formatLegacyShortDateInput,
+  maskLegacyShortDateInput,
+} from "../utils/legacyDate";
 
 type ProductDetails = {
   id: number;
@@ -83,8 +87,7 @@ const EMPTY_TOAST: ToastState = {
 };
 
 function toDateInputValue(value?: string | null) {
-  if (!value) return "";
-  return String(value).slice(0, 10);
+  return formatLegacyShortDateInput(value);
 }
 
 function formatDateTime(value?: string | null) {
@@ -418,9 +421,13 @@ export default function OrderDetails() {
                 </label>
                 <input
                   id="order-test-date"
-                  type="date"
                   value={form.testDate}
-                  onChange={(event) => handleFieldChange("testDate", event.target.value)}
+                  onChange={(event) =>
+                    handleFieldChange("testDate", maskLegacyShortDateInput(event.target.value))
+                  }
+                  inputMode="numeric"
+                  maxLength={8}
+                  placeholder="dd/mm/aa"
                   className={`${fieldClassName} mt-2`}
                 />
               </div>

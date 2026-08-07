@@ -22,6 +22,7 @@ import {
 } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
+import { parseLegacyOrIsoDate } from "../utils/legacyDate";
 
 interface CustomerOption {
   id: number;
@@ -302,8 +303,7 @@ function formatDateInputValue(date: Date) {
 }
 
 function getDateFromInputValue(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, (month || 1) - 1, day || 1, 0, 0, 0, 0);
+  return parseLegacyOrIsoDate(value) || new Date(NaN);
 }
 
 function addDays(baseDate: Date, daysToAdd: number) {

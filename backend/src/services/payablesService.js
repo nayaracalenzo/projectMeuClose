@@ -1,6 +1,7 @@
 ﻿const { notFoundError, validationError } = require("../errors/AppError");
 const financialAccountsRepository = require("../repositories/financialAccountsRepository");
 const repository = require("../repositories/payablesRepository");
+const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
 
 function createPayablesValidationError(message, statusCode = 400) {
   const error = validationError(message, {
@@ -24,8 +25,10 @@ function normalizeDate(value, fieldName) {
     throw createPayablesValidationError(`${fieldName} obrigatoria.`);
   }
 
-  const base = String(value).trim().split("T")[0];
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  const normalized = normalizeShortOrIsoDateToIso(value);
+  const match = normalized
+    ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized)
+    : null;
   if (!match) {
     throw createPayablesValidationError(`${fieldName} invalida.`);
   }
@@ -38,8 +41,10 @@ function normalizeOptionalDate(value, fieldName, options = {}) {
     return null;
   }
 
-  const base = String(value).trim().split("T")[0];
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(base);
+  const normalized = normalizeShortOrIsoDateToIso(value);
+  const match = normalized
+    ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized)
+    : null;
   if (!match) {
     throw createPayablesValidationError(`${fieldName} invalida.`);
   }
