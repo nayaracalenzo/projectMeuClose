@@ -14,7 +14,11 @@ interface AdminOption {
   desc?: string | null;
 }
 
-type QuickCreateResource = "clothings-types" | "fabrics" | "colors";
+type QuickCreateResource =
+  | "clothings-types"
+  | "fabrics"
+  | "colors"
+  | "measurement-definitions";
 
 type QuickCreateNotice = {
   tone: "success" | "error";
@@ -105,6 +109,7 @@ export interface CustomMadeSummaryItem {
 
 interface CustomMadeClothingProps {
   initialProducts?: CustomMadeProductDraft[];
+  customerMeasurements?: CustomMadeMeasurements;
   onSummaryChange?: (items: CustomMadeSummaryItem[]) => void;
   onProductsChange?: (items: CustomMadeProductDraft[]) => void;
 }
@@ -170,6 +175,7 @@ function buildCustomMadeDescription(product: {
 
 export default function CustomMadeClothing({
   initialProducts,
+  customerMeasurements,
   onSummaryChange,
   onProductsChange,
 }: CustomMadeClothingProps) {
@@ -188,6 +194,16 @@ export default function CustomMadeClothing({
   const [quickCreateSubmitting, setQuickCreateSubmitting] = useState(false);
   const [quickCreateError, setQuickCreateError] = useState("");
   const [notice, setNotice] = useState<QuickCreateNotice | null>(null);
+  const [sharedMeasurements, setSharedMeasurements] = useState<CustomMadeMeasurements>(() => {
+    const seededFromProducts =
+      initialProducts?.find((product) => Object.keys(product.measurements || {}).length > 0)
+        ?.measurements || {};
+
+    return {
+      ...(customerMeasurements || {}),
+      ...seededFromProducts,
+    };
+  });
   const buildEmptyProduct = (id: number): CustomMadeProduct => ({
     id,
     type: "",
@@ -210,7 +226,7 @@ export default function CustomMadeClothing({
           ...product,
           id: product.id || index + 1,
           fittingDate: formatLegacyShortDateInput(product.fittingDate),
-          measurements: { ...product.measurements },
+          measurements: emptyMeasurements(),
           selectedMeasurements: [...product.selectedMeasurements],
         }))
       : [buildEmptyProduct(1)],
@@ -241,6 +257,11 @@ export default function CustomMadeClothing({
         endpoint: "/admin/colors",
         label: "cor",
         buttonLabel: "Cor",
+      },
+      "measurement-definitions": {
+        endpoint: "/admin/measurement-definitions",
+        label: "medida",
+        buttonLabel: "Medida",
       },
     }),
     [],
@@ -316,6 +337,25 @@ export default function CustomMadeClothing({
     fetchReferenceData();
   }, []);
 
+  useEffect(() => {
+    const seededFromProducts =
+      initialProducts?.find((product) => Object.keys(product.measurements || {}).length > 0)
+        ?.measurements || {};
+
+    if (
+      Object.keys(sharedMeasurements).length > 0 ||
+      (!Object.keys(customerMeasurements || {}).length &&
+        !Object.keys(seededFromProducts).length)
+    ) {
+      return;
+    }
+
+    setSharedMeasurements({
+      ...(customerMeasurements || {}),
+      ...seededFromProducts,
+    });
+  }, [customerMeasurements, initialProducts, sharedMeasurements]);
+
   const updateProduct = (
     productId: number,
     field: keyof Omit<CustomMadeProduct, "id" | "measurements" | "selectedMeasurements">,
@@ -328,46 +368,11 @@ export default function CustomMadeClothing({
     );
   };
 
-  const updateMeasurement = useCallback(
-    (productId: number, field: MeasurementField, value: string) => {
-      setProducts((prev) =>
-        prev.map((product) =>
-          product.id === productId
-            ? { ...product, measurements: { ...product.measurements, [field]: value } }
-            : product,
-        ),
-      );
-    },
-    [],
-  );
-
-  const addMeasurementField = useCallback((productId: number, field: MeasurementField) => {
-    setProducts((prev) =>
-      prev.map((product) => {
-        if (product.id !== productId || product.selectedMeasurements.includes(field)) {
-          return product;
-        }
-
-        return {
-          ...product,
-          selectedMeasurements: [...product.selectedMeasurements, field],
-        };
-      }),
-    );
-  }, []);
-
-  const removeMeasurementField = useCallback((productId: number, field: MeasurementField) => {
-    setProducts((prev) =>
-      prev.map((product) => {
-        if (product.id !== productId) return product;
-
-        return {
-          ...product,
-          measurements: { ...product.measurements, [field]: "" },
-          selectedMeasurements: product.selectedMeasurements.filter((item) => item !== field),
-        };
-      }),
-    );
+  const updateMeasurement = useCallback((field: MeasurementField, value: string) => {
+    setSharedMeasurements((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   }, []);
 
   const handlePriceChange = (productId: number, value: string) => {
@@ -448,11 +453,27 @@ export default function CustomMadeClothing({
         setQuickCreateSubmitting(true);
         setQuickCreateError("");
 
-        await postRequest(quickCreateConfig[quickCreateResource].endpoint, {
-          desc: normalizedValue,
-        });
+        const created = await postRequest(
+          quickCreateConfig[quickCreateResource].endpoint,
+          quickCreateResource === "measurement-definitions"
+            ? { label: normalizedValue }
+            : { desc: normalizedValue },
+        );
 
-        syncQuickCreateOptions(quickCreateResource, normalizedValue);
+        if (quickCreateResource === "measurement-definitions") {
+          const createdMeasurement = normalizeMeasurementOptions([created])[0];
+
+          if (createdMeasurement) {
+            setMeasurementOptions((prev) => [...prev, createdMeasurement]);
+            setSharedMeasurements((prev) => ({
+              ...prev,
+              [createdMeasurement.value]: prev[createdMeasurement.value] || "",
+            }));
+          }
+        } else {
+          syncQuickCreateOptions(quickCreateResource, normalizedValue);
+        }
+
         setProducts((prev) =>
           prev.map((product) => {
             if (product.id !== quickCreateProductId) {
@@ -465,6 +486,10 @@ export default function CustomMadeClothing({
 
             if (quickCreateResource === "fabrics") {
               return { ...product, fabric: normalizedValue };
+            }
+
+            if (quickCreateResource === "measurement-definitions") {
+              return product;
             }
 
             return { ...product, color: normalizedValue };
@@ -525,14 +550,16 @@ export default function CustomMadeClothing({
   useEffect(() => {
     if (!onProductsChange) return;
 
+    const allMeasurementKeys = measurementOptions.map((item) => item.value);
+
     onProductsChange(
       products.map((product) => ({
         ...product,
-        measurements: { ...product.measurements },
-        selectedMeasurements: [...product.selectedMeasurements],
+        measurements: { ...sharedMeasurements },
+        selectedMeasurements: [...allMeasurementKeys],
       })),
     );
-  }, [onProductsChange, products]);
+  }, [measurementOptions, onProductsChange, products, sharedMeasurements]);
 
   return (
     <div className="bg-white">
@@ -639,19 +666,15 @@ export default function CustomMadeClothing({
             </div>
 
             <MeasurementsFields
-              productId={product.id}
+              contextKey={product.id}
               fieldClassName={fieldClassName}
-              selectedMeasurements={product.selectedMeasurements}
-              measurements={product.measurements}
+              measurements={sharedMeasurements}
               measurementOptions={measurementOptions}
-              onAddMeasurementField={(id, field) =>
-                addMeasurementField(id, field as MeasurementField)
+              onCreateMeasurementRequest={() =>
+                openQuickCreateModal("measurement-definitions", product.id)
               }
-              onRemoveMeasurementField={(id, field) =>
-                removeMeasurementField(id, field as MeasurementField)
-              }
-              onUpdateMeasurement={(id, field, value) =>
-                updateMeasurement(id, field as MeasurementField, value)
+              onUpdateMeasurement={(field, value) =>
+                updateMeasurement(field as MeasurementField, value)
               }
             />
 

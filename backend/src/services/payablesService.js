@@ -211,7 +211,7 @@ async function createPayable(body = {}) {
   const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
 
   if (!description || !category) {
-    throw createPayablesValidationError("DescriÃ§Ã£o e categoria sao obrigatÃ³rias.");
+    throw createPayablesValidationError("Descrição e categoria sao obrigatórias.");
   }
 
   const amount = normalizeAmount(body.amount, "Valor");

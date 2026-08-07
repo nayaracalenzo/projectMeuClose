@@ -2,7 +2,7 @@ module.exports = {
   async up(queryInterface) {
     await queryInterface.sequelize.query(`
       INSERT INTO "status" ("id", "desc")
-      VALUES (5, 'atrasada')
+      VALUES (5, 'ATRASADA')
       ON CONFLICT ("id") DO UPDATE
       SET "desc" = EXCLUDED."desc";
     `);

@@ -59,6 +59,21 @@ async function updateClientById(req, res, next) {
   }
 }
 
+async function updateClientMeasurementsController(req, res, next) {
+  try {
+    const { id } = req.params;
+    const client = await service.updateClientMeasurements(id, req.body);
+
+    if (!client) {
+      throw notFoundError("Cliente não encontrado");
+    }
+
+    return res.status(200).json(client);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function createClient(req, res, next) {
   try {
     const created = await service.createClient(req.body);
@@ -84,5 +99,6 @@ module.exports = {
   getClientById,
   getClientCreditsController,
   updateClientById,
+  updateClientMeasurementsController,
   createClient,
 };

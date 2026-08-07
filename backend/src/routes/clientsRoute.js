@@ -12,6 +12,7 @@ router.get("/birthdays/month", controller.getBirthdaysOfMonthController);
 router.get("/:id/credits", controller.getClientCreditsController);
 router.get("/:id", controller.getClientById);
 router.post("/", controller.createClient);
+router.put("/:id/measurements", controller.updateClientMeasurementsController);
 router.put("/:id", controller.updateClientById);
 
 module.exports = router;

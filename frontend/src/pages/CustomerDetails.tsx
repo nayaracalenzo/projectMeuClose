@@ -6,6 +6,9 @@ import CustomerFormFields, {
   type CustomerFormValues,
 } from "../components/CustomerFormFields";
 import CustomerModal from "../components/CustomerModal";
+import MeasurementsFields, {
+  type MeasurementOption as MeasurementsFieldOption,
+} from "../components/MeasurementsFields";
 import NoticeToast from "../components/NoticeToast";
 import CustomerSalesModal from "../components/CustomerSalesModal";
 import { getRequest, postRequest, updateRequest } from "../services/request";
@@ -42,8 +45,22 @@ type ClientDetails = {
   professionId: number | null;
   professionName: string | null;
   comment: string | null;
+  measurements?: ClientMeasurement[];
   createdAt: string | null;
   updatedAt: string | null;
+};
+
+type ClientMeasurement = {
+  measurementDefinitionId: number | null;
+  key: string | null;
+  label: string;
+  value: number | null;
+};
+
+type MeasurementDefinition = {
+  idMeasurementDefinition: number;
+  key: string;
+  label: string;
 };
 
 type ProfessionOption = {
@@ -109,6 +126,35 @@ const toEditableForm = (clientData: ClientDetails): Partial<ClientDetails> => ({
   phone: formatPhoneMask(clientData.phone),
   zipCode: maskCep(clientData.zipCode || ""),
 });
+
+const toMeasurementValueMap = (measurements: ClientMeasurement[] = []) =>
+  measurements.reduce<Record<string, string>>((acc, measurement) => {
+    const key = String(measurement.key || "").trim();
+    if (!key) return acc;
+
+    acc[key] =
+      measurement.value === null || measurement.value === undefined
+        ? ""
+        : String(measurement.value);
+    return acc;
+  }, {});
+
+const toMeasurementOptions = (
+  definitions: MeasurementDefinition[] = [],
+): MeasurementsFieldOption[] =>
+  definitions
+    .map((definition) => {
+      const key = String(definition.key || "").trim();
+      const label = String(definition.label || "").trim();
+
+      if (!key || !label) return null;
+
+      return {
+        value: key,
+        label,
+      };
+    })
+    .filter((item): item is MeasurementsFieldOption => Boolean(item));
 
 const toSharedFormValues = (
   form: Partial<ClientDetails>,
@@ -277,6 +323,12 @@ export default function CustomerDetails() {
   const [form, setForm] = useState<Partial<ClientDetails>>({});
   const [professions, setProfessions] = useState<ProfessionOption[]>([]);
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
+  const [measurementDefinitions, setMeasurementDefinitions] = useState<MeasurementDefinition[]>([]);
+  const [measurementValues, setMeasurementValues] = useState<Record<string, string>>({});
+  const [measurementSaving, setMeasurementSaving] = useState(false);
+  const [measurementModalOpen, setMeasurementModalOpen] = useState(false);
+  const [measurementName, setMeasurementName] = useState("");
+  const [measurementError, setMeasurementError] = useState("");
   const [notice, setNotice] = useState<NoticeState>(EMPTY_NOTICE);
   const [confirmationModal, setConfirmationModal] =
     useState<ConfirmationModalState>(EMPTY_CONFIRMATION_MODAL);
@@ -286,12 +338,30 @@ export default function CustomerDetails() {
       try {
         setLoading(true);
         setError("");
-        const [clientData, professionsData] = await Promise.all([
+        const [clientData, professionsData, measurementDefinitionsData] = await Promise.all([
           getRequest(`/clients/${id}`),
           getRequest("/professions"),
+          getRequest("/admin/measurement-definitions"),
         ]);
         setClient(clientData);
         setForm(toEditableForm(clientData));
+        setMeasurementDefinitions(
+          (Array.isArray(measurementDefinitionsData) ? measurementDefinitionsData : [])
+            .map((item) => ({
+              idMeasurementDefinition: Number(item?.idMeasurementDefinition || 0),
+              key: String(item?.key || "").trim(),
+              label: String(item?.label || "").trim(),
+            }))
+            .filter(
+              (item) =>
+                item.idMeasurementDefinition > 0 && Boolean(item.key) && Boolean(item.label),
+            ),
+        );
+        setMeasurementValues(
+          toMeasurementValueMap(
+            Array.isArray(clientData.measurements) ? clientData.measurements : [],
+          ),
+        );
         setProfessions(professionsData);
       } catch (err: unknown) {
         const maybeAxiosError = err as { response?: { status?: number } };
@@ -474,6 +544,10 @@ export default function CustomerDetails() {
     () => getOptionalClientValidationIssues(form),
     [form],
   );
+  const measurementOptions = useMemo(
+    () => toMeasurementOptions(measurementDefinitions),
+    [measurementDefinitions],
+  );
 
   const buildPayload = (overrides: Partial<ClientDetails> = {}) => ({
     typeCustomer: overrides.typeCustomer ?? form.typeCustomer,
@@ -576,6 +650,114 @@ export default function CustomerDetails() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const closeMeasurementModal = () => {
+    setMeasurementModalOpen(false);
+    setMeasurementName("");
+    setMeasurementError("");
+  };
+
+  const handleCreateMeasurement = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+
+    const normalizedName = measurementName.trim();
+
+    if (!normalizedName) {
+      setMeasurementError("Informe o nome da medida.");
+      return;
+    }
+
+    try {
+      setMeasurementSaving(true);
+      setMeasurementError("");
+
+      const created = (await postRequest("/admin/measurement-definitions", {
+        label: normalizedName,
+      })) as {
+        idMeasurementDefinition?: number;
+        key?: string | null;
+        label?: string | null;
+      };
+
+      const key = String(created.key || "").trim();
+      const label = String(created.label || normalizedName).trim();
+      const measurementDefinitionId = Number(created.idMeasurementDefinition || 0);
+
+      if (key && label && measurementDefinitionId) {
+        setMeasurementDefinitions((prev) => [
+          ...prev,
+          {
+            idMeasurementDefinition: measurementDefinitionId,
+            key,
+            label,
+          },
+        ]);
+        setMeasurementValues((prev) => ({
+          ...prev,
+          [key]: prev[key] || "",
+        }));
+      }
+
+      closeMeasurementModal();
+      setNotice({
+        open: true,
+        tone: "success",
+        title: "Medida cadastrada",
+        message: "A nova medida foi adicionada com sucesso.",
+      });
+    } catch (err: unknown) {
+      setMeasurementError(
+        getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel cadastrar a medida.",
+        ),
+      );
+    } finally {
+      setMeasurementSaving(false);
+    }
+  };
+
+  const handleSaveMeasurements = async () => {
+    if (!id) return;
+
+    try {
+      setMeasurementSaving(true);
+
+      const updated = (await updateRequest(`/clients/${id}/measurements`, {
+        measurements: measurementDefinitions.map((measurement) => ({
+          measurementDefinitionId: measurement.idMeasurementDefinition,
+          value: measurementValues[String(measurement.key || "").trim()] || null,
+        })),
+      })) as ClientDetails;
+
+      setClient(updated);
+      setMeasurementValues(
+        toMeasurementValueMap(
+          Array.isArray(updated.measurements) ? updated.measurements : [],
+        ),
+      );
+      setNotice({
+        open: true,
+        tone: "success",
+        title: "Medidas atualizadas",
+        message: "As medidas da cliente foram salvas com sucesso.",
+      });
+    } catch (err: unknown) {
+      setNotice({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel salvar",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel salvar as medidas da cliente.",
+        ),
+      });
+    } finally {
+      setMeasurementSaving(false);
     }
   };
 
@@ -728,6 +910,42 @@ export default function CustomerDetails() {
           onActiveChange={handleActiveChange}
         />
 
+        <div className="mt-6 rounded-lg border border-[#a59797] bg-white p-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-700">
+                Medidas da cliente
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="primary"
+                size="md"
+                onClick={() => void handleSaveMeasurements()}
+                disabled={measurementSaving || !measurementOptions.length}
+              >
+                {measurementSaving ? "Salvando..." : "Salvar medidas"}
+              </Button>
+            </div>
+          </div>
+
+          <MeasurementsFields
+            contextKey={`customer-${client.id}`}
+            fieldClassName="h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70"
+            measurements={measurementValues}
+            measurementOptions={measurementOptions}
+            onCreateMeasurementRequest={() => setMeasurementModalOpen(true)}
+            onUpdateMeasurement={(field, value) =>
+              setMeasurementValues((prev) => ({
+                ...prev,
+                [field]: value,
+              }))
+            }
+          />
+        </div>
+
         <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 py-2">
             <p className="text-sm text-primary">Criado em</p>
@@ -798,6 +1016,59 @@ export default function CustomerDetails() {
                 disabled={professionSaving}
               >
                 {professionSaving ? "Salvando..." : "Salvar profissão"}
+              </Button>
+            </div>
+          </form>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={measurementModalOpen}
+        onClose={closeMeasurementModal}
+        title="Nova medida"
+        subtitle="Cadastre uma nova medida sem sair do cliente."
+      >
+        <div className="mx-auto max-w-xl">
+          {measurementError ? (
+            <div className="mb-4 rounded border border-[#c76767] bg-[#fdecec] px-3 py-2 text-sm text-[#7a1717]">
+              {measurementError}
+            </div>
+          ) : null}
+
+          <form className="space-y-4" onSubmit={handleCreateMeasurement}>
+            <div>
+              <label
+                className="mb-1 block text-sm text-primary"
+                htmlFor="measurement-name-create"
+              >
+                Nome da medida
+              </label>
+              <input
+                id="measurement-name-create"
+                value={measurementName}
+                onChange={(event) => setMeasurementName(event.target.value)}
+                className="h-10 w-full rounded-lg border border-[#a59797] bg-[#f9f7f6] px-3 text-[#2a2526] uppercase shadow-xs transition duration-200 focus:outline-none focus:ring-2 focus:ring-[#8a4d5dcf]"
+                autoFocus
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={closeMeasurementModal}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                disabled={measurementSaving}
+              >
+                {measurementSaving ? "Salvando..." : "Salvar medida"}
               </Button>
             </div>
           </form>

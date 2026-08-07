@@ -2,6 +2,7 @@ const repository = require("../repositories/clientsRepository.js");
 const employeesRepository = require("../repositories/employeesRepository.js");
 const { validationError } = require("../errors/AppError");
 const { normalizeDateToLocalMidnight } = require("../utils/normalizeDate.js");
+const { LEGACY_MEASUREMENT_DEFINITIONS } = require("../utils/measurementDefinitions");
 const {
   normalizeClientInput,
   validateClientPayload,
@@ -13,6 +14,71 @@ const {
   isBirthdayInWindow,
   sortBirthdays,
 } = require("./birthdayService.js");
+
+const LEGACY_MEASUREMENT_KEYS = new Set(
+  LEGACY_MEASUREMENT_DEFINITIONS.map((item) => item.key),
+);
+
+function normalizeMeasurementValue(value, label) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalized = Number(String(value).replace(",", "."));
+
+  if (!Number.isFinite(normalized)) {
+    throw validationError(`Medida ${label} invalida.`, {
+      name: "ClientValidationError",
+      code: "CLIENT_VALIDATION_ERROR",
+    });
+  }
+
+  return Number(normalized.toFixed(2));
+}
+
+function buildClientMeasurements({
+  definitions = [],
+  masterRecord = null,
+  dynamicRows = [],
+}) {
+  const latestValueByKey = new Map();
+
+  dynamicRows.forEach((row) => {
+    const definition = row.MeasurementDefinition || row.MeasurementDefinitions || null;
+    const key = String(definition?.key || "").trim();
+
+    if (!key || latestValueByKey.has(key)) {
+      return;
+    }
+
+    latestValueByKey.set(
+      key,
+      row.value === null || row.value === undefined ? null : Number(row.value),
+    );
+  });
+
+  return definitions.map((definition) => {
+    const key = String(definition.key || "").trim();
+    const masterValue =
+      masterRecord && key in masterRecord.dataValues
+        ? masterRecord.get(key)
+        : null;
+    const dynamicValue = latestValueByKey.get(key);
+    const value =
+      dynamicValue !== undefined && dynamicValue !== null
+        ? dynamicValue
+        : masterValue === null || masterValue === undefined
+          ? null
+          : Number(masterValue);
+
+    return {
+      measurementDefinitionId: Number(definition.idMeasurementDefinition),
+      key,
+      label: String(definition.label || key),
+      value,
+    };
+  });
+}
 
 function toClientDetails(client) {
   if (!client) return null;
@@ -43,6 +109,7 @@ function toClientDetails(client) {
       client.Professions?.nameProfession ||
       null,
     comment: client.comment,
+    measurements: Array.isArray(client.measurements) ? client.measurements : [],
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
   };
@@ -202,6 +269,23 @@ async function getAllClients(query = {}) {
 
 async function getClientById(id) {
   const client = await repository.getClientById(id);
+  if (!client) return null;
+
+  const [definitions, masterRecord, dynamicRows] = await Promise.all([
+    repository.listMeasurementDefinitions(),
+    repository.getLatestCustomerMeasurementsRecord(client.idCustomer),
+    repository.listLatestMeasurementValuesByCustomerId(client.idCustomer),
+  ]);
+
+  client.setDataValue(
+    "measurements",
+    buildClientMeasurements({
+      definitions,
+      masterRecord,
+      dynamicRows,
+    }),
+  );
+
   return toClientDetails(client);
 }
 
@@ -279,8 +363,7 @@ async function updateClientById(id, body) {
   }
   if (!updated) return null;
 
-  const client = await repository.getClientById(id, { includeBlocked: true });
-  return toClientDetails(client);
+  return getClientById(id);
 }
 
 async function createClient(body) {
@@ -305,9 +388,10 @@ async function createClient(body) {
 
     await repository.updateClientById(existingClient.idCustomer, reactivatedPayload);
 
-    const reactivatedClient = await repository.getClientById(existingClient.idCustomer);
-    return toClientDetails(reactivatedClient) ||
-      buildClientDetailsFromPayload(existingClient.idCustomer, reactivatedPayload, existingClient);
+    return (
+      (await getClientById(existingClient.idCustomer)) ||
+      buildClientDetailsFromPayload(existingClient.idCustomer, reactivatedPayload, existingClient)
+    );
   }
 
   try {
@@ -333,11 +417,58 @@ async function createClient(body) {
   }
 }
 
+async function updateClientMeasurements(id, body = {}) {
+  const currentClient = await repository.getClientById(id, { includeBlocked: true });
+  if (!currentClient) return null;
+
+  const definitions = await repository.listMeasurementDefinitions();
+  const definitionById = new Map(
+    definitions.map((item) => [Number(item.idMeasurementDefinition), item]),
+  );
+  const measurements = Array.isArray(body.measurements) ? body.measurements : [];
+  const legacyFields = {};
+  const dynamicValues = [];
+
+  for (const measurement of measurements) {
+    const measurementDefinitionId = Number(measurement?.measurementDefinitionId || 0);
+    const definition = definitionById.get(measurementDefinitionId);
+
+    if (!definition) {
+      throw validationError("Medida invalida.", {
+        name: "ClientValidationError",
+        code: "CLIENT_VALIDATION_ERROR",
+      });
+    }
+
+    const key = String(definition.key || "").trim();
+    const value = normalizeMeasurementValue(measurement?.value, definition.label || key);
+
+    if (LEGACY_MEASUREMENT_KEYS.has(key)) {
+      legacyFields[key] = value;
+    }
+
+    if (value !== null) {
+      dynamicValues.push({
+        measurementDefinitionId,
+        value,
+      });
+    }
+  }
+
+  await repository.saveClientMeasurements(currentClient.idCustomer, {
+    legacyFields,
+    dynamicValues,
+  });
+
+  return getClientById(currentClient.idCustomer);
+}
+
 module.exports = {
   getBirthdaysOfMonth,
   getBirthdaysOfWeek,
   getAllClients,
   getClientById,
   updateClientById,
+  updateClientMeasurements,
   createClient,
 };

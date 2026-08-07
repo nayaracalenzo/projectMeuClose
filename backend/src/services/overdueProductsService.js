@@ -2,7 +2,7 @@ const { sequelize, Status } = require("../models");
 const { logger, serializeError } = require("../utils/logger");
 
 const OVERDUE_STATUS_ID = 5;
-const OVERDUE_STATUS_DESC = "atrasada";
+const OVERDUE_STATUS_DESC = "ATRASADA";
 const TARGET_HOUR = 8;
 
 async function syncOverdueProductsStatus() {

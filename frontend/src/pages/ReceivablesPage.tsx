@@ -508,8 +508,8 @@ export default function ReceivablesPage() {
         getUserFacingApiErrorMessage(
           error,
           receivableFormMode === "create"
-            ? "Não foi possÃ­vel criar a conta a receber."
-            : "Não foi possÃ­vel alterar a conta a receber.",
+            ? "Não foi possível criar a conta a receber."
+            : "Não foi possível alterar a conta a receber.",
         ),
       );
     }
@@ -523,7 +523,7 @@ export default function ReceivablesPage() {
 
     try {
       await deleteRequest(`/receivables/${selectedRow!.id}`, {});
-      setMessage("Conta a receber excluÃ­da com sucesso.");
+      setMessage("Conta a receber excluída com sucesso.");
       setReceivableFormOpen(false);
       setSelectedRowId(null);
       resetReceivableForm();
@@ -532,7 +532,7 @@ export default function ReceivablesPage() {
       setMessage(
         getUserFacingApiErrorMessage(
           error,
-          "Não foi possÃ­vel excluir a conta a receber.",
+          "Não foi possível excluir a conta a receber.",
         ),
       );
     }
@@ -543,7 +543,7 @@ export default function ReceivablesPage() {
 
     try {
       await deleteRequest(`/receivables/${selectedRow.id}`, {});
-      setMessage("Conta a receber excluÃƒÂ­da com sucesso.");
+      setMessage("Conta a receber excluída com sucesso.");
       setDeleteConfirmOpen(false);
       setReceivableFormOpen(false);
       setSelectedRowId(null);
@@ -553,7 +553,7 @@ export default function ReceivablesPage() {
       setMessage(
         getUserFacingApiErrorMessage(
           error,
-          "NÃ£o foi possÃƒÂ­vel excluir a conta a receber.",
+          "Não foi possível excluir a conta a receber.",
         ),
       );
     }
@@ -814,7 +814,7 @@ export default function ReceivablesPage() {
         title: "Conta a receber",
         message: getUserFacingApiErrorMessage(
           error,
-          "NÃ£o foi possÃ­vel quitar o recebimento.",
+          "Não foi possível quitar o recebimento.",
         ),
       });
       setMessage(
@@ -900,7 +900,7 @@ export default function ReceivablesPage() {
             >
               {receivableFormMode === "create"
                 ? "Gravar conta a receber"
-                : "Salvar alteraÃ§ão"}
+                : "Salvar alteração"}
             </button>
             <button
               type="button"

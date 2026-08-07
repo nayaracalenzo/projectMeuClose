@@ -126,6 +126,17 @@ interface ExistingQuoteMeasurement {
   value: number | null;
 }
 
+interface CustomerMeasurementResponse {
+  measurementDefinitionId: number | null;
+  key: string | null;
+  label: string;
+  value: number | null;
+}
+
+interface CustomerDetailsResponse {
+  measurements?: CustomerMeasurementResponse[];
+}
+
 interface ExistingQuotePaymentDraft {
   paymentTypeId: number | null;
   installmentCount: number | null;
@@ -328,12 +339,18 @@ function mapSaleItemTypeToModalType(
   return "Diversos";
 }
 
-function stringifyMeasurementValue(value: number | null | undefined) {
+function stringifyMeasurementValue(value: number | string | null | undefined) {
   return value === null || value === undefined ? "" : String(value);
 }
 
 function buildMeasurementsMap(
-  measurements: ExistingQuoteMeasurement[] | null | undefined,
+  measurements:
+    | Array<{
+        key?: string | null;
+        value?: number | string | null;
+      }>
+    | null
+    | undefined,
 ) {
   if (!Array.isArray(measurements) || !measurements.length) {
     return {
@@ -508,6 +525,8 @@ export default function NewSalePage() {
   const [search, setSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] =
     useState<CustomerOption | null>(null);
+  const [selectedCustomerMeasurements, setSelectedCustomerMeasurements] =
+    useState<Record<string, string>>({});
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
 
@@ -639,6 +658,29 @@ export default function NewSalePage() {
 
     fetchCustomers();
   }, [search]);
+
+  useEffect(() => {
+    const loadCustomerMeasurements = async () => {
+      if (!selectedCustomer?.id) {
+        setSelectedCustomerMeasurements({});
+        return;
+      }
+
+      try {
+        const data = (await getRequest(
+          `/clients/${selectedCustomer.id}`,
+        )) as CustomerDetailsResponse;
+        setSelectedCustomerMeasurements(
+          buildMeasurementsMap(data.measurements).measurements,
+        );
+      } catch (error) {
+        console.error("Erro ao carregar medidas da cliente", error);
+        setSelectedCustomerMeasurements({});
+      }
+    };
+
+    void loadCustomerMeasurements();
+  }, [selectedCustomer?.id]);
 
   useEffect(() => {
     const fetchPaymentTypes = async () => {
@@ -880,7 +922,7 @@ export default function NewSalePage() {
         setSaveMessage(
           getUserFacingApiErrorMessage(
             error,
-            "Não foi possÃ­vel carregar o orçamento para finalizaÃ§ão.",
+            "Não foi possível carregar o orçamento para finalização.",
           ),
         );
       } finally {
@@ -1978,7 +2020,7 @@ export default function NewSalePage() {
       setSaveMessage(
         getUserFacingApiErrorMessage(
           error,
-          "Não foi possÃ­vel salvar o pedido.",
+          "Não foi possível salvar o pedido.",
         ),
       );
     } finally {
@@ -2145,15 +2187,26 @@ export default function NewSalePage() {
     ];
   };
 
-  const buildCustomerMeasurementsPayload = () =>
-    customMadeProducts.flatMap((product) =>
-      product.selectedMeasurements
-        .map((key) => ({
+  const buildCustomerMeasurementsPayload = () => {
+    const measurementsByKey = new Map<string, { key: string; value: string }>();
+
+    customMadeProducts.forEach((product) => {
+      product.selectedMeasurements.forEach((key) => {
+        const value = String(product.measurements[key] || "").trim();
+
+        if (!value || measurementsByKey.has(key)) {
+          return;
+        }
+
+        measurementsByKey.set(key, {
           key,
-          value: product.measurements[key],
-        }))
-        .filter((measurement) => String(measurement.value || "").trim() !== ""),
-    );
+          value,
+        });
+      });
+    });
+
+    return Array.from(measurementsByKey.values());
+  };
 
   const buildQuotePayload = () => {
     if (!selectedCustomer) {
@@ -2340,7 +2393,7 @@ export default function NewSalePage() {
       setSaveMessage(
         getUserFacingApiErrorMessage(
           error,
-          "Não foi possÃ­vel gerar o orçamento.",
+          "Não foi possível gerar o orçamento.",
         ),
       );
     } finally {
@@ -2448,7 +2501,7 @@ export default function NewSalePage() {
     } catch (error: unknown) {
       const message = getUserFacingApiErrorMessage(
         error,
-        "Não foi possÃ­vel concluir o pedido.",
+        "Não foi possível concluir o pedido.",
       );
 
       if (
@@ -2538,7 +2591,7 @@ export default function NewSalePage() {
 
         {loadingExistingQuote ? (
           <div className="mb-4 rounded-lg border border-outline-variant/35 bg-white px-4 py-3 text-sm text-neutral-700">
-            Carregando orçamento para finalizaÃ§ão...
+            Carregando orçamento para finalização...
           </div>
         ) : null}
 
@@ -3490,7 +3543,13 @@ export default function NewSalePage() {
       </div>
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-3 sm:p-4">
-          <div className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-xl bg-white p-3 shadow-lg sm:w-[92%] lg:w-[78%] xl:w-[65%]">
+          <div
+            className={`max-h-[95vh] w-full overflow-y-auto rounded-xl bg-white p-3 shadow-lg sm:w-[92%] ${
+              modalType === "Sob medida"
+                ? "max-w-[92rem] lg:w-[92%] xl:w-[88%]"
+                : "max-w-6xl lg:w-[78%] xl:w-[65%]"
+            }`}
+          >
             {modalType === "Roupa pronta" ? (
               <ReadyMadeClothing
                 key={`ready-${modalSessionKey}`}
@@ -3502,6 +3561,7 @@ export default function NewSalePage() {
               <CustomMadeClothing
                 key={`custom-${modalSessionKey}`}
                 initialProducts={modalCustomMadeProducts}
+                customerMeasurements={selectedCustomerMeasurements}
                 onSummaryChange={handleModalSummaryChange}
                 onProductsChange={handleModalCustomMadeProductsChange}
               />
