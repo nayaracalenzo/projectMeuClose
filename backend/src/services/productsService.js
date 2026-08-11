@@ -295,7 +295,7 @@ function normalizeNullableDate(value) {
     normalizedDate.getUTCMonth() !== month - 1 ||
     normalizedDate.getUTCDate() !== day
   ) {
-    throw validationError("Data de prova invÃ¡lida.");
+    throw validationError("Data de prova inválida.");
   }
 
   return normalized;
@@ -309,7 +309,7 @@ function normalizeFilterDate(value) {
 
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(normalized);
   if (!match) {
-    throw validationError("Filtro de data invÃ¡lido.");
+    throw validationError("Filtro de data inválido.");
   }
 
   return normalized;

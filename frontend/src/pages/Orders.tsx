@@ -185,6 +185,15 @@ export default function Orders() {
   const [sizeFilter, setSizeFilter] = useState(
     () => searchParams.get("sizeId") || "",
   );
+  const [sortBy, setSortBy] = useState(() => {
+    const value = String(searchParams.get("sortBy") || "").trim();
+
+    if (value === "testDateAsc" || value === "testDateDesc") {
+      return value;
+    }
+
+    return "createdAtDesc";
+  });
   const [page, setPage] = useState(() => {
     const parsedPage = Number(searchParams.get("page") || "1");
     return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
@@ -275,6 +284,10 @@ export default function Orders() {
       params.set("sizeId", sizeFilter);
     }
 
+    if (sortBy !== "createdAtDesc") {
+      params.set("sortBy", sortBy);
+    }
+
     return `/producao?${params.toString()}`;
   }, [
     colorFilter,
@@ -286,6 +299,7 @@ export default function Orders() {
     page,
     productIdFilter,
     productTypeFilter,
+    sortBy,
     sizeFilter,
     startDateFilter,
     statusFilter,
@@ -305,6 +319,7 @@ export default function Orders() {
     sizeFilter,
     startDateFilter,
     statusFilter,
+    sortBy,
   ]);
 
   useEffect(() => {
@@ -396,6 +411,10 @@ export default function Orders() {
       params.set("sizeId", sizeFilter);
     }
 
+    if (sortBy !== "createdAtDesc") {
+      params.set("sortBy", sortBy);
+    }
+
     setSearchParams(params, { replace: true });
   }, [
     colorFilter,
@@ -407,6 +426,7 @@ export default function Orders() {
     page,
     productIdFilter,
     productTypeFilter,
+    sortBy,
     setSearchParams,
     sizeFilter,
     startDateFilter,
@@ -422,7 +442,7 @@ export default function Orders() {
         const params = new URLSearchParams({
           page: String(page),
           pageSize: String(pageSize),
-          sortBy: "createdAtDesc",
+          sortBy,
           productionOnly: "true",
         });
 
@@ -498,6 +518,7 @@ export default function Orders() {
     pageSize,
     productIdFilter,
     productTypeFilter,
+    sortBy,
     sizeFilter,
     startDateFilter,
     statusFilter,
@@ -703,7 +724,9 @@ export default function Orders() {
             <option value="">Todos</option>
             {filteredProductTypeOptions.map((option) => (
               <option key={option.id} value={option.id}>
-                {String(option.desc || "").trim().toUpperCase()}
+                {String(option.desc || "")
+                  .trim()
+                  .toUpperCase()}
               </option>
             ))}
           </select>
@@ -781,7 +804,9 @@ export default function Orders() {
             <option value="">Todos</option>
             {clothingTypeOptions.map((option) => (
               <option key={option.id} value={option.id}>
-                {String(option.desc || "").trim().toUpperCase()}
+                {String(option.desc || "")
+                  .trim()
+                  .toUpperCase()}
               </option>
             ))}
           </select>
@@ -806,31 +831,6 @@ export default function Orders() {
                 {String(option.shortName || option.fullName || "")
                   .trim()
                   .toUpperCase()}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label
-            htmlFor="orders-status-filter"
-            className="text-sm font-medium text-primary"
-          >
-            Filtrar por situação
-          </label>
-          <select
-            id="orders-status-filter"
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value);
-              setPage(1);
-            }}
-            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-          >
-            <option value="todos">Todos</option>
-            {statusOptions.map((status) => (
-              <option key={status.id} value={status.id}>
-                {status.desc}
               </option>
             ))}
           </select>
@@ -902,6 +902,52 @@ export default function Orders() {
           </select>
         </div>
 
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-status-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Filtrar por situação
+          </label>
+          <select
+            id="orders-status-filter"
+            value={statusFilter}
+            onChange={(event) => {
+              setStatusFilter(event.target.value);
+              setPage(1);
+            }}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="todos">Todos</option>
+            {statusOptions.map((status) => (
+              <option key={status.id} value={status.id}>
+                {status.desc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label
+            htmlFor="orders-sort-filter"
+            className="text-sm font-medium text-primary"
+          >
+            Ordenação
+          </label>
+          <select
+            id="orders-sort-filter"
+            value={sortBy}
+            onChange={(event) => {
+              setSortBy(event.target.value);
+              setPage(1);
+            }}
+            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+          >
+            <option value="createdAtDesc">Mais recentes</option>
+            <option value="testDateAsc">Data da prova: mais antiga</option>
+            <option value="testDateDesc">Data da prova: mais recente</option>
+          </select>
+        </div>
       </div>
 
       {error ? (
@@ -1206,24 +1252,24 @@ export default function Orders() {
             </select>
           </div>
           <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={loading || page <= 1}
-          >
-            Anterior
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() =>
-              setPage((current) => Math.min(totalPages, current + 1))
-            }
-            disabled={loading || page >= totalPages}
-          >
-            Próxima
-          </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={loading || page <= 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={loading || page >= totalPages}
+            >
+              Próxima
+            </Button>
           </div>
         </div>
       </div>

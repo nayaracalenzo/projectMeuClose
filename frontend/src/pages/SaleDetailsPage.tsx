@@ -6,6 +6,7 @@ import NoticeToast from "../components/NoticeToast";
 import { deleteRequest, getRequest, postRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
+import { parseLegacyOrIsoDate } from "../utils/legacyDate";
 
 type SaleDetailItem = {
   id: number;
@@ -177,8 +178,8 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 function formatDate(value?: string | null) {
   if (!value) return "-";
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
+  const date = parseLegacyOrIsoDate(value);
+  if (!date || Number.isNaN(date.getTime())) return "-";
 
   return new Intl.DateTimeFormat("pt-BR").format(date);
 }

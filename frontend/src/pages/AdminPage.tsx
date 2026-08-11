@@ -2035,7 +2035,7 @@ export default function AdminPage() {
                     description: e.target.value,
                   }))
                 }
-                placeholder="DescriÃ§Ã£o"
+                placeholder="Descrição"
                 className={simpleInputClassName}
                 required
               />

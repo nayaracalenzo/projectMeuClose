@@ -1,5 +1,15 @@
 const { Op } = require("sequelize");
-const { Customers, Professions, Receivables, Sequelize } = require("../models");
+const {
+  CustomerMeasurements,
+  CustomerMeasurementValues,
+  Customers,
+  MeasurementDefinitions,
+  Professions,
+  Receivables,
+  Sales,
+  Sequelize,
+  sequelize,
+} = require("../models");
 
 function buildBirthdayWhere({ month, year }) {
   const filters = [`EXTRACT(MONTH FROM "birthDate") = ${month}`];
@@ -140,12 +150,166 @@ async function createClient(payload) {
   return Customers.create(payload);
 }
 
+async function listMeasurementDefinitions() {
+  return MeasurementDefinitions.findAll({
+    where: {
+      active: true,
+    },
+    order: [["sortOrder", "ASC"], ["label", "ASC"]],
+  });
+}
+
+async function getLatestCustomerMeasurementsRecord(customerId, transaction) {
+  if (!customerId) return null;
+
+  return CustomerMeasurements.findOne({
+    where: {
+      customerId,
+    },
+    order: [["updatedAt", "DESC"], ["idMeasurement", "DESC"]],
+    transaction,
+  });
+}
+
+async function getLatestSaleByCustomerId(customerId, transaction) {
+  if (!customerId) return null;
+
+  return Sales.findOne({
+    where: {
+      customerId,
+    },
+    attributes: ["idSale", "createdAt", "updatedAt"],
+    order: [["updatedAt", "DESC"], ["idSale", "DESC"]],
+    transaction,
+  });
+}
+
+async function listLatestMeasurementValuesByCustomerId(customerId, transaction) {
+  if (!customerId) return [];
+
+  return CustomerMeasurementValues.findAll({
+    where: {
+      customerId,
+    },
+    include: [
+      {
+        model: MeasurementDefinitions,
+        attributes: ["idMeasurementDefinition", "key", "label", "sortOrder", "active"],
+        required: false,
+      },
+      {
+        model: Sales,
+        attributes: ["idSale", "createdAt", "updatedAt"],
+        required: false,
+      },
+    ],
+    order: [
+      ["updatedAt", "DESC"],
+      ["idCustomerMeasurementValue", "DESC"],
+    ],
+    transaction,
+  });
+}
+
+async function saveClientMeasurements(
+  customerId,
+  {
+    legacyFields = {},
+    dynamicValues = [],
+  } = {},
+) {
+  return sequelize.transaction(async (transaction) => {
+    let masterRecord = await getLatestCustomerMeasurementsRecord(customerId, transaction);
+
+    if (masterRecord) {
+      await masterRecord.update(legacyFields, { transaction });
+    } else {
+      masterRecord = await CustomerMeasurements.create(
+        {
+          customerId,
+          saleId: null,
+          ...legacyFields,
+        },
+        { transaction },
+      );
+    }
+
+    const latestSale = await getLatestSaleByCustomerId(customerId, transaction);
+
+    if (latestSale && Array.isArray(dynamicValues) && dynamicValues.length) {
+      const keptDefinitionIds = new Set(
+        dynamicValues.map((measurement) => Number(measurement.measurementDefinitionId)),
+      );
+
+      await CustomerMeasurementValues.destroy({
+        where: {
+          customerId,
+          saleId: latestSale.idSale,
+          measurementDefinitionId: {
+            [Op.notIn]: [...keptDefinitionIds],
+          },
+        },
+        transaction,
+      });
+
+      for (const measurement of dynamicValues) {
+        const existing = await CustomerMeasurementValues.findOne({
+          where: {
+            customerId,
+            saleId: latestSale.idSale,
+            measurementDefinitionId: measurement.measurementDefinitionId,
+          },
+          transaction,
+        });
+
+        if (existing) {
+          await existing.update(
+            {
+              value: measurement.value,
+            },
+            { transaction },
+          );
+          continue;
+        }
+
+        await CustomerMeasurementValues.create(
+          {
+            customerId,
+            saleId: latestSale.idSale,
+            measurementDefinitionId: measurement.measurementDefinitionId,
+            value: measurement.value,
+          },
+          { transaction },
+        );
+      }
+    } else if (latestSale) {
+      await CustomerMeasurementValues.destroy({
+        where: {
+          customerId,
+          saleId: latestSale.idSale,
+        },
+        transaction,
+      });
+    }
+
+    return {
+      masterRecord,
+      latestSaleId: latestSale?.idSale || null,
+    };
+  });
+}
+
 module.exports = {
   getAllClients,
   findBirthdays,
   getClientById,
+  getLatestCustomerMeasurementsRecord,
+  getLatestSaleByCustomerId,
   findClientByDocument,
   updateClientById,
   hasOpenReceivablesByCustomerId,
   createClient,
+  listLatestMeasurementValuesByCustomerId,
+  listMeasurementDefinitions,
+  saveClientMeasurements,
 };
