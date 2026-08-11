@@ -83,6 +83,11 @@ function buildClientMeasurements({
 function toClientDetails(client) {
   if (!client) return null;
 
+  const measurements =
+    typeof client?.get === "function"
+      ? client.get("measurements")
+      : client.measurements;
+
   return {
     id: client.idCustomer,
     typeCustomer: client.typeCustomer,
@@ -109,7 +114,7 @@ function toClientDetails(client) {
       client.Professions?.nameProfession ||
       null,
     comment: client.comment,
-    measurements: Array.isArray(client.measurements) ? client.measurements : [],
+    measurements: Array.isArray(measurements) ? measurements : [],
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
   };
@@ -277,16 +282,17 @@ async function getClientById(id) {
     repository.listLatestMeasurementValuesByCustomerId(client.idCustomer),
   ]);
 
-  client.setDataValue(
-    "measurements",
-    buildClientMeasurements({
+  const clientData =
+    typeof client.get === "function" ? client.get({ plain: true }) : client;
+
+  return toClientDetails({
+    ...clientData,
+    measurements: buildClientMeasurements({
       definitions,
       masterRecord,
       dynamicRows,
     }),
-  );
-
-  return toClientDetails(client);
+  });
 }
 
 function buildClientPayload(body, { isCreate }) {
