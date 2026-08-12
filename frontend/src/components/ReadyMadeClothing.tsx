@@ -4,6 +4,7 @@ import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
 import { getRequest, postRequest } from "../services/request";
 import CustomerModal from "./CustomerModal";
 import NoticeToast from "./NoticeToast";
+import SearchableSelect from "./SearchableSelect";
 
 interface AdminOption {
   desc?: string | null;
@@ -78,7 +79,6 @@ export default function ReadyMadeClothing({
 
   const fieldClassName =
     "h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";
-
   const getDiscountPercent = (value: string) => {
     const parsed = Number(value.replace(",", "."));
     if (!Number.isFinite(parsed)) return 0;
@@ -282,19 +282,17 @@ export default function ReadyMadeClothing({
                   Tamanho
                 </label>
                 <div className="grid grid-cols-[minmax(0,1fr)_42px] gap-3">
-                  <select
+                  <SearchableSelect
                     id={`ready-size-${product.id}`}
                     value={product.size}
-                    onChange={(e) => updateProduct(product.id, "size", e.target.value)}
-                    className={fieldClassName}
-                  >
-                    <option value="">Selecione...</option>
-                    {sizes.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(nextValue) => updateProduct(product.id, "size", nextValue)}
+                    options={sizes.map((item) => ({ value: item, label: item }))}
+                    className="relative"
+                    inputClassName={fieldClassName}
+                    dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+                    optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+                    placeholder="Digite para filtrar o tamanho"
+                  />
                   <button
                     type="button"
                     onClick={() => openQuickCreateModal(product.id)}

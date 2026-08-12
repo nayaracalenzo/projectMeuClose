@@ -962,12 +962,6 @@ export default function NewSalePage() {
       selectedPaymentType.financialFlow === "IMMEDIATE_CASH",
     [selectedPaymentType],
   );
-  const selectedEntryPaymentType = useMemo(
-    () =>
-      paymentTypes.find((item) => String(item.id) === entryPaymentTypeId) ||
-      null,
-    [entryPaymentTypeId, paymentTypes],
-  );
   const isPixPayment = useMemo(
     () => normalizePaymentTypeName(selectedPaymentType?.name) === "PIX",
     [selectedPaymentType],
@@ -2674,7 +2668,7 @@ export default function NewSalePage() {
                 {tableItems.length > 0 && (
                   <>
                     <div className="overflow-x-auto rounded-lg border border-outline-variant/45 bg-white">
-                      <table className="min-w-[720px] w-full text-sm">
+                      <table className="min-w-180 w-full text-sm">
                         <thead className="bg-surface-low">
                           <tr>
                             <th className="px-3 py-2 text-left font-semibold text-primary">
@@ -3211,7 +3205,7 @@ export default function NewSalePage() {
                       </div>
 
                       <div className="mt-4 overflow-x-auto">
-                        <table className="min-w-[420px] w-full border-separate border-spacing-y-2 text-sm">
+                        <table className="min-w-105 w-full border-separate border-spacing-y-2 text-sm">
                           <thead className="bg-[#dbd1d1] rounded-t-md">
                             <tr className="text-left">
                               <th className="px-3 py-2 font-semibold text-primary">
@@ -3326,7 +3320,7 @@ export default function NewSalePage() {
           <div
             className={`max-h-[95vh] w-full overflow-y-auto rounded-xl bg-white p-3 shadow-lg sm:w-[92%] ${
               modalType === "Sob medida"
-                ? "max-w-[92rem] lg:w-[92%] xl:w-[88%]"
+                ? "max-w-368 lg:w-[92%] xl:w-[88%]"
                 : "max-w-6xl lg:w-[78%] xl:w-[65%]"
             }`}
           >
