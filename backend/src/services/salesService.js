@@ -1187,10 +1187,6 @@ function mapBudgetPaymentDraft(draft) {
 
   const paymentType = draft.PaymentType || draft.PaymentTypes || null;
   const entryPaymentType = draft.EntryPaymentType || null;
-  const receiptFinancialAccount =
-    draft.ReceiptFinancialAccount || draft.ReceiptFinancialAccounts || null;
-  const entryFinancialAccount =
-    draft.EntryFinancialAccount || draft.EntryFinancialAccounts || null;
 
   return {
     paymentTypeId: draft.paymentTypeId || null,
@@ -1204,14 +1200,10 @@ function mapBudgetPaymentDraft(draft) {
         ? null
         : Number(draft.installmentIntervalDays),
     dueDate: draft.dueDate || null,
-    receiptFinancialAccountId: draft.receiptFinancialAccountId || null,
-    receiptFinancialAccountName: receiptFinancialAccount?.desc || null,
     entryAmount:
       draft.entryAmount === null || draft.entryAmount === undefined ? null : Number(draft.entryAmount),
     entryPaymentTypeId: draft.entryPaymentTypeId || null,
     entryPaymentTypeName: entryPaymentType?.desc || null,
-    entryFinancialAccountId: draft.entryFinancialAccountId || null,
-    entryFinancialAccountName: entryFinancialAccount?.desc || null,
     entryReferenceCode: draft.entryReferenceCode || null,
     paymentReferenceCode: draft.paymentReferenceCode || null,
     useCustomerCredit: Boolean(draft.useCustomerCredit),
