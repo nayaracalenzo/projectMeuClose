@@ -142,24 +142,12 @@ interface ExistingQuotePaymentDraft {
   installmentCount: number | null;
   installmentIntervalDays: number | null;
   dueDate: string | null;
-  receiptFinancialAccountId: number | null;
-  receiptFinancialAccountName: string | null;
   entryAmount: number | null;
   entryPaymentTypeId: number | null;
-  entryFinancialAccountId: number | null;
-  entryFinancialAccountName: string | null;
   entryReferenceCode: string | null;
   paymentReferenceCode: string | null;
   useCustomerCredit: boolean;
   customerCreditAmount: number | null;
-}
-
-interface FinancialAccountOption {
-  id: number;
-  label: string;
-  value: string;
-  scope: "LOJA" | "PESSOAL";
-  targetType: "CASH" | "BANK";
 }
 
 interface ExistingQuoteResponse {
@@ -574,18 +562,12 @@ export default function NewSalePage() {
   const [saveMessage, setSaveMessage] = useState("");
   const [draftSaleId, setDraftSaleId] = useState<number | null>(null);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
-  const [financialAccounts, setFinancialAccounts] = useState<
-    FinancialAccountOption[]
-  >([]);
   const [paymentTypeId, setPaymentTypeId] = useState("");
-  const [receiptFinancialAccountId, setReceiptFinancialAccountId] =
-    useState("");
   const [installmentCount, setInstallmentCount] = useState("1");
   const [installmentIntervalDays, setInstallmentIntervalDays] = useState("30");
   const [dueDate, setDueDate] = useState(() => getDueDateInputValue());
   const [entryAmount, setEntryAmount] = useState("");
   const [entryPaymentTypeId, setEntryPaymentTypeId] = useState("");
-  const [entryFinancialAccountId, setEntryFinancialAccountId] = useState("");
   const [entryReferenceCode, setEntryReferenceCode] = useState("");
   const [paymentReferenceCode, setPaymentReferenceCode] = useState("");
   const [cashReceivedAmount, setCashReceivedAmount] = useState("");
@@ -674,7 +656,7 @@ export default function NewSalePage() {
           buildMeasurementsMap(data.measurements).measurements,
         );
       } catch (error) {
-        console.error("Erro ao carregar medidas da cliente", error);
+        console.error("Erro ao carregar medidas da(o) cliente", error);
         setSelectedCustomerMeasurements({});
       }
     };
@@ -713,30 +695,6 @@ export default function NewSalePage() {
     };
 
     fetchPaymentTypes();
-  }, []);
-
-  useEffect(() => {
-    const fetchFinancialAccounts = async () => {
-      try {
-        const data = await getRequest("/financial-accounts/options");
-        setFinancialAccounts(
-          Array.isArray(data)
-            ? (data as FinancialAccountOption[]).map((item) => ({
-                id: Number(item.id),
-                label: item.label,
-                value: String(item.value),
-                scope: item.scope,
-                targetType: item.targetType,
-              }))
-            : [],
-        );
-      } catch (error) {
-        console.error("Erro ao buscar contas financeiras", error);
-        setFinancialAccounts([]);
-      }
-    };
-
-    void fetchFinancialAccounts();
   }, []);
 
   useEffect(() => {
@@ -883,11 +841,6 @@ export default function NewSalePage() {
               ? String(data.dueDate).slice(0, 10)
               : getDueDateInputValue(),
         );
-        setReceiptFinancialAccountId(
-          data.paymentDraft?.receiptFinancialAccountId
-            ? String(data.paymentDraft.receiptFinancialAccountId)
-            : "",
-        );
         setEntryAmount(
           data.paymentDraft?.entryAmount !== null &&
             data.paymentDraft?.entryAmount !== undefined
@@ -897,11 +850,6 @@ export default function NewSalePage() {
         setEntryPaymentTypeId(
           data.paymentDraft?.entryPaymentTypeId
             ? String(data.paymentDraft.entryPaymentTypeId)
-            : "",
-        );
-        setEntryFinancialAccountId(
-          data.paymentDraft?.entryFinancialAccountId
-            ? String(data.paymentDraft.entryFinancialAccountId)
             : "",
         );
         setEntryReferenceCode(data.paymentDraft?.entryReferenceCode || "");
@@ -1052,51 +1000,6 @@ export default function NewSalePage() {
     ],
   );
   const isDebtExemptionActive = doesNotGenerateDebt;
-  const immediateReceiptDestinationLabel = useMemo(() => {
-    const selectedAccount = financialAccounts.find(
-      (item) => String(item.id) === receiptFinancialAccountId,
-    );
-    return selectedAccount?.label || "";
-  }, [financialAccounts, receiptFinancialAccountId]);
-  const saleReceiptAccountOptions = useMemo(() => {
-    if (
-      !selectedPaymentType ||
-      selectedPaymentType.financialFlow !== "IMMEDIATE_CASH"
-    ) {
-      return [];
-    }
-
-    if (selectedPaymentType.kind === "CASH") {
-      return financialAccounts;
-    }
-
-    return financialAccounts.filter((item) => item.targetType === "BANK");
-  }, [financialAccounts, selectedPaymentType]);
-  const entryReceiptAccountOptions = useMemo(() => {
-    if (!selectedEntryPaymentType) {
-      return [];
-    }
-
-    if (selectedEntryPaymentType.kind === "CASH") {
-      return financialAccounts;
-    }
-
-    return financialAccounts.filter((item) => item.targetType === "BANK");
-  }, [financialAccounts, selectedEntryPaymentType]);
-  const defaultCashAccountOption = useMemo(
-    () =>
-      financialAccounts.find(
-        (item) => item.scope === "LOJA" && item.targetType === "CASH",
-      ) || null,
-    [financialAccounts],
-  );
-  const defaultBankAccountOption = useMemo(
-    () =>
-      financialAccounts.find(
-        (item) => item.scope === "LOJA" && item.targetType === "BANK",
-      ) || null,
-    [financialAccounts],
-  );
   const entryPaymentTypeOptions = useMemo(
     () =>
       paymentTypes.filter((item) => {
@@ -1109,8 +1012,7 @@ export default function NewSalePage() {
   );
   const parsedEntryAmount = useMemo(() => {
     if (!entryAmount.trim()) return 0;
-    const parsed = Number(entryAmount.replace(",", "."));
-    return Number.isFinite(parsed) ? parsed : 0;
+    return parseCurrencyToNumber(entryAmount);
   }, [entryAmount]);
   const parsedCustomerCreditAmount = useMemo(() => {
     if (!customerCreditAmountInput.trim()) return 0;
@@ -1140,6 +1042,26 @@ export default function NewSalePage() {
 
     return parsed;
   }, [installmentIntervalDays]);
+  const maxEntryAmount = useMemo(
+    () =>
+      Math.max(
+        0,
+        Number((discountedTotalValue - customerCreditToApply).toFixed(2)),
+      ),
+    [customerCreditToApply, discountedTotalValue],
+  );
+  const hasEntryAmountError = useMemo(
+    () =>
+      !doesNotGenerateDebt &&
+      shouldAllowEntryAmount &&
+      parsedEntryAmount >= maxEntryAmount,
+    [
+      doesNotGenerateDebt,
+      maxEntryAmount,
+      parsedEntryAmount,
+      shouldAllowEntryAmount,
+    ],
+  );
   const remainingAmount = useMemo(
     () =>
       Math.max(
@@ -1244,15 +1166,12 @@ export default function NewSalePage() {
     tableItems.length > 0 &&
     (isDebtExemptionActive || !!paymentTypeId) &&
     (isDebtExemptionActive ||
-      selectedPaymentType?.financialFlow !== "IMMEDIATE_CASH" ||
-      !!receiptFinancialAccountId) &&
-    (isDebtExemptionActive ||
       !selectedPaymentType?.requiresDueDate ||
       !!dueDate) &&
     (isDebtExemptionActive ||
       !shouldAllowEntryAmount ||
       parsedEntryAmount <= 0 ||
-      (!!entryPaymentTypeId && !!entryFinancialAccountId)) &&
+      !!entryPaymentTypeId) &&
     (isDebtExemptionActive ||
       !isImmediateCashPayment ||
       parsedCashReceivedAmount >=
@@ -1266,6 +1185,12 @@ export default function NewSalePage() {
         customerCreditToApply < discountedTotalValue)) &&
     (isDebtExemptionActive ||
       parsedEntryAmount + customerCreditToApply < discountedTotalValue);
+  const canAttemptCompleteSale =
+    canSaveSale ||
+    (!isSaving &&
+      !!selectedCustomer &&
+      tableItems.length > 0 &&
+      hasEntryAmountError);
   const canCreateQuote =
     !isSaving && !!selectedCustomer && tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
@@ -1296,10 +1221,6 @@ export default function NewSalePage() {
       doesNotGenerateDebt || !selectedPaymentType?.requiresDueDate
         ? null
         : dueDate,
-    receiptFinancialAccountId:
-      receiptFinancialAccountId && !doesNotGenerateDebt
-        ? Number(receiptFinancialAccountId)
-        : null,
     entryAmount:
       !doesNotGenerateDebt &&
       shouldAllowEntryAmount &&
@@ -1309,10 +1230,6 @@ export default function NewSalePage() {
     entryPaymentTypeId:
       !doesNotGenerateDebt && entryPaymentTypeId
         ? Number(entryPaymentTypeId)
-        : null,
-    entryFinancialAccountId:
-      entryFinancialAccountId && !doesNotGenerateDebt
-        ? Number(entryFinancialAccountId)
         : null,
     entryReferenceCode: doesNotGenerateDebt ? null : entryReferenceCode || null,
     paymentReferenceCode: doesNotGenerateDebt
@@ -1519,7 +1436,6 @@ export default function NewSalePage() {
     setPaymentTypeId(value);
 
     if (!value) {
-      setReceiptFinancialAccountId("");
       setSaveMessage("");
       return;
     }
@@ -1540,10 +1456,6 @@ export default function NewSalePage() {
 
   const handleEntryPaymentTypeChange = async (value: string) => {
     setEntryPaymentTypeId(value);
-    if (!value) {
-      setEntryFinancialAccountId("");
-    }
-
     if (value !== "1") {
       setSaveMessage("");
       return;
@@ -1559,12 +1471,10 @@ export default function NewSalePage() {
     }
 
     if (!selectedPaymentType) {
-      setReceiptFinancialAccountId("");
       setInstallmentCount("1");
       setInstallmentIntervalDays("30");
       setEntryAmount("");
       setEntryPaymentTypeId("");
-      setEntryFinancialAccountId("");
       setEntryReferenceCode("");
       setPaymentReferenceCode("");
       setCashReceivedAmount("");
@@ -1581,7 +1491,6 @@ export default function NewSalePage() {
     if (!shouldAllowEntryAmount) {
       setEntryAmount("");
       setEntryPaymentTypeId("");
-      setEntryFinancialAccountId("");
       setEntryReferenceCode("");
     }
 
@@ -1605,77 +1514,17 @@ export default function NewSalePage() {
     }
 
     setPaymentTypeId("");
-    setReceiptFinancialAccountId("");
     setInstallmentCount("1");
     setInstallmentIntervalDays("30");
     setDueDate(getDueDateInputValue());
     setEntryAmount("");
     setEntryPaymentTypeId("");
-    setEntryFinancialAccountId("");
     setEntryReferenceCode("");
     setPaymentReferenceCode("");
     setCashReceivedAmount("");
     setUseCustomerCredit(false);
     setCustomerCreditAmountInput("");
   }, [doesNotGenerateDebt]);
-
-  useEffect(() => {
-    if (
-      !selectedPaymentType ||
-      selectedPaymentType.financialFlow !== "IMMEDIATE_CASH"
-    ) {
-      setReceiptFinancialAccountId("");
-      return;
-    }
-
-    const availableIds = new Set(
-      saleReceiptAccountOptions.map((item) => String(item.id)),
-    );
-    if (
-      receiptFinancialAccountId &&
-      availableIds.has(receiptFinancialAccountId)
-    ) {
-      return;
-    }
-
-    const fallback =
-      selectedPaymentType.kind === "CASH"
-        ? defaultCashAccountOption
-        : defaultBankAccountOption;
-    setReceiptFinancialAccountId(fallback ? String(fallback.id) : "");
-  }, [
-    defaultBankAccountOption,
-    defaultCashAccountOption,
-    receiptFinancialAccountId,
-    saleReceiptAccountOptions,
-    selectedPaymentType,
-  ]);
-
-  useEffect(() => {
-    if (!selectedEntryPaymentType) {
-      setEntryFinancialAccountId("");
-      return;
-    }
-
-    const availableIds = new Set(
-      entryReceiptAccountOptions.map((item) => String(item.id)),
-    );
-    if (entryFinancialAccountId && availableIds.has(entryFinancialAccountId)) {
-      return;
-    }
-
-    const fallback =
-      selectedEntryPaymentType.kind === "CASH"
-        ? defaultCashAccountOption
-        : defaultBankAccountOption;
-    setEntryFinancialAccountId(fallback ? String(fallback.id) : "");
-  }, [
-    defaultBankAccountOption,
-    defaultCashAccountOption,
-    entryFinancialAccountId,
-    entryReceiptAccountOptions,
-    selectedEntryPaymentType,
-  ]);
 
   const addModalItemsToTable = () => {
     handleSaveModalItems();
@@ -1964,18 +1813,12 @@ export default function NewSalePage() {
           ? parsedInstallmentIntervalDays
           : null,
         dueDate: selectedPaymentType?.requiresDueDate ? dueDate : null,
-        receiptFinancialAccountId: receiptFinancialAccountId
-          ? Number(receiptFinancialAccountId)
-          : null,
         entryAmount:
           shouldAllowEntryAmount && parsedEntryAmount > 0
             ? parsedEntryAmount
             : null,
         entryPaymentTypeId: entryPaymentTypeId
           ? Number(entryPaymentTypeId)
-          : null,
-        entryFinancialAccountId: entryFinancialAccountId
-          ? Number(entryFinancialAccountId)
           : null,
         entryPaidAt: parsedEntryAmount > 0 ? getCurrentDateInputValue() : null,
         entryReferenceCode: entryReferenceCode || null,
@@ -2001,13 +1844,11 @@ export default function NewSalePage() {
       setSelectedCategoryCode("");
       setSelectedClothingSubtype("");
       setPaymentTypeId("");
-      setReceiptFinancialAccountId("");
       setInstallmentCount("1");
       setInstallmentIntervalDays("30");
       setDueDate(getDueDateInputValue());
       setEntryAmount("");
       setEntryPaymentTypeId("");
-      setEntryFinancialAccountId("");
       setEntryReferenceCode("");
       setPaymentReferenceCode("");
       setCashReceivedAmount("");
@@ -2248,10 +2089,6 @@ export default function NewSalePage() {
         doesNotGenerateDebt || !selectedPaymentType?.requiresDueDate
           ? null
           : dueDate,
-      receiptFinancialAccountId:
-        receiptFinancialAccountId && !doesNotGenerateDebt
-          ? Number(receiptFinancialAccountId)
-          : null,
       entryAmount:
         !doesNotGenerateDebt &&
         shouldAllowEntryAmount &&
@@ -2261,10 +2098,6 @@ export default function NewSalePage() {
       entryPaymentTypeId:
         !doesNotGenerateDebt && entryPaymentTypeId
           ? Number(entryPaymentTypeId)
-          : null,
-      entryFinancialAccountId:
-        entryFinancialAccountId && !doesNotGenerateDebt
-          ? Number(entryFinancialAccountId)
           : null,
       entryPaidAt:
         !doesNotGenerateDebt && parsedEntryAmount > 0
@@ -2299,13 +2132,11 @@ export default function NewSalePage() {
     setSelectedCategoryCode("");
     setSelectedClothingSubtype("");
     setPaymentTypeId("");
-    setReceiptFinancialAccountId("");
     setInstallmentCount("1");
     setInstallmentIntervalDays("30");
     setDueDate(getDueDateInputValue());
     setEntryAmount("");
     setEntryPaymentTypeId("");
-    setEntryFinancialAccountId("");
     setEntryReferenceCode("");
     setPaymentReferenceCode("");
     setCashReceivedAmount("");
@@ -2525,6 +2356,11 @@ export default function NewSalePage() {
 
   const handleCompleteSale = async () => {
     if (!selectedCustomer || tableItems.length === 0) {
+      return;
+    }
+
+    if (hasEntryAmountError) {
+      setSaveMessage("A entrada não pode ser maior que o valor total.");
       return;
     }
 
@@ -3164,19 +3000,30 @@ export default function NewSalePage() {
 
                 {!doesNotGenerateDebt &&
                   shouldAllowEntryAmount && (
-                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
                           Valor de entrada
                         </label>
                         <input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                          type="text"
+                          inputMode="numeric"
                           value={entryAmount}
-                          onChange={(e) => setEntryAmount(e.target.value)}
-                          className={paymentFieldClassName}
+                          onChange={(e) =>
+                            setEntryAmount(formatCurrencyInput(e.target.value))
+                          }
+                          placeholder="R$ 0,00"
+                          className={`${paymentFieldClassName} ${
+                            hasEntryAmountError
+                              ? "border-[#b42318] text-[#b42318] focus:ring-[#b42318]/30"
+                              : ""
+                          }`}
                         />
+                        {hasEntryAmountError ? (
+                          <p className="mt-1 text-xs text-[#b42318]">
+                            A entrada não pode ser maior que o valor total.
+                          </p>
+                        ) : null}
                       </div>
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
@@ -3209,31 +3056,12 @@ export default function NewSalePage() {
                           className={paymentFieldClassName}
                         />
                       </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Recebido em
-                        </label>
-                        <select
-                          value={entryFinancialAccountId}
-                          onChange={(e) =>
-                            setEntryFinancialAccountId(e.target.value)
-                          }
-                          className={paymentFieldClassName}
-                        >
-                          <option value="">Selecione...</option>
-                          {entryReceiptAccountOptions.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
                     </div>
                   )}
 
                 {!doesNotGenerateDebt && selectedPaymentType ? (
                   isPixOrDebitPayment ? (
-                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
                           Saldo
@@ -3264,27 +3092,11 @@ export default function NewSalePage() {
                           className={paymentReadonlyFieldClassName}
                         />
                       </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Recebido em
-                        </label>
-                        <select
-                          value={receiptFinancialAccountId}
-                          onChange={(e) =>
-                            setReceiptFinancialAccountId(e.target.value)
-                          }
-                          className={paymentFieldClassName}
-                        >
-                          <option value="">Selecione...</option>
-                          {saleReceiptAccountOptions.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
                     </div>
-                  ) : (
+                  ) : selectedPaymentType.allowsInstallments ||
+                    selectedPaymentType.requiresDueDate ||
+                    shouldShowInstallmentVisualization ||
+                    !isImmediateCashPayment ? (
                     <div
                       className={`grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 ${
                         selectedPaymentType.requiresDueDate ||
@@ -3347,41 +3159,9 @@ export default function NewSalePage() {
                             className={paymentFieldClassName}
                           />
                         </div>
-                      ) : selectedPaymentType.financialFlow ===
-                        "IMMEDIATE_CASH" ? (
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-primary">
-                            Recebido em
-                          </label>
-                          <select
-                            value={receiptFinancialAccountId}
-                            onChange={(e) =>
-                              setReceiptFinancialAccountId(e.target.value)
-                            }
-                            className={paymentFieldClassName}
-                          >
-                            <option value="">Selecione...</option>
-                            {saleReceiptAccountOptions.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      ) : (
-                        <div>
-                          <label className="mb-1 block text-sm font-medium text-primary">
-                            Destino do recebimento
-                          </label>
-                          <input
-                            value={immediateReceiptDestinationLabel}
-                            disabled
-                            className={paymentReadonlyFieldClassName}
-                          />
-                        </div>
-                      )}
+                      ) : null}
                     </div>
-                  )
+                  ) : null
                 ) : null}
 
                 {!doesNotGenerateDebt &&
@@ -3483,7 +3263,7 @@ export default function NewSalePage() {
                       type="button"
                       className="w-full sm:w-auto"
                       onClick={handleCompleteSale}
-                      disabled={!canSaveSale}
+                      disabled={!canAttemptCompleteSale}
                     >
                       {isSaving ? "Concluindo..." : "Concluir venda"}
                     </Button>

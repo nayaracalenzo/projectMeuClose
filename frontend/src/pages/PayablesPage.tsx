@@ -33,11 +33,7 @@ interface PaymentTypeOption {
   name: string;
 }
 
-interface FinancialAccountOption {
-  id: number;
-  label: string;
-  value: string;
-  scope: Scope;
+interface FinancialTargetHint {
   targetType: "CASH" | "BANK";
 }
 
@@ -64,8 +60,6 @@ interface PayableRow {
   openAmount: number;
   dueDate: string;
   status: string;
-  settlementTarget: SettlementTarget;
-  accountLabel: string | null;
   plannedPaymentTypeId: number | null;
   plannedPaymentTypeName: string | null;
   filter: PayableFilter;
@@ -132,8 +126,30 @@ const formatDate = (value: string) =>
 
 const getCurrentDateInputValue = () => new Date().toISOString().slice(0, 10);
 
-const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
-  `${account.label} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
+const normalizeUppercasePayloadText = (value: string) =>
+  String(value || "").trim().toUpperCase();
+
+const normalizePaymentTypeLabel = (value: string) =>
+  String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+const resolveSettlementTargetByPaymentTypeName = (
+  paymentTypeName?: string | null,
+): SettlementTarget => {
+  const normalized = normalizePaymentTypeLabel(paymentTypeName || "");
+
+  if (
+    normalized === "DINHEIRO" ||
+    normalized === "CARNE"
+  ) {
+    return "CAIXA";
+  }
+
+  return "BANCO";
+};
 
 export default function PayablesPage() {
   const [filter, setFilter] = useState<PayableFilter>("EM_ABERTO");
@@ -143,9 +159,6 @@ export default function PayablesPage() {
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<PayableRow[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
-  const [financialAccounts, setFinancialAccounts] = useState<
-    FinancialAccountOption[]
-  >([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [financialCategories, setFinancialCategories] = useState<
     FinancialCategoryOption[]
@@ -175,9 +188,6 @@ export default function PayablesPage() {
   const [dueDate, setDueDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
-  const [settlementTarget, setSettlementTarget] =
-    useState<SettlementTarget>("BANCO");
-  const [accountLabel, setAccountLabel] = useState("");
   const [plannedPaymentTypeId, setPlannedPaymentTypeId] = useState("");
 
   const [paymentTypeId, setPaymentTypeId] = useState("");
@@ -186,8 +196,6 @@ export default function PayablesPage() {
     new Date().toISOString().slice(0, 10),
   );
   const [referenceCode, setReferenceCode] = useState("");
-  const [paymentFinancialAccountId, setPaymentFinancialAccountId] =
-    useState("");
   const [paymentConfirmOpen, setPaymentConfirmOpen] = useState(false);
   const [cashSessionStatus, setCashSessionStatus] =
     useState<CashSessionStatusResponse | null>(null);
@@ -316,22 +324,6 @@ export default function PayablesPage() {
     fetchSuppliers();
   }, []);
 
-  useEffect(() => {
-    const fetchFinancialAccounts = async () => {
-      try {
-        const data = (await getRequest(
-          "/financial-accounts/options",
-        )) as FinancialAccountOption[];
-        setFinancialAccounts(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Erro ao buscar contas financeiras", error);
-        setFinancialAccounts([]);
-      }
-    };
-
-    fetchFinancialAccounts();
-  }, []);
-
   const selectedRow = rows.find((row) => row.id === selectedPayableId) || null;
   const canManageSelectedPayable = Boolean(
     selectedRow &&
@@ -347,8 +339,6 @@ export default function PayablesPage() {
     setSupplierId("");
     setAmount("");
     setDueDate(new Date().toISOString().slice(0, 10));
-    setSettlementTarget("BANCO");
-    setAccountLabel("");
     setPlannedPaymentTypeId("");
     setPayableFormMode("create");
   };
@@ -368,8 +358,6 @@ export default function PayablesPage() {
     setSupplierId(selectedRow.supplierId ? String(selectedRow.supplierId) : "");
     setAmount(formatCurrencyInput(String(selectedRow.amount.toFixed(2))));
     setDueDate(selectedRow.dueDate.slice(0, 10));
-    setSettlementTarget(selectedRow.settlementTarget);
-    setAccountLabel(selectedRow.accountLabel || "");
     setPlannedPaymentTypeId(
       selectedRow.plannedPaymentTypeId
         ? String(selectedRow.plannedPaymentTypeId)
@@ -382,14 +370,12 @@ export default function PayablesPage() {
     try {
       const payload = {
         scope: "LOJA" as Scope,
-        description,
-        category,
-        beneficiary,
+        description: normalizeUppercasePayloadText(description),
+        category: normalizeUppercasePayloadText(category),
+        beneficiary: normalizeUppercasePayloadText(beneficiary),
         supplierId: supplierId ? Number(supplierId) : null,
         amount: parseCurrencyToNumber(amount),
         dueDate,
-        settlementTarget,
-        accountLabel: accountLabel || null,
         plannedPaymentTypeId: plannedPaymentTypeId
           ? Number(plannedPaymentTypeId)
           : null,
@@ -473,8 +459,7 @@ export default function PayablesPage() {
     setPaymentTypeId(
       row.plannedPaymentTypeId ? String(row.plannedPaymentTypeId) : "",
     );
-    setPaymentFinancialAccountId("");
-    setPaymentAmount(String(row.openAmount.toFixed(2)));
+    setPaymentAmount(formatCurrencyInput(String(row.openAmount.toFixed(2))));
     setPaidAt(new Date().toISOString().slice(0, 10));
     setReferenceCode("");
     setPaymentConfirmOpen(false);
@@ -487,7 +472,6 @@ export default function PayablesPage() {
     setPaymentAmount("");
     setPaidAt(new Date().toISOString().slice(0, 10));
     setReferenceCode("");
-    setPaymentFinancialAccountId("");
   };
 
   const handleSelectRow = (rowId: number) => {
@@ -521,25 +505,16 @@ export default function PayablesPage() {
       return;
     }
 
-    if (!paymentFinancialAccountId) {
-      setToast({
-        open: true,
-        tone: "warning",
-        title: "Conta a pagar",
-        message: "Selecione onde o pagamento foi realizado.",
-      });
-      return;
-    }
-
     void (async () => {
-      const selectedFinancialAccount =
-        financialAccounts.find(
-          (item) => String(item.id) === paymentFinancialAccountId,
-        ) || null;
+      const selectedPaymentType =
+        paymentTypes.find((item) => String(item.id) === paymentTypeId) || null;
+      const selectedSettlementTarget = resolveSettlementTargetByPaymentTypeName(
+        selectedPaymentType?.name,
+      );
 
       if (
         !(await ensureCashSessionBeforeStoreCashSettlement(
-          selectedFinancialAccount,
+          selectedSettlementTarget === "CAIXA" ? { targetType: "CASH" } : null,
         ))
       ) {
         return;
@@ -550,7 +525,7 @@ export default function PayablesPage() {
   };
 
   const ensureCashSessionBeforeStoreCashSettlement = async (
-    financialAccount: FinancialAccountOption | null,
+    financialAccount: FinancialTargetHint | null,
   ) => {
     if (
       !financialAccount ||
@@ -709,8 +684,7 @@ export default function PayablesPage() {
     try {
       const data = (await postRequest(`/payables/${activePayableId}/payments`, {
         paymentTypeId: Number(paymentTypeId),
-        financialAccountId: Number(paymentFinancialAccountId),
-        amount: Number(paymentAmount),
+        amount: parseCurrencyToNumber(paymentAmount),
         paidAt,
         referenceCode: referenceCode || null,
       })) as RegisterPaymentResponse;
@@ -835,6 +809,23 @@ export default function PayablesPage() {
               onChange={(e) => setDueDate(e.target.value)}
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Forma de pagamento
+            </label>
+            <select
+              value={plannedPaymentTypeId}
+              onChange={(e) => setPlannedPaymentTypeId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
+              <option value="">Selecione...</option>
+              {paymentTypes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2 md:col-span-2">
             <button
@@ -1025,98 +1016,6 @@ export default function PayablesPage() {
 
       {message && <p className="mb-4 text-sm text-neutral-700">{message}</p>}
 
-      {activePayableId && (
-        <div className="mb-4 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Forma paga
-            </label>
-            <select
-              value={paymentTypeId}
-              onChange={(e) => setPaymentTypeId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {paymentTypes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-                ))}
-              </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Pago em
-            </label>
-            <select
-              value={paymentFinancialAccountId}
-              onChange={(e) => setPaymentFinancialAccountId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {financialAccounts.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {formatFinancialAccountLabel(item)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Valor
-            </label>
-            <input
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={paymentAmount}
-              onChange={(e) => setPaymentAmount(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Data
-            </label>
-            <input
-              type="date"
-              value={paidAt}
-              onChange={(e) => setPaidAt(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Referência
-            </label>
-            <input
-              value={referenceCode}
-              onChange={(e) => setReferenceCode(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div className="flex gap-2 md:col-span-4">
-            <button
-              type="button"
-              onClick={handleRegisterPayment}
-              disabled={!paymentTypeId || !paymentFinancialAccountId}
-              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
-            >
-              Confirmar pagamento
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                resetPaymentFlow();
-              }}
-              className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
@@ -1244,6 +1143,86 @@ export default function PayablesPage() {
           </Button>
         </div>
       </div>
+
+      <CustomerModal
+        open={Boolean(activePayableId)}
+        onClose={resetPaymentFlow}
+        title="Quitar Conta"
+        subtitle="Informe os dados do pagamento da conta a pagar."
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Forma paga
+            </label>
+            <select
+              value={paymentTypeId}
+              onChange={(e) => setPaymentTypeId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
+              <option value="">Selecione...</option>
+              {paymentTypes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Valor
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={paymentAmount}
+              onChange={(e) =>
+                setPaymentAmount(formatCurrencyInput(e.target.value))
+              }
+              placeholder="R$ 0,00"
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Data
+            </label>
+            <input
+              type="date"
+              value={paidAt}
+              onChange={(e) => setPaidAt(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Referência
+            </label>
+            <input
+              value={referenceCode}
+              onChange={(e) => setReferenceCode(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+          <div className="flex gap-2 md:col-span-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleRegisterPayment}
+              disabled={!paymentTypeId}
+            >
+              Confirmar pagamento
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={resetPaymentFlow}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      </CustomerModal>
 
       <CustomerModal
         open={paymentConfirmOpen && Boolean(activePayableId)}

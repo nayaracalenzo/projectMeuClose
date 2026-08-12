@@ -244,7 +244,7 @@ async function registerPayment(payableId, payload) {
         payablePaymentId: payment.idPayablePayment,
       };
 
-      if (payload.financialMovement.target === "CAIXA") {
+      if (payload.financialMovement.target === "CASH") {
         await createCashEntry(movementPayload, transaction);
       } else {
         await createBankEntry(movementPayload, transaction);

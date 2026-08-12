@@ -102,7 +102,9 @@ const getCurrentSearchDateInputValue = () =>
   formatLegacyShortDateInput(getCurrentDateInputValue());
 
 const formatDate = (dateString: string) =>
-  new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
+  new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(
+    new Date(dateString),
+  );
 
 export default function Registers() {
   const pageSize = 10;
@@ -142,9 +144,6 @@ export default function Registers() {
     "Transferencia do caixa para o banco",
   );
   const [transferReferenceCode, setTransferReferenceCode] = useState("");
-  const [transferFinancialCategoryId, setTransferFinancialCategoryId] =
-    useState("");
-  const [transferAccountLabel, setTransferAccountLabel] = useState("");
   const [manualMovementType, setManualMovementType] = useState<"IN" | "OUT">(
     "IN",
   );
@@ -169,8 +168,7 @@ export default function Registers() {
 
   const currentSession = sessionStatus?.currentSession || null;
   const requiresOpenStoreSession = !currentSession;
-  const canOpenTransferModal =
-    !requiresOpenStoreSession && bankAccountOptions.length > 0;
+  const canOpenTransferModal = !requiresOpenStoreSession;
   const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
   const previousCashLaunchDateLabel = currentSession
     ? formatDate(currentSession.openedAt)
@@ -286,8 +284,6 @@ export default function Registers() {
     setTransferDate(getCurrentDateInputValue());
     setTransferDescription("Transferencia do caixa para o banco");
     setTransferReferenceCode("");
-    setTransferFinancialCategoryId("");
-    setTransferAccountLabel("");
     setTransferModalOpen(false);
   };
 
@@ -386,8 +382,6 @@ export default function Registers() {
         occurredAt: transferDate,
         description: transferDescription.trim(),
         referenceCode: transferReferenceCode.trim() || null,
-        financialCategoryId: Number(transferFinancialCategoryId),
-        accountLabel: transferAccountLabel,
       });
       resetTransferModal();
       await refreshData();
@@ -706,16 +700,13 @@ export default function Registers() {
               <th className="w-[170px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma pag.
               </th>
-              <th className="w-[180px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
-                Conta
-              </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="whitespace-nowrap px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Entrada
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="whitespace-nowrap px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saida
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="whitespace-nowrap px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>
@@ -724,7 +715,7 @@ export default function Registers() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando lancamentos...
@@ -733,7 +724,7 @@ export default function Registers() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhum lancamento de caixa cadastrado.
@@ -782,16 +773,13 @@ export default function Registers() {
                   <td className="w-[170px] whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {row.paymentTypeName || "-"}
                   </td>
-                  <td className="w-[180px] px-4 py-3 text-[14px] text-neutral-700">
-                    {row.accountLabel || "-"}
-                  </td>
-                  <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
                     {row.amountIn ? formatCurrency(row.amountIn) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] text-[#b42318]">
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] text-[#b42318]">
                     {row.amountOut ? formatCurrency(row.amountOut) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] font-semibold text-primary">
                     {formatCurrency(row.balance)}
                   </td>
                 </tr>
@@ -837,9 +825,6 @@ export default function Registers() {
                 </p>
                 <p className="text-xs text-neutral-700">
                   Forma de pagamento: {row.paymentTypeName || "-"}
-                </p>
-                <p className="text-xs text-neutral-700">
-                  Conta: {row.accountLabel || "-"}
                 </p>
                 <p className="text-xs text-[#1f7a1f]">
                   Entrada: {row.amountIn ? formatCurrency(row.amountIn) : "-"}
@@ -891,89 +876,55 @@ export default function Registers() {
         subtitle="Registre a saida do caixa e a entrada correspondente na conta bancaria selecionada."
       >
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Categoria
-            </label>
-            <select
-              value={transferFinancialCategoryId}
-              onChange={(e) => setTransferFinancialCategoryId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="">Selecione</option>
-              {financialCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.description}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Valor
+              </label>
+              <input
+                value={transferAmountInput}
+                onChange={(e) =>
+                  setTransferAmountInput(formatCurrencyInput(e.target.value))
+                }
+                placeholder="R$ 0,00"
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Conta de destino
-            </label>
-            <select
-              value={transferAccountLabel}
-              onChange={(e) => setTransferAccountLabel(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="">Selecione</option>
-              {bankAccountOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Data
+              </label>
+              <input
+                type="date"
+                value={transferDate}
+                onChange={(e) => setTransferDate(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Valor
-            </label>
-            <input
-              value={transferAmountInput}
-              onChange={(e) =>
-                setTransferAmountInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
-          </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Descricao
+              </label>
+              <input
+                value={transferDescription}
+                onChange={(e) => setTransferDescription(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Data
-            </label>
-            <input
-              type="date"
-              value={transferDate}
-              onChange={(e) => setTransferDate(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Descricao
-            </label>
-            <input
-              value={transferDescription}
-              onChange={(e) => setTransferDescription(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Referencia
-            </label>
-            <input
-              value={transferReferenceCode}
-              onChange={(e) => setTransferReferenceCode(e.target.value)}
-              placeholder="Opcional"
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Referencia
+              </label>
+              <input
+                value={transferReferenceCode}
+                onChange={(e) => setTransferReferenceCode(e.target.value)}
+                placeholder="Opcional"
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -982,8 +933,6 @@ export default function Registers() {
               onClick={handleTransferToBank}
               disabled={
                 sessionActionLoading ||
-                !transferAccountLabel ||
-                !transferFinancialCategoryId ||
                 !transferAmountInput ||
                 !transferDescription.trim()
               }
@@ -1011,87 +960,89 @@ export default function Registers() {
         subtitle="Registre uma entrada ou saida no caixa."
       >
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Tipo de movimentacao
-            </label>
-            <select
-              value={manualMovementType}
-              onChange={(e) =>
-                setManualMovementType(e.target.value as "IN" | "OUT")
-              }
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="IN">Entrada</option>
-              <option value="OUT">Saida</option>
-            </select>
-          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Tipo de movimentacao
+              </label>
+              <select
+                value={manualMovementType}
+                onChange={(e) =>
+                  setManualMovementType(e.target.value as "IN" | "OUT")
+                }
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              >
+                <option value="IN">Entrada</option>
+                <option value="OUT">Saida</option>
+              </select>
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Categoria
-            </label>
-            <select
-              value={manualFinancialCategoryId}
-              onChange={(e) => setManualFinancialCategoryId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="">Selecione</option>
-              {financialCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.description}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Categoria
+              </label>
+              <select
+                value={manualFinancialCategoryId}
+                onChange={(e) => setManualFinancialCategoryId(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              >
+                <option value="">Selecione</option>
+                {financialCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.description}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Valor
-            </label>
-            <input
-              value={manualAmountInput}
-              onChange={(e) =>
-                setManualAmountInput(formatCurrencyInput(e.target.value))
-              }
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
-          </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Valor
+              </label>
+              <input
+                value={manualAmountInput}
+                onChange={(e) =>
+                  setManualAmountInput(formatCurrencyInput(e.target.value))
+                }
+                placeholder="R$ 0,00"
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Data
-            </label>
-            <input
-              type="date"
-              value={manualDate}
-              onChange={(e) => setManualDate(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
-          </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Data
+              </label>
+              <input
+                type="date"
+                value={manualDate}
+                onChange={(e) => setManualDate(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Descricao
-            </label>
-            <input
-              value={manualDescription}
-              onChange={(e) => setManualDescription(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
-          </div>
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Descricao
+              </label>
+              <input
+                value={manualDescription}
+                onChange={(e) => setManualDescription(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Referencia
-            </label>
-            <input
-              value={manualReferenceCode}
-              onChange={(e) => setManualReferenceCode(e.target.value)}
-              placeholder="Opcional"
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            />
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Referencia
+              </label>
+              <input
+                value={manualReferenceCode}
+                onChange={(e) => setManualReferenceCode(e.target.value)}
+                placeholder="Opcional"
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+            </div>
           </div>
 
           <div className="flex gap-2">

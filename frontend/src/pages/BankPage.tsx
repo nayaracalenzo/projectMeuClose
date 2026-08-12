@@ -528,16 +528,13 @@ export default function BankPage() {
               <th className="w-[170px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma pag.
               </th>
-              <th className="w-[180px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
-                Conta
-              </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="whitespace-nowrap px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Entrada
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="whitespace-nowrap px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saida
               </th>
-              <th className="px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="whitespace-nowrap px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>
@@ -546,7 +543,7 @@ export default function BankPage() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando movimentacoes...
@@ -555,7 +552,7 @@ export default function BankPage() {
             ) : rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Nenhuma movimentacao bancaria cadastrada.
@@ -604,16 +601,13 @@ export default function BankPage() {
                   <td className="w-[170px] whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {row.paymentTypeName || "-"}
                   </td>
-                  <td className="w-[180px] px-4 py-3 text-[14px] text-neutral-700">
-                    {row.bank || row.accountLabel || "-"}
-                  </td>
-                  <td className="px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
                     {row.amountIn ? formatCurrency(row.amountIn) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] text-[#b42318]">
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] text-[#b42318]">
                     {row.amountOut ? formatCurrency(row.amountOut) : "-"}
                   </td>
-                  <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] font-semibold text-primary">
                     {formatCurrency(row.balance)}
                   </td>
                 </tr>
@@ -661,9 +655,6 @@ export default function BankPage() {
               </p>
               <p className="text-xs text-neutral-700">
                 Forma de pagamento: {row.paymentTypeName || "-"}
-              </p>
-              <p className="text-xs text-neutral-700">
-                Conta: {row.bank || row.accountLabel || "-"}
               </p>
               <p className="text-xs text-[#1f7a1f]">
                 Entrada: {row.amountIn ? formatCurrency(row.amountIn) : "-"}

@@ -57,11 +57,7 @@ interface PaymentTypeOption {
   name: string;
 }
 
-interface FinancialAccountOption {
-  id: number;
-  label: string;
-  value: string;
-  scope: "LOJA" | "PESSOAL";
+interface FinancialTargetHint {
   targetType: "CASH" | "BANK";
 }
 
@@ -141,14 +137,30 @@ const formatDate = (value?: string | null) => {
 
 const getCurrentDateInputValue = () => toIsoDate(new Date());
 
-const formatFinancialAccountLabel = (account: FinancialAccountOption) =>
-  `${account.label} (${account.targetType === "CASH" ? "Caixa" : "Banco"})`;
-
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
 
 const normalizeCustomerDisplayName = (value: string | null | undefined) => {
   const normalized = String(value || "").trim();
   return normalized ? normalized.toUpperCase() : "SEM NOME";
+};
+
+const normalizePaymentTypeLabel = (value: string) =>
+  String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+const resolveSettlementTargetByPaymentTypeName = (
+  paymentTypeName?: string | null,
+) => {
+  const normalized = normalizePaymentTypeLabel(paymentTypeName || "");
+
+  if (normalized === "DINHEIRO" || normalized === "CARNE") {
+    return "CAIXA";
+  }
+
+  return "BANCO";
 };
 
 const getReceivableOriginName = (row: ReceivableRow) =>
@@ -213,9 +225,6 @@ export default function ReceivablesPage() {
   const [endDate, setEndDate] = useState("");
   const [rows, setRows] = useState<ReceivableRow[]>([]);
   const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
-  const [financialAccounts, setFinancialAccounts] = useState<
-    FinancialAccountOption[]
-  >([]);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [page, setPage] = useState(1);
   const [totalRows, setTotalRows] = useState(0);
@@ -242,8 +251,6 @@ export default function ReceivablesPage() {
     toIsoDate(new Date()),
   );
   const [receiptReferenceCode, setReceiptReferenceCode] = useState("");
-  const [receiptFinancialAccountId, setReceiptFinancialAccountId] =
-    useState("");
   const [discardInterest, setDiscardInterest] = useState(false);
   const [receiptConfirmOpen, setReceiptConfirmOpen] = useState(false);
   const [cashSessionStatus, setCashSessionStatus] =
@@ -358,22 +365,6 @@ export default function ReceivablesPage() {
     };
 
     fetchCustomers();
-  }, []);
-
-  useEffect(() => {
-    const fetchFinancialAccounts = async () => {
-      try {
-        const data = (await getRequest(
-          "/financial-accounts/options",
-        )) as FinancialAccountOption[];
-        setFinancialAccounts(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Erro ao buscar contas financeiras", error);
-        setFinancialAccounts([]);
-      }
-    };
-
-    fetchFinancialAccounts();
   }, []);
 
   useEffect(() => {
@@ -570,7 +561,6 @@ export default function ReceivablesPage() {
     setDiscardInterest(false);
     setReceiptAmount("");
     setReceiptReferenceCode("");
-    setReceiptFinancialAccountId("");
     setReceiptConfirmOpen(false);
     setQuitModalOpen(true);
   };
@@ -610,7 +600,6 @@ export default function ReceivablesPage() {
     setReceiptPaymentTypeId("");
     setReceiptAmount("");
     setReceiptReferenceCode("");
-    setReceiptFinancialAccountId("");
     setDiscardInterest(false);
   };
 
@@ -656,19 +645,16 @@ export default function ReceivablesPage() {
       return;
     }
 
-    if (!receiptFinancialAccountId) {
-      setMessage("Selecione onde o valor foi recebido.");
-      return;
-    }
-
-    const selectedFinancialAccount =
-      financialAccounts.find(
-        (item) => String(item.id) === receiptFinancialAccountId,
-      ) || null;
+    const selectedPaymentType =
+      paymentTypes.find((item) => String(item.id) === receiptPaymentTypeId) ||
+      null;
+    const selectedSettlementTarget = resolveSettlementTargetByPaymentTypeName(
+      selectedPaymentType?.name,
+    );
 
     if (
       !(await ensureCashSessionBeforeStoreCashSettlement(
-        selectedFinancialAccount,
+        selectedSettlementTarget === "CAIXA" ? { targetType: "CASH" } : null,
       ))
     ) {
       return;
@@ -678,13 +664,9 @@ export default function ReceivablesPage() {
   };
 
   const ensureCashSessionBeforeStoreCashSettlement = async (
-    financialAccount: FinancialAccountOption | null,
+    financialAccount: FinancialTargetHint | null,
   ) => {
-    if (
-      !financialAccount ||
-      financialAccount.scope !== "LOJA" ||
-      financialAccount.targetType !== "CASH"
-    ) {
+    if (!financialAccount || financialAccount.targetType !== "CASH") {
       return true;
     }
 
@@ -791,7 +773,6 @@ export default function ReceivablesPage() {
     try {
       await postRequest(`/receivables/${selectedRow.id}/receipts`, {
         paymentTypeId: Number(receiptPaymentTypeId),
-        financialAccountId: Number(receiptFinancialAccountId),
         amount: settledAmount,
         paidAt: receiptPaidAt,
         referenceCode: receiptReferenceCode || null,
@@ -1386,7 +1367,7 @@ export default function ReceivablesPage() {
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                   />
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <label className="mb-1 block text-sm font-semibold text-primary">
                     Forma de pgto
                   </label>
@@ -1399,25 +1380,6 @@ export default function ReceivablesPage() {
                     {paymentTypes.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-primary">
-                    Recebido em
-                  </label>
-                  <select
-                    value={receiptFinancialAccountId}
-                    onChange={(e) =>
-                      setReceiptFinancialAccountId(e.target.value)
-                    }
-                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-                  >
-                    <option value="">Selecione...</option>
-                    {financialAccounts.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {formatFinancialAccountLabel(item)}
                       </option>
                     ))}
                   </select>
@@ -1443,7 +1405,6 @@ export default function ReceivablesPage() {
                 onClick={handleRegisterReceipt}
                 disabled={
                   !receiptPaymentTypeId ||
-                  !receiptFinancialAccountId ||
                   settledAmount <= 0
                 }
               >
@@ -1484,7 +1445,6 @@ export default function ReceivablesPage() {
                 onClick={handleConfirmRegisterReceipt}
                 disabled={
                   !receiptPaymentTypeId ||
-                  !receiptFinancialAccountId ||
                   settledAmount <= 0
                 }
               >

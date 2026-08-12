@@ -116,6 +116,18 @@ async function getFinancialAccountOrDefault({
   return fallback;
 }
 
+function resolveDefaultFinancialTargetType(paymentType) {
+  const normalizedKind = String(paymentType?.kind || "")
+    .trim()
+    .toUpperCase();
+
+  if (normalizedKind === "CASH" || normalizedKind === "BOOKLET") {
+    return "CASH";
+  }
+
+  return "BANK";
+}
+
 function getInstallmentFilter(status, dueDate, paidAmount, amount) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -704,9 +716,8 @@ async function registerReceipt(installmentId, body = {}) {
     );
   const saleId = installment.Receivable?.saleId || null;
   const financialAccount = await getFinancialAccountOrDefault({
-    idFinancialAccount: body.financialAccountId,
     fieldName: "Recebido em",
-    defaultTargetType: isImmediateCashPaymentType(normalizedPaymentType) ? "CASH" : "BANK",
+    defaultTargetType: resolveDefaultFinancialTargetType(normalizedPaymentType),
   });
 
   const created = await repository.registerReceipt(normalizedInstallmentId, {
