@@ -829,10 +829,8 @@ async function normalizeBudgetPaymentDraft(body = {}) {
     body.installmentCount,
     body.installmentIntervalDays,
     body.dueDate,
-    body.receiptFinancialAccountId,
     body.entryAmount,
     body.entryPaymentTypeId,
-    body.entryFinancialAccountId,
     body.entryReferenceCode,
     body.paymentReferenceCode,
     body.useCustomerCredit,
@@ -853,18 +851,6 @@ async function normalizeBudgetPaymentDraft(body = {}) {
     body.entryPaymentTypeId === ""
       ? null
       : normalizeInteger(body.entryPaymentTypeId, "Forma da entrada");
-  const receiptFinancialAccountId =
-    body.receiptFinancialAccountId === null ||
-    body.receiptFinancialAccountId === undefined ||
-    body.receiptFinancialAccountId === ""
-      ? null
-      : normalizeInteger(body.receiptFinancialAccountId, "Recebido em");
-  const entryFinancialAccountId =
-    body.entryFinancialAccountId === null ||
-    body.entryFinancialAccountId === undefined ||
-    body.entryFinancialAccountId === ""
-      ? null
-      : normalizeInteger(body.entryFinancialAccountId, "Recebido em");
 
   if (paymentTypeId) {
     const paymentType = await paymentTypesRepository.getPaymentTypeById(paymentTypeId);
@@ -877,20 +863,6 @@ async function normalizeBudgetPaymentDraft(body = {}) {
     const entryPaymentType = await paymentTypesRepository.getPaymentTypeById(entryPaymentTypeId);
     if (!entryPaymentType) {
       throw createSalesValidationError("Forma da entrada invalida.");
-    }
-  }
-
-  if (receiptFinancialAccountId) {
-    const receiptAccount = await financialAccountsRepository.getById(receiptFinancialAccountId);
-    if (!receiptAccount || receiptAccount.active === false) {
-      throw createSalesValidationError("Recebido em invalido.");
-    }
-  }
-
-  if (entryFinancialAccountId) {
-    const entryAccount = await financialAccountsRepository.getById(entryFinancialAccountId);
-    if (!entryAccount || entryAccount.active === false) {
-      throw createSalesValidationError("Recebido em invalido.");
     }
   }
 
@@ -907,13 +879,11 @@ async function normalizeBudgetPaymentDraft(body = {}) {
         ? null
         : normalizeInteger(body.installmentIntervalDays, "Intervalo entre parcelas"),
     dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
-    receiptFinancialAccountId,
     entryAmount:
       body.entryAmount === null || body.entryAmount === undefined || body.entryAmount === ""
         ? null
         : roundCurrency(normalizeDecimal(body.entryAmount, "Valor da entrada")),
     entryPaymentTypeId,
-    entryFinancialAccountId,
     entryReferenceCode: body.entryReferenceCode ? String(body.entryReferenceCode).trim() : null,
     paymentReferenceCode: body.paymentReferenceCode ? String(body.paymentReferenceCode).trim() : null,
     useCustomerCredit: Boolean(body.useCustomerCredit),
@@ -1023,6 +993,18 @@ async function getFinancialAccountOrDefault({
   }
 
   return fallback;
+}
+
+function resolveDefaultFinancialTargetType(paymentType) {
+  const normalizedKind = String(paymentType?.kind || "")
+    .trim()
+    .toUpperCase();
+
+  if (normalizedKind === "CASH" || normalizedKind === "BOOKLET") {
+    return "CASH";
+  }
+
+  return "BANK";
 }
 
 function validateInstallmentCount(paymentType, installmentCount) {
@@ -1205,10 +1187,6 @@ function mapBudgetPaymentDraft(draft) {
 
   const paymentType = draft.PaymentType || draft.PaymentTypes || null;
   const entryPaymentType = draft.EntryPaymentType || null;
-  const receiptFinancialAccount =
-    draft.ReceiptFinancialAccount || draft.ReceiptFinancialAccounts || null;
-  const entryFinancialAccount =
-    draft.EntryFinancialAccount || draft.EntryFinancialAccounts || null;
 
   return {
     paymentTypeId: draft.paymentTypeId || null,
@@ -1222,14 +1200,10 @@ function mapBudgetPaymentDraft(draft) {
         ? null
         : Number(draft.installmentIntervalDays),
     dueDate: draft.dueDate || null,
-    receiptFinancialAccountId: draft.receiptFinancialAccountId || null,
-    receiptFinancialAccountName: receiptFinancialAccount?.desc || null,
     entryAmount:
       draft.entryAmount === null || draft.entryAmount === undefined ? null : Number(draft.entryAmount),
     entryPaymentTypeId: draft.entryPaymentTypeId || null,
     entryPaymentTypeName: entryPaymentType?.desc || null,
-    entryFinancialAccountId: draft.entryFinancialAccountId || null,
-    entryFinancialAccountName: entryFinancialAccount?.desc || null,
     entryReferenceCode: draft.entryReferenceCode || null,
     paymentReferenceCode: draft.paymentReferenceCode || null,
     useCustomerCredit: Boolean(draft.useCustomerCredit),
@@ -1672,9 +1646,8 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     };
 
     entryFinancialAccount = await getFinancialAccountOrDefault({
-      idFinancialAccount: body.entryFinancialAccountId,
       fieldName: "Recebido em",
-      defaultTargetType: isImmediateCashPaymentType(entryPaymentType) ? "CASH" : "BANK",
+      defaultTargetType: resolveDefaultFinancialTargetType(entryPaymentType),
       allowCashDestination: isImmediateCashPaymentType(entryPaymentType),
     });
 
@@ -1687,7 +1660,6 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     });
   } else if (
     body.entryPaymentTypeId ||
-    body.entryFinancialAccountId ||
     body.entryPaidAt ||
     body.entryReferenceCode
   ) {
@@ -1712,9 +1684,8 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     };
 
     receiptFinancialAccount = await getFinancialAccountOrDefault({
-      idFinancialAccount: body.receiptFinancialAccountId,
       fieldName: "Recebido em",
-      defaultTargetType: isImmediateCashPaymentType(mainPaymentType) ? "CASH" : "BANK",
+      defaultTargetType: resolveDefaultFinancialTargetType(mainPaymentType),
       allowCashDestination: isImmediateCashPaymentType(mainPaymentType),
     });
 

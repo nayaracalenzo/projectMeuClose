@@ -914,7 +914,7 @@ export default function CustomerDetails() {
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.08em] text-neutral-700">
-                Medidas da cliente
+                Medidas cliente
               </p>
             </div>
 

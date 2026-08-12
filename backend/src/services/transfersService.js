@@ -1,5 +1,6 @@
 const { sequelize } = require("../models");
 const { validationError } = require("../errors/AppError");
+const financialAccountsRepository = require("../repositories/financialAccountsRepository");
 const financialCategoriesRepository = require("../repositories/financialCategoriesRepository");
 const { createBankEntry, createCashEntry } = require("./financialEntriesService");
 
@@ -84,13 +85,27 @@ async function getRequiredFinancialCategoryId(rawFinancialCategoryId) {
   return normalized;
 }
 
+async function getDefaultStoreBankAccountLabel() {
+  const account = await financialAccountsRepository.findDefaultByScopeAndTarget(
+    "LOJA",
+    "BANK",
+  );
+
+  const normalized = String(account?.desc || "").trim();
+
+  if (!normalized) {
+    throw validationError("Conta bancaria padrao da loja nao encontrada.");
+  }
+
+  return normalized;
+}
+
 async function transferStoreCashToBank(body = {}) {
   const amount = normalizeAmount(body.amount);
   const occurredAt = normalizeDate(body.occurredAt);
   const description = normalizeDescription(body.description);
   const referenceCode = normalizeReferenceCode(body.referenceCode);
-  const financialCategoryId = await getRequiredFinancialCategoryId(body.financialCategoryId);
-  const accountLabel = normalizeBankAccountLabel(body.accountLabel);
+  const accountLabel = await getDefaultStoreBankAccountLabel();
   const transferKey = buildTransferKey();
 
   return sequelize.transaction(async (transaction) => {
@@ -98,7 +113,6 @@ async function transferStoreCashToBank(body = {}) {
       {
         scope: "LOJA",
         movementType: "OUT",
-        financialCategoryId,
         category: "TRANSFERENCIA",
         description,
         amount,
@@ -115,7 +129,6 @@ async function transferStoreCashToBank(body = {}) {
       {
         scope: "LOJA",
         movementType: "IN",
-        financialCategoryId,
         category: "TRANSFERENCIA",
         description,
         accountLabel,

@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { Printer } from "lucide-react";
 import { Button } from "../components/Button";
+import SearchableSelect from "../components/SearchableSelect";
 import CustomerModal from "../components/CustomerModal";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
@@ -795,21 +796,21 @@ export default function Orders() {
           >
             Tipo de roupa
           </label>
-          <select
+          <SearchableSelect
             id="orders-product-type-filter"
             value={clothingTypeFilter}
-            onChange={(event) => setClothingTypeFilter(event.target.value)}
-            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-          >
-            <option value="">Todos</option>
-            {clothingTypeOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {String(option.desc || "")
-                  .trim()
-                  .toUpperCase()}
-              </option>
-            ))}
-          </select>
+            onChange={setClothingTypeFilter}
+            options={clothingTypeOptions.map((option) => ({
+              value: String(option.id),
+              label: String(option.desc || "").trim().toUpperCase(),
+            }))}
+            placeholder="Digite para filtrar"
+            className="relative"
+            inputClassName="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+            optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+            promptMessage="Digite para filtrar os tipos de roupa."
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -843,19 +844,21 @@ export default function Orders() {
           >
             Tecido
           </label>
-          <select
+          <SearchableSelect
             id="orders-fabric-filter"
             value={fabricFilter}
-            onChange={(event) => setFabricFilter(event.target.value)}
-            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-          >
-            <option value="">Todos</option>
-            {fabricOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.desc}
-              </option>
-            ))}
-          </select>
+            onChange={setFabricFilter}
+            options={fabricOptions.map((option) => ({
+              value: String(option.id),
+              label: String(option.desc || "").trim(),
+            }))}
+            placeholder="Digite para filtrar"
+            className="relative"
+            inputClassName="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+            optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+            promptMessage="Digite para filtrar os tecidos."
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -865,19 +868,21 @@ export default function Orders() {
           >
             Cor
           </label>
-          <select
+          <SearchableSelect
             id="orders-color-filter"
             value={colorFilter}
-            onChange={(event) => setColorFilter(event.target.value)}
-            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-          >
-            <option value="">Todas</option>
-            {colorOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.desc}
-              </option>
-            ))}
-          </select>
+            onChange={setColorFilter}
+            options={colorOptions.map((option) => ({
+              value: String(option.id),
+              label: String(option.desc || "").trim(),
+            }))}
+            placeholder="Digite para filtrar"
+            className="relative"
+            inputClassName="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+            optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+            promptMessage="Digite para filtrar as cores."
+          />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -887,19 +892,21 @@ export default function Orders() {
           >
             Tam.
           </label>
-          <select
+          <SearchableSelect
             id="orders-size-filter"
             value={sizeFilter}
-            onChange={(event) => setSizeFilter(event.target.value)}
-            className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-          >
-            <option value="">Todos</option>
-            {sizeOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.desc}
-              </option>
-            ))}
-          </select>
+            onChange={setSizeFilter}
+            options={sizeOptions.map((option) => ({
+              value: String(option.id),
+              label: String(option.desc || "").trim(),
+            }))}
+            placeholder="Digite para filtrar"
+            className="relative"
+            inputClassName="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+            dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+            optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+            promptMessage="Digite para filtrar os tamanhos."
+          />
         </div>
 
         <div className="flex flex-col gap-2">

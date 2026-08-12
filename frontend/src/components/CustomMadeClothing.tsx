@@ -9,6 +9,7 @@ import { getRequest, postRequest } from "../services/request";
 import MeasurementsFields from "./MeasurementsFields";
 import CustomerModal from "./CustomerModal";
 import NoticeToast from "./NoticeToast";
+import SearchableSelect from "./SearchableSelect";
 
 interface AdminOption {
   desc?: string | null;
@@ -234,7 +235,6 @@ export default function CustomMadeClothing({
 
   const fieldClassName =
     "h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none focus:ring-2 focus:ring-secondary/70";
-
   const getDiscountPercent = (value: string) => {
     const parsed = Number(value.replace(",", "."));
     if (!Number.isFinite(parsed)) return 0;
@@ -592,19 +592,17 @@ export default function CustomMadeClothing({
               <label htmlFor={`type-${product.id}`} className="text-sm text-primary">
                 Tipo
               </label>
-              <select
+              <SearchableSelect
                 id={`type-${product.id}`}
                 value={product.type}
-                onChange={(e) => updateProduct(product.id, "type", e.target.value)}
-                className={fieldClassName}
-              >
-                <option value="">Selecione...</option>
-                {clothingTypes.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => updateProduct(product.id, "type", nextValue)}
+                options={clothingTypes.map((item) => ({ value: item, label: item }))}
+                className="relative"
+                inputClassName={fieldClassName}
+                dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+                optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+                placeholder="Digite para filtrar o tipo"
+              />
               <button
                 type="button"
                 onClick={() => openQuickCreateModal("clothings-types", product.id)}
@@ -617,19 +615,17 @@ export default function CustomMadeClothing({
               <label htmlFor={`fabric-${product.id}`} className="text-sm text-primary">
                 Tecido
               </label>
-              <select
+              <SearchableSelect
                 id={`fabric-${product.id}`}
                 value={product.fabric}
-                onChange={(e) => updateProduct(product.id, "fabric", e.target.value)}
-                className={fieldClassName}
-              >
-                <option value="">Selecione...</option>
-                {fabrics.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => updateProduct(product.id, "fabric", nextValue)}
+                options={fabrics.map((item) => ({ value: item, label: item }))}
+                className="relative"
+                inputClassName={fieldClassName}
+                dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+                optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+                placeholder="Digite para filtrar o tecido"
+              />
               <button
                 type="button"
                 onClick={() => openQuickCreateModal("fabrics", product.id)}
@@ -642,19 +638,17 @@ export default function CustomMadeClothing({
               <label htmlFor={`color-${product.id}`} className="text-sm text-primary">
                 Cor
               </label>
-              <select
+              <SearchableSelect
                 id={`color-${product.id}`}
                 value={product.color}
-                onChange={(e) => updateProduct(product.id, "color", e.target.value)}
-                className={fieldClassName}
-              >
-                <option value="">Selecione...</option>
-                {colors.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
+                onChange={(nextValue) => updateProduct(product.id, "color", nextValue)}
+                options={colors.map((item) => ({ value: item, label: item }))}
+                className="relative"
+                inputClassName={fieldClassName}
+                dropdownClassName="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-outline-variant/60 bg-white shadow-lg"
+                optionClassName="block w-full border-b border-outline-variant/30 px-3 py-2 text-left text-sm transition-colors last:border-0 hover:bg-surface-low"
+                placeholder="Digite para filtrar a cor"
+              />
               <button
                 type="button"
                 onClick={() => openQuickCreateModal("colors", product.id)}

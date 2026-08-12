@@ -1,7 +1,9 @@
 ﻿const { notFoundError, validationError } = require("../errors/AppError");
 const financialAccountsRepository = require("../repositories/financialAccountsRepository");
+const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const repository = require("../repositories/payablesRepository");
 const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
+const { buildPaymentTypeResponse } = require("../utils/paymentTypeRules");
 
 function createPayablesValidationError(message, statusCode = 400) {
   const error = validationError(message, {
@@ -60,9 +62,38 @@ function normalizeOptionalDate(value, fieldName, options = {}) {
   );
 }
 
-function normalizeOptionalText(value) {
-  const normalized = String(value || "").trim();
-  return normalized || null;
+async function resolvePlannedPaymentType(paymentTypeId, fieldName = "Forma de pagamento") {
+  const normalizedId = Number(paymentTypeId);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createPayablesValidationError(`${fieldName} invalida.`);
+  }
+
+  const paymentType = await paymentTypesRepository.getPaymentTypeById(normalizedId);
+
+  if (!paymentType) {
+    throw createPayablesValidationError(`${fieldName} invalida.`);
+  }
+
+  return buildPaymentTypeResponse(paymentType);
+}
+
+function resolvePayableSettlementByPaymentType(paymentType) {
+  const normalizedKind = String(paymentType?.kind || "")
+    .trim()
+    .toUpperCase();
+
+  if (normalizedKind === "CASH" || normalizedKind === "BOOKLET") {
+    return {
+      settlementTarget: "CAIXA",
+      accountLabel: null,
+    };
+  }
+
+  return {
+    settlementTarget: "BANCO",
+    accountLabel: "BANCO DA LOJA",
+  };
 }
 
 async function getFinancialAccountOrDefault({
@@ -195,11 +226,6 @@ async function createPayable(body = {}) {
     throw createPayablesValidationError("Escopo invalido.");
   }
 
-  const settlementTarget = String(body.settlementTarget || "").trim();
-  if (settlementTarget !== "BANCO" && settlementTarget !== "CAIXA") {
-    throw createPayablesValidationError("Destino previsto invalido.");
-  }
-
   const description = String(body.description || "").trim();
   const category = String(body.category || "").trim();
   const rawBeneficiary = String(body.beneficiary || "").trim();
@@ -215,6 +241,8 @@ async function createPayable(body = {}) {
   }
 
   const amount = normalizeAmount(body.amount, "Valor");
+  const plannedPaymentType = await resolvePlannedPaymentType(body.plannedPaymentTypeId);
+  const financialRouting = resolvePayableSettlementByPaymentType(plannedPaymentType);
 
   const created = await repository.createPayable({
     scope,
@@ -226,9 +254,9 @@ async function createPayable(body = {}) {
     openAmount: amount,
     dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
     status: "OPEN",
-    settlementTarget,
-    accountLabel: body.accountLabel ? String(body.accountLabel).trim() : null,
-    plannedPaymentTypeId: body.plannedPaymentTypeId ? Number(body.plannedPaymentTypeId) : null,
+    settlementTarget: financialRouting.settlementTarget,
+    accountLabel: financialRouting.accountLabel,
+    plannedPaymentTypeId: plannedPaymentType.id,
   });
 
   return {
@@ -267,11 +295,6 @@ async function updatePayable(payableId, body = {}) {
     throw createPayablesValidationError("Escopo invalido.");
   }
 
-  const settlementTarget = String(body.settlementTarget || "").trim();
-  if (settlementTarget !== "BANCO" && settlementTarget !== "CAIXA") {
-    throw createPayablesValidationError("Destino previsto invalido.");
-  }
-
   const description = String(body.description || "").trim();
   const category = String(body.category || "").trim();
   const rawBeneficiary = String(body.beneficiary || "").trim();
@@ -287,6 +310,8 @@ async function updatePayable(payableId, body = {}) {
   }
 
   const amount = normalizeAmount(body.amount, "Valor");
+  const plannedPaymentType = await resolvePlannedPaymentType(body.plannedPaymentTypeId);
+  const financialRouting = resolvePayableSettlementByPaymentType(plannedPaymentType);
 
   await repository.updatePayable(normalizedPayableId, {
     scope,
@@ -297,9 +322,9 @@ async function updatePayable(payableId, body = {}) {
     amount,
     openAmount: amount,
     dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
-    settlementTarget,
-    accountLabel: normalizeOptionalText(body.accountLabel),
-    plannedPaymentTypeId: body.plannedPaymentTypeId ? Number(body.plannedPaymentTypeId) : null,
+    settlementTarget: financialRouting.settlementTarget,
+    accountLabel: financialRouting.accountLabel,
+    plannedPaymentTypeId: plannedPaymentType.id,
   });
 
   return {
@@ -344,6 +369,17 @@ async function registerPayment(payableId, body = {}) {
     throw createPayablesValidationError("Forma de pagamento invalida.");
   }
 
+  const paymentType = await paymentTypesRepository.getPaymentTypeById(paymentTypeId);
+  if (!paymentType) {
+    throw createPayablesValidationError("Forma de pagamento invalida.");
+  }
+
+  const normalizedPaymentType = buildPaymentTypeResponse(paymentType);
+  const defaultTargetType =
+    normalizedPaymentType.kind === "CASH" || normalizedPaymentType.kind === "BOOKLET"
+      ? "CASH"
+      : "BANK";
+
   const payable = await repository.getPayableById(normalizedPayableId);
   if (!payable) {
     throw notFoundError("Conta a pagar nao encontrada.");
@@ -357,9 +393,8 @@ async function registerPayment(payableId, body = {}) {
   const paidAt = normalizeDate(body.paidAt, "Data do pagamento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
   const financialAccount = await getFinancialAccountOrDefault({
-    idFinancialAccount: body.financialAccountId,
     fieldName: "Pago em",
-    defaultTargetType: payable.settlementTarget === "CAIXA" ? "CASH" : "BANK",
+    defaultTargetType,
     defaultScope: payable.scope,
   });
 
