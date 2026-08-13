@@ -173,6 +173,7 @@ export default function Registers() {
   const previousCashLaunchDateLabel = currentSession
     ? formatDate(currentSession.openedAt)
     : "-";
+  const availableCashBalance = Number(currentSession?.expectedBalance || 0);
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
@@ -369,6 +370,18 @@ export default function Registers() {
   }
 
   async function handleTransferToBank() {
+    const transferAmount = parseCurrencyToNumber(transferAmountInput);
+
+    if (transferAmount > availableCashBalance) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Saldo insuficiente",
+        message: "A transferencia nao pode ser maior que o valor disponivel no caixa.",
+      });
+      return;
+    }
+
     if (
       !(await ensureCashSessionBeforeFinalizingAction("transfer-to-bank"))
     ) {
@@ -378,7 +391,7 @@ export default function Registers() {
     try {
       setSessionActionLoading(true);
       await postRequest("/cash/transfers/to-bank", {
-        amount: parseCurrencyToNumber(transferAmountInput),
+        amount: transferAmount,
         occurredAt: transferDate,
         description: transferDescription.trim(),
         referenceCode: transferReferenceCode.trim() || null,
@@ -873,7 +886,7 @@ export default function Registers() {
         open={transferModalOpen}
         onClose={resetTransferModal}
         title="Transferir caixa para banco"
-        subtitle="Registre a saida do caixa e a entrada correspondente na conta bancaria selecionada."
+        subtitle="Registre a saida do caixa e a entrada correspondente no banco."
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -889,6 +902,9 @@ export default function Registers() {
                 placeholder="R$ 0,00"
                 className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
               />
+              <p className="mt-2 text-xs text-neutral-700">
+                Disponivel no caixa: {formatCurrency(availableCashBalance)}
+              </p>
             </div>
 
             <div>
