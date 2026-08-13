@@ -46,6 +46,21 @@ interface BankListResponse {
   };
 }
 
+interface CashSessionSummary {
+  id: number;
+  openedAt: string;
+  expectedBalance: number;
+  notes: string | null;
+  pendingPreviousDay: boolean;
+}
+
+interface CashSessionStatusResponse {
+  currentSession: CashSessionSummary | null;
+  lastClosedSession?: CashSessionSummary | null;
+  hasOpenSession: boolean;
+  pendingPreviousDay: boolean;
+}
+
 interface FinancialCategoryOption {
   id: number;
   description: string;
@@ -101,6 +116,7 @@ export default function BankPage() {
     totalOut: 0,
     balance: 0,
   });
+  const [overallBankBalance, setOverallBankBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
@@ -110,10 +126,15 @@ export default function BankPage() {
   const [bankAccountOptions, setBankAccountOptions] = useState<
     BankAccountOption[]
   >([]);
+  const [cashSessionStatus, setCashSessionStatus] =
+    useState<CashSessionStatusResponse | null>(null);
   const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
   const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [openCashModalOpen, setOpenCashModalOpen] = useState(false);
+  const [rolloverCashModalOpen, setRolloverCashModalOpen] = useState(false);
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
   const [reverseReason, setReverseReason] = useState("");
+  const [cashSessionNotes, setCashSessionNotes] = useState("");
   const [manualMovementType, setManualMovementType] = useState<"IN" | "OUT">(
     "IN",
   );
@@ -124,15 +145,12 @@ export default function BankPage() {
   const [manualDescription, setManualDescription] = useState("");
   const [manualReferenceCode, setManualReferenceCode] = useState("");
   const [manualAccountLabel, setManualAccountLabel] = useState("");
-  const [transferFinancialCategoryId, setTransferFinancialCategoryId] =
-    useState("");
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [transferDate, setTransferDate] = useState(getCurrentDateInputValue());
   const [transferDescription, setTransferDescription] = useState(
     "Transferencia do banco para o caixa",
   );
   const [transferReferenceCode, setTransferReferenceCode] = useState("");
-  const [transferAccountLabel, setTransferAccountLabel] = useState("");
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
   const selectedRow = useMemo(
@@ -141,6 +159,11 @@ export default function BankPage() {
   );
 
   const canOpenTransferModal = bankAccountOptions.length > 0;
+  const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
+  const previousCashLaunchDateLabel = cashSessionStatus?.currentSession
+    ? formatDate(cashSessionStatus.currentSession.openedAt)
+    : "-";
+  const availableBankBalance = Number(overallBankBalance || 0);
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
@@ -189,6 +212,24 @@ export default function BankPage() {
     }
   };
 
+  const fetchCashSessionStatus = async () => {
+    try {
+      const data = await getRequest("/cash/session-status");
+      setCashSessionStatus((data as CashSessionStatusResponse) || null);
+    } catch {
+      setCashSessionStatus(null);
+    }
+  };
+
+  const fetchOverallBankBalance = async () => {
+    try {
+      const data = (await getRequest("/bank?page=1&pageSize=1")) as BankListResponse;
+      setOverallBankBalance(Number(data.summary?.balance || 0));
+    } catch {
+      setOverallBankBalance(0);
+    }
+  };
+
   useEffect(() => {
     setPage(1);
   }, [accountFilter, categoryFilter, search, startDate, endDate]);
@@ -207,11 +248,14 @@ export default function BankPage() {
         await fetchRows();
         void fetchFinancialCategories();
         void fetchBankAccountOptions();
+        void fetchCashSessionStatus();
+        void fetchOverallBankBalance();
       } catch (err: unknown) {
         setRows([]);
         setTotalRows(0);
         setTotalPages(1);
         setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
+        setOverallBankBalance(0);
         setError(
           getUserFacingApiErrorMessage(
             err,
@@ -238,12 +282,10 @@ export default function BankPage() {
   };
 
   const resetTransferModal = () => {
-    setTransferFinancialCategoryId("");
     setTransferAmountInput("");
     setTransferDate(getCurrentDateInputValue());
     setTransferDescription("Transferencia do banco para o caixa");
     setTransferReferenceCode("");
-    setTransferAccountLabel("");
     setTransferModalOpen(false);
   };
 
@@ -253,7 +295,12 @@ export default function BankPage() {
   };
 
   async function refreshData() {
-    await Promise.all([fetchRows(), fetchBankAccountOptions()]);
+    await Promise.all([
+      fetchRows(),
+      fetchBankAccountOptions(),
+      fetchCashSessionStatus(),
+      fetchOverallBankBalance(),
+    ]);
   }
 
   async function handleCreateManualEntry() {
@@ -292,15 +339,29 @@ export default function BankPage() {
   }
 
   async function handleTransferToCash() {
+    const transferAmount = parseCurrencyToNumber(transferAmountInput);
+
+    if (transferAmount > availableBankBalance) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Saldo insuficiente",
+        message: "A transferencia nao pode ser maior que o valor disponivel no banco.",
+      });
+      return;
+    }
+
+    if (!(await ensureCashSessionBeforeTransferToCash())) {
+      return;
+    }
+
     try {
       setActionLoading(true);
       await postRequest("/bank/transfers/to-cash", {
-        amount: parseCurrencyToNumber(transferAmountInput),
+        amount: transferAmount,
         occurredAt: transferDate,
         description: transferDescription.trim(),
         referenceCode: transferReferenceCode.trim() || null,
-        financialCategoryId: Number(transferFinancialCategoryId),
-        accountLabel: transferAccountLabel,
       });
       resetTransferModal();
       await refreshData();
@@ -319,6 +380,99 @@ export default function BankPage() {
         message: getUserFacingApiErrorMessage(
           err,
           "Nao foi possivel registrar a transferencia para o caixa.",
+        ),
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function ensureCashSessionBeforeTransferToCash() {
+    try {
+      const data = await getRequest("/cash/session-status");
+      const parsed = (data as CashSessionStatusResponse) || null;
+      setCashSessionStatus(parsed);
+
+      if (parsed?.currentSession?.pendingPreviousDay) {
+        setCashSessionNotes(parsed.currentSession.notes || "");
+        setRolloverCashModalOpen(true);
+        return false;
+      }
+
+      if (!parsed?.hasOpenSession) {
+        setCashSessionNotes("");
+        setOpenCashModalOpen(true);
+        return false;
+      }
+
+      return true;
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel validar",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel validar o status do caixa.",
+        ),
+      });
+      return false;
+    }
+  }
+
+  async function handleRolloverCashSession() {
+    try {
+      setActionLoading(true);
+      await postRequest("/cash/sessions/rollover", {
+        notes: cashSessionNotes.trim() || null,
+      });
+      await refreshData();
+      setRolloverCashModalOpen(false);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Caixa atualizado",
+        message:
+          "O caixa pendente foi encerrado e o caixa do dia foi aberto. Agora voce pode continuar com a transferencia.",
+      });
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel atualizar",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel encerrar e abrir o caixa.",
+        ),
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleOpenCashSession() {
+    try {
+      setActionLoading(true);
+      await postRequest("/cash/sessions/open", {
+        notes: cashSessionNotes.trim() || null,
+      });
+      await refreshData();
+      setOpenCashModalOpen(false);
+      setToast({
+        open: true,
+        tone: "success",
+        title: "Caixa aberto",
+        message:
+          "O caixa da loja foi aberto. Agora voce pode continuar com a transferencia.",
+      });
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel abrir",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel abrir o caixa.",
         ),
       });
     } finally {
@@ -834,45 +988,9 @@ export default function BankPage() {
         open={transferModalOpen}
         onClose={resetTransferModal}
         title="Transferir banco para caixa"
-        subtitle="Registre a saida de uma conta bancaria e a entrada correspondente no caixa."
+        subtitle="Registre a saida do banco e a entrada correspondente no caixa."
       >
         <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Conta de origem
-            </label>
-            <select
-              value={transferAccountLabel}
-              onChange={(e) => setTransferAccountLabel(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="">Selecione</option>
-              {bankAccountOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Categoria
-            </label>
-            <select
-              value={transferFinancialCategoryId}
-              onChange={(e) => setTransferFinancialCategoryId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="">Selecione</option>
-              {financialCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.description}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <label className="mb-2 block text-sm font-semibold text-primary">
               Valor
@@ -885,6 +1003,9 @@ export default function BankPage() {
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
+            <p className="mt-2 text-xs text-neutral-700">
+              Saldo geral disponivel no banco: {formatCurrency(availableBankBalance)}
+            </p>
           </div>
 
           <div>
@@ -928,8 +1049,6 @@ export default function BankPage() {
               onClick={handleTransferToCash}
               disabled={
                 actionLoading ||
-                !transferAccountLabel ||
-                !transferFinancialCategoryId ||
                 !transferAmountInput ||
                 !transferDescription.trim()
               }
@@ -943,6 +1062,97 @@ export default function BankPage() {
               className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
             >
               Cancelar
+            </button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={openCashModalOpen}
+        onClose={() => setOpenCashModalOpen(false)}
+        title="Abrir Caixa"
+        subtitle="Confirme a abertura do caixa usando o saldo esperado."
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+            <p>
+              O caixa sera aberto automaticamente com o saldo esperado da ultima
+              sessao fechada.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-primary">
+              Observacoes
+            </label>
+            <textarea
+              value={cashSessionNotes}
+              onChange={(e) => setCashSessionNotes(e.target.value)}
+              className="min-h-24 w-full rounded-lg border border-outline-variant/60 bg-white px-3 py-2 text-[15px] text-primary"
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleOpenCashSession}
+              disabled={actionLoading}
+              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {actionLoading ? "Abrindo..." : "Confirmar abertura"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpenCashModalOpen(false)}
+              className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      </CustomerModal>
+
+      <CustomerModal
+        open={rolloverCashModalOpen}
+        onClose={() => setRolloverCashModalOpen(false)}
+        title="Encerrar e abrir caixa"
+        subtitle={
+          cashSessionStatus?.currentSession
+            ? `Existe um caixa pendente aberto em ${formatDate(
+                cashSessionStatus.currentSession.openedAt,
+              )}.`
+            : "Feche o caixa da loja para continuar."
+        }
+      >
+        <div className="space-y-4">
+          {cashSessionStatus?.currentSession ? (
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p>
+                Data do lancamento: {currentCashLaunchDateLabel} e maior que a
+                data do ultimo lancamento: {previousCashLaunchDateLabel}.
+              </p>
+              <p className="mt-3">
+                Confirma encerramento do(s) caixa\banco(s) anteriores ao dia{" "}
+                {currentCashLaunchDateLabel}?
+              </p>
+            </div>
+          ) : null}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleRolloverCashSession}
+              disabled={actionLoading}
+              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+            >
+              {actionLoading ? "Confirmando..." : "Confirmar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRolloverCashModalOpen(false)}
+              className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
+            >
+              Voltar
             </button>
           </div>
         </div>

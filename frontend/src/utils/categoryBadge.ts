@@ -14,7 +14,7 @@ export const getCategoryBadgeClassName = (category?: string) => {
   }
 
   if (
-    normalized === "TRANSFERENCIA" ||
+    normalized === "TRANSFERENCIAS" ||
     normalized === "TRANSFERENCIAS ENTRE CAIXA E BANCO"
   ) {
     return "bg-[#E8F1FF] text-[#1E4FA3]";

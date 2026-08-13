@@ -1,7 +1,6 @@
 const { sequelize } = require("../models");
 const { validationError } = require("../errors/AppError");
 const financialAccountsRepository = require("../repositories/financialAccountsRepository");
-const financialCategoriesRepository = require("../repositories/financialCategoriesRepository");
 const { createBankEntry, createCashEntry } = require("./financialEntriesService");
 
 function roundCurrency(value) {
@@ -55,34 +54,8 @@ function normalizeReferenceCode(value) {
   return normalized || null;
 }
 
-function normalizeBankAccountLabel(value) {
-  const normalized = String(value || "").trim();
-
-  if (!normalized) {
-    throw validationError("Conta bancaria obrigatoria.");
-  }
-
-  return normalized;
-}
-
 function buildTransferKey() {
   return `TRF-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-}
-
-async function getRequiredFinancialCategoryId(rawFinancialCategoryId) {
-  const normalized = Number(rawFinancialCategoryId);
-
-  if (!Number.isInteger(normalized) || normalized <= 0) {
-    throw validationError("Categoria financeira invalida.");
-  }
-
-  const category = await financialCategoriesRepository.getCategoryById(normalized);
-
-  if (!category) {
-    throw validationError("Categoria financeira invalida.");
-  }
-
-  return normalized;
 }
 
 async function getDefaultStoreBankAccountLabel() {
@@ -155,8 +128,7 @@ async function transferBankToCash(body = {}) {
   const occurredAt = normalizeDate(body.occurredAt);
   const description = normalizeDescription(body.description);
   const referenceCode = normalizeReferenceCode(body.referenceCode);
-  const financialCategoryId = await getRequiredFinancialCategoryId(body.financialCategoryId);
-  const accountLabel = normalizeBankAccountLabel(body.accountLabel);
+  const accountLabel = await getDefaultStoreBankAccountLabel();
   const transferKey = buildTransferKey();
 
   return sequelize.transaction(async (transaction) => {
@@ -164,7 +136,6 @@ async function transferBankToCash(body = {}) {
       {
         scope: "LOJA",
         movementType: "OUT",
-        financialCategoryId,
         category: "TRANSFERENCIA",
         description,
         accountLabel,
@@ -182,7 +153,6 @@ async function transferBankToCash(body = {}) {
       {
         scope: "LOJA",
         movementType: "IN",
-        financialCategoryId,
         category: "TRANSFERENCIA",
         description,
         amount,
