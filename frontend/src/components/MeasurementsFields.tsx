@@ -52,7 +52,7 @@ function MeasurementsFieldsComponent({
           <div key={`${contextKey}-${item.value}`}>
             <label
               htmlFor={`measurement-${contextKey}-${item.value}`}
-              className="mb-1 block text-xs leading-tight text-primary"
+              className="mb-1 block whitespace-nowrap text-xs leading-tight text-primary"
             >
               {item.label} (cm)
             </label>
