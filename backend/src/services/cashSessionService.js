@@ -5,6 +5,10 @@ const {
 } = require("../errors/AppError");
 const { sequelize } = require("../models");
 const repository = require("../repositories/cashSessionsRepository");
+const {
+  normalizeDateToLocalMidnight,
+  normalizeShortOrIsoDateToIso,
+} = require("../utils/normalizeDate");
 
 function roundCurrency(value) {
   return Number(Number(value).toFixed(2));
@@ -16,11 +20,26 @@ function startOfToday() {
   return date;
 }
 
-function isPreviousDay(dateValue) {
+function resolveReferenceDay(referenceDateValue) {
+  if (referenceDateValue === undefined || referenceDateValue === null || referenceDateValue === "") {
+    return startOfToday();
+  }
+
+  const normalizedReferenceDate = normalizeShortOrIsoDateToIso(referenceDateValue);
+  const referenceDay = normalizeDateToLocalMidnight(normalizedReferenceDate);
+
+  if (!referenceDay) {
+    throw validationError("Data de referencia invalida.");
+  }
+
+  return referenceDay;
+}
+
+function isPreviousDay(dateValue, referenceDay = startOfToday()) {
   const openedAt = new Date(dateValue);
   const openedDay = new Date(openedAt);
   openedDay.setHours(0, 0, 0, 0);
-  return openedDay.getTime() < startOfToday().getTime();
+  return openedDay.getTime() < referenceDay.getTime();
 }
 
 function normalizeAmount(value, fieldName) {
@@ -39,7 +58,7 @@ function normalizeNotes(value) {
   return normalized || null;
 }
 
-async function buildSessionSummary(session) {
+async function buildSessionSummary(session, referenceDay = startOfToday()) {
   if (!session) return null;
 
   const { totalIn, totalOut } = await repository.sumSessionEntries(session.idCashSession);
@@ -65,16 +84,17 @@ async function buildSessionSummary(session) {
     notes: session.notes || null,
     openedByUserId: session.openedByUserId || null,
     closedByUserId: session.closedByUserId || null,
-    pendingPreviousDay: isPreviousDay(session.openedAt),
+    pendingPreviousDay: isPreviousDay(session.openedAt, referenceDay),
   };
 }
 
-async function getStoreSessionStatus() {
+async function getStoreSessionStatus(referenceDateValue) {
+  const referenceDay = resolveReferenceDay(referenceDateValue);
   const openSession = await repository.findOpenStoreSession();
-  const currentSession = await buildSessionSummary(openSession);
+  const currentSession = await buildSessionSummary(openSession, referenceDay);
   const lastClosedSession = currentSession
     ? null
-    : await buildSessionSummary(await repository.findLatestClosedSession());
+    : await buildSessionSummary(await repository.findLatestClosedSession(), referenceDay);
 
   return {
     currentSession,

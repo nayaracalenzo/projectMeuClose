@@ -137,7 +137,10 @@ export default function Registers() {
   const [reverseReason, setReverseReason] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
   const [pendingCashActionAfterRollover, setPendingCashActionAfterRollover] =
-    useState<"manual-entry" | "transfer-to-bank" | null>(null);
+    useState<{
+      action: "manual-entry" | "transfer-to-bank";
+      launchDate: string;
+    } | null>(null);
   const [transferAmountInput, setTransferAmountInput] = useState("");
   const [transferDate, setTransferDate] = useState(getCurrentDateInputValue());
   const [transferDescription, setTransferDescription] = useState(
@@ -169,7 +172,9 @@ export default function Registers() {
   const currentSession = sessionStatus?.currentSession || null;
   const requiresOpenStoreSession = !currentSession;
   const canOpenTransferModal = !requiresOpenStoreSession;
-  const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
+  const currentCashLaunchDateLabel = formatDate(
+    pendingCashActionAfterRollover?.launchDate || getCurrentDateInputValue(),
+  );
   const previousCashLaunchDateLabel = currentSession
     ? formatDate(currentSession.openedAt)
     : "-";
@@ -343,13 +348,23 @@ export default function Registers() {
   async function ensureCashSessionBeforeFinalizingAction(
     action: "manual-entry" | "transfer-to-bank",
   ) {
+    const launchDate =
+      action === "transfer-to-bank" ? transferDate : manualDate;
+
     try {
-      const data = await getRequest("/cash/session-status");
+      const params = new URLSearchParams();
+      if (launchDate) {
+        params.set("referenceDate", launchDate);
+      }
+
+      const data = await getRequest(
+        `/cash/session-status${params.size ? `?${params.toString()}` : ""}`,
+      );
       const parsed = (data as CashSessionStatusResponse) || null;
       setSessionStatus(parsed);
 
       if (parsed?.currentSession?.pendingPreviousDay) {
-        setPendingCashActionAfterRollover(action);
+        setPendingCashActionAfterRollover({ action, launchDate });
         setRolloverCashModalOpen(true);
         return false;
       }
@@ -425,6 +440,8 @@ export default function Registers() {
       return;
     }
 
+    const manualLaunchDate = manualDate;
+
     try {
       setSessionActionLoading(true);
       await postRequest("/cash/manual-entry", {
@@ -435,6 +452,9 @@ export default function Registers() {
         description: manualDescription.trim(),
         referenceCode: manualReferenceCode.trim() || null,
       });
+      setStartDate(formatLegacyShortDateInput(manualLaunchDate));
+      setEndDate(getCurrentSearchDateInputValue());
+      setPage(1);
       resetManualEntryModal();
       await refreshData();
       setToast({
@@ -475,10 +495,10 @@ export default function Registers() {
           "O caixa pendente foi encerrado e o caixa do dia foi aberto.",
       });
 
-      if (pendingCashActionAfterRollover === "manual-entry") {
+      if (pendingCashActionAfterRollover?.action === "manual-entry") {
         setPendingCashActionAfterRollover(null);
         await handleCreateManualEntry();
-      } else if (pendingCashActionAfterRollover === "transfer-to-bank") {
+      } else if (pendingCashActionAfterRollover?.action === "transfer-to-bank") {
         setPendingCashActionAfterRollover(null);
         await handleTransferToBank();
       }
