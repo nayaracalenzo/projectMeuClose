@@ -315,7 +315,74 @@ function normalizeFilterDate(value) {
   return normalized;
 }
 
-function normalizeProductPayload(body = {}) {
+function normalizeMeasurementDecimal(value, fieldLabel) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(String(value).replace(",", "."));
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw validationError(`${fieldLabel} invalida.`);
+  }
+
+  return parsed;
+}
+
+async function normalizeMeasurementsPayload(measurements = []) {
+  if (!Array.isArray(measurements)) {
+    return [];
+  }
+
+  const definitionRows = await repository.listMeasurementDefinitions();
+  const definitionById = new Map(
+    definitionRows.map((item) => [Number(item.idMeasurementDefinition), item]),
+  );
+  const definitionByKey = new Map(
+    definitionRows.map((item) => [String(item.key || "").trim(), item]),
+  );
+  const normalizedMeasurements = [];
+
+  for (const measurement of measurements) {
+    if (!measurement || typeof measurement !== "object") {
+      continue;
+    }
+
+    const rawDefinitionId =
+      measurement.measurementDefinitionId ??
+      measurement.idMeasurementDefinition ??
+      null;
+    const measurementDefinitionId =
+      rawDefinitionId === null || rawDefinitionId === undefined || rawDefinitionId === ""
+        ? null
+        : Number(rawDefinitionId);
+    const key = String(measurement.key || "").trim() || null;
+    const definition =
+      (Number.isInteger(measurementDefinitionId) && measurementDefinitionId > 0
+        ? definitionById.get(measurementDefinitionId)
+        : null) || (key ? definitionByKey.get(key) : null);
+
+    if (!definition) {
+      throw validationError("Medida invalida.");
+    }
+
+    const label = String(definition.label || definition.key || "Medida").trim();
+    const value = normalizeMeasurementDecimal(measurement.value, `Medida ${label}`);
+
+    if (value === null) {
+      continue;
+    }
+
+    normalizedMeasurements.push({
+      measurementDefinitionId: Number(definition.idMeasurementDefinition),
+      key: String(definition.key || "").trim(),
+      value,
+    });
+  }
+
+  return normalizedMeasurements;
+}
+
+async function normalizeProductPayload(body = {}) {
   const desc = normalizeText(body.desc, { allowEmpty: false });
   if (!desc) {
     throw validationError("Descrição do pedido é obrigatória.");
@@ -364,6 +431,7 @@ function normalizeProductPayload(body = {}) {
     dressmakerValue,
     finalValue,
     remainingValue: Number((finalValue - dressmakerValue).toFixed(2)),
+    measurements: await normalizeMeasurementsPayload(body.measurements),
   };
 }
 
@@ -472,9 +540,61 @@ async function updateProductById(id, body) {
   return mapProductDetails(updated, measurementsBySaleId);
 }
 
+async function updateProductByIdWithMeasurements(id, body) {
+  const normalizedId = Number(id);
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw validationError("Pedido invalido.");
+  }
+
+  const existing = await repository.getProductById(normalizedId);
+  if (!existing) {
+    throw notFoundError("Pedido nao encontrado.");
+  }
+
+  const basePayload = await normalizeProductPayload(body);
+  const payload = {
+    ...basePayload,
+    measurements: await normalizeMeasurementsPayload(body.measurements),
+  };
+  const dependencies = await repository.getProductUpdateDependencies(payload);
+  validateDependencies(payload, dependencies);
+
+  await repository.sequelize.transaction(async (transaction) => {
+    const persistedProduct = await repository.updateProductById(
+      normalizedId,
+      payload,
+      transaction,
+    );
+
+    if (!persistedProduct) {
+      throw notFoundError("Pedido nao encontrado.");
+    }
+
+    const persistedSaleItem = Array.isArray(persistedProduct.SaleItems)
+      ? persistedProduct.SaleItems[0]
+      : null;
+    const saleId = Number(persistedSaleItem?.saleId || 0) || null;
+
+    await repository.saveMeasurementValuesBySaleId(
+      saleId,
+      payload.customerId ?? existing.customerId ?? null,
+      payload.measurements || [],
+      transaction,
+    );
+  });
+
+  const refreshed = await repository.getProductById(normalizedId);
+  if (!refreshed) {
+    throw notFoundError("Pedido nao encontrado.");
+  }
+
+  const measurementsBySaleId = await buildMeasurementsBySaleId([refreshed]);
+  return mapProductDetails(refreshed, measurementsBySaleId);
+}
+
 module.exports = {
   getProductById,
   listProducts,
   listProductStatuses,
-  updateProductById,
+  updateProductById: updateProductByIdWithMeasurements,
 };

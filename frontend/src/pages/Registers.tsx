@@ -123,6 +123,7 @@ export default function Registers() {
     totalOut: 0,
     balance: 0,
   });
+  const [overallCashBalance, setOverallCashBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sessionStatus, setSessionStatus] =
@@ -220,6 +221,15 @@ export default function Registers() {
     }
   };
 
+  const fetchOverallCashBalance = async () => {
+    try {
+      const data = (await getRequest("/cash?page=1&pageSize=1")) as CashListResponse;
+      setOverallCashBalance(Number(data.summary?.balance || 0));
+    } catch {
+      setOverallCashBalance(0);
+    }
+  };
+
   const fetchFinancialCategories = async () => {
     try {
       const data = await getRequest("/financial-categories");
@@ -261,11 +271,13 @@ export default function Registers() {
         void fetchSessionStatus();
         void fetchFinancialCategories();
         void fetchBankAccountOptions();
+        void fetchOverallCashBalance();
       } catch (err: unknown) {
         setRows([]);
         setTotalRows(0);
         setTotalPages(1);
         setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
+        setOverallCashBalance(0);
         setError(
           getUserFacingApiErrorMessage(
             err,
@@ -313,6 +325,7 @@ export default function Registers() {
       fetchRows(),
       fetchSessionStatus(),
       fetchBankAccountOptions(),
+      fetchOverallCashBalance(),
     ]);
   }
 
@@ -574,7 +587,7 @@ export default function Registers() {
               <p className="mt-2 text-sm text-neutral-700">Carregando sessao...</p>
             ) : (
               <p className="mt-2 text-[1.3rem] leading-none text-primary md:text-[1.5rem]">
-                {formatCurrency(currentSession?.expectedBalance ?? 0)}
+                {formatCurrency(overallCashBalance)}
               </p>
             )}
           </div>

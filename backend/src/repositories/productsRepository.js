@@ -14,6 +14,7 @@ const {
   Sequelize,
   Sizes,
   Status,
+  sequelize,
 } = require("../models");
 const { Op } = require("sequelize");
 
@@ -506,6 +507,15 @@ async function listProductStatuses() {
   });
 }
 
+async function listMeasurementDefinitions() {
+  return MeasurementDefinitions.findAll({
+    where: {
+      active: true,
+    },
+    order: [["sortOrder", "ASC"], ["label", "ASC"]],
+  });
+}
+
 async function getProductById(id) {
   return Products.findOne({
     where: {
@@ -553,18 +563,81 @@ async function getProductUpdateDependencies(payload = {}) {
   };
 }
 
-async function updateProductById(id, payload) {
+async function updateProductById(id, payload, transaction) {
   const product = await Products.findOne({
     where: {
       id,
       dsbl: false,
     },
+    transaction,
   });
 
   if (!product) return null;
 
-  await product.update(payload);
+  const { measurements, ...productPayload } = payload || {};
+
+  await product.update(productPayload, { transaction });
   return getProductById(id);
+}
+
+async function saveMeasurementValuesBySaleId(saleId, customerId, measurements = [], transaction) {
+  const normalizedSaleId = Number(saleId);
+
+  if (!Number.isInteger(normalizedSaleId) || normalizedSaleId <= 0) {
+    return;
+  }
+
+  const normalizedCustomerId =
+    Number.isInteger(Number(customerId)) && Number(customerId) > 0 ? Number(customerId) : null;
+  const keptDefinitionIds = measurements
+    .map((measurement) => Number(measurement.measurementDefinitionId))
+    .filter((measurementDefinitionId) => Number.isInteger(measurementDefinitionId) && measurementDefinitionId > 0);
+
+  if (!keptDefinitionIds.length) {
+    await CustomerMeasurementValues.destroy({
+      where: {
+        saleId: normalizedSaleId,
+      },
+      transaction,
+    });
+    return;
+  }
+
+  await CustomerMeasurementValues.destroy({
+    where: {
+      saleId: normalizedSaleId,
+      measurementDefinitionId: {
+        [Op.notIn]: keptDefinitionIds,
+      },
+    },
+    transaction,
+  });
+
+  for (const measurement of measurements) {
+    const measurementDefinitionId = Number(measurement.measurementDefinitionId);
+
+    const existing = await CustomerMeasurementValues.findOne({
+      where: {
+        saleId: normalizedSaleId,
+        measurementDefinitionId,
+      },
+      transaction,
+    });
+
+    const payload = {
+      customerId: normalizedCustomerId,
+      saleId: normalizedSaleId,
+      measurementDefinitionId,
+      value: measurement.value,
+    };
+
+    if (existing) {
+      await existing.update(payload, { transaction });
+      continue;
+    }
+
+    await CustomerMeasurementValues.create(payload, { transaction });
+  }
 }
 
 async function listMeasurementValuesBySaleIds(saleIds = []) {
@@ -604,8 +677,11 @@ module.exports = {
   getProductById,
   getProductUpdateDependencies,
   listProducts,
+  listMeasurementDefinitions,
   listMeasurementValuesBySaleIds,
   listProductStatuses,
+  saveMeasurementValuesBySaleId,
+  sequelize,
   syncProductsSequence,
   updateProductById,
 };
