@@ -1,12 +1,17 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
+import MeasurementsFields, {
+  type MeasurementOption as MeasurementsFieldOption,
+} from "../components/MeasurementsFields";
 import NoticeToast from "../components/NoticeToast";
 import { getRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
-import { formatCurrency } from "../utils/currency";
+import {
+  formatCurrency,
+  formatCurrencyInput,
+  parseCurrencyToNumber,
+} from "../utils/currency";
 import {
   formatLegacyShortDateInput,
   maskLegacyShortDateInput,
@@ -63,11 +68,28 @@ type SelectOption = {
   label: string;
 };
 
+type CustomerOption = {
+  id: number;
+  name: string;
+};
+
 type ProductFormState = {
+  desc: string;
   details: string;
+  customerId: string;
+  categoryId: string;
+  productTypeId: string;
+  clothingTypeId: string;
+  colorId: string;
+  fabricId: string;
+  sizeId: string;
+  qtyStock: string;
+  dressmakerValue: string;
+  finalValue: string;
   employeeId: string;
   statusId: string;
   testDate: string;
+  measurements: Record<string, string>;
 };
 
 type ToastState = {
@@ -75,6 +97,14 @@ type ToastState = {
   tone: "success" | "warning" | "error";
   title?: string;
   message: string;
+};
+
+type CustomersResponse = {
+  items?: Array<{
+    id: number;
+    fullName?: string | null;
+    companyName?: string | null;
+  }>;
 };
 
 const fieldClassName =
@@ -124,12 +154,81 @@ function mapAdminOptions(
     .filter(Boolean) as SelectOption[];
 }
 
+function mapCustomerOptions(data: CustomersResponse | unknown): CustomerOption[] {
+  const items = Array.isArray((data as CustomersResponse)?.items)
+    ? ((data as CustomersResponse).items || [])
+    : [];
+
+  return items
+    .map((item) => {
+      const id = Number(item.id);
+      const name = String(item.fullName || item.companyName || `Cliente ${item.id}`).trim();
+
+      if (!Number.isInteger(id) || !name) {
+        return null;
+      }
+
+      return { id, name };
+    })
+    .filter(Boolean) as CustomerOption[];
+}
+
+function ensureSelectOption(
+  options: SelectOption[],
+  value: number | null | undefined,
+  label: string | null | undefined,
+): SelectOption[] {
+  const normalizedValue = Number(value);
+  const normalizedLabel = String(label || "").trim();
+
+  if (!Number.isInteger(normalizedValue) || normalizedValue <= 0 || !normalizedLabel) {
+    return options;
+  }
+
+  if (options.some((option) => option.id === normalizedValue)) {
+    return options;
+  }
+
+  return [{ id: normalizedValue, label: normalizedLabel }, ...options];
+}
+
+function ensureCustomerOption(
+  options: CustomerOption[],
+  value: number | null | undefined,
+  name: string | null | undefined,
+): CustomerOption[] {
+  const normalizedValue = Number(value);
+  const normalizedName = String(name || "").trim();
+
+  if (!Number.isInteger(normalizedValue) || normalizedValue <= 0 || !normalizedName) {
+    return options;
+  }
+
+  if (options.some((option) => option.id === normalizedValue)) {
+    return options;
+  }
+
+  return [{ id: normalizedValue, name: normalizedName }, ...options];
+}
+
 function toFormState(product: ProductDetails): ProductFormState {
   return {
+    desc: product.desc || "",
     details: product.details || "",
+    customerId: product.customerId ? String(product.customerId) : "",
+    categoryId: product.categoryId ? String(product.categoryId) : "",
+    productTypeId: product.productTypeId ? String(product.productTypeId) : "",
+    clothingTypeId: product.clothingTypeId ? String(product.clothingTypeId) : "",
+    colorId: product.colorId ? String(product.colorId) : "",
+    fabricId: product.fabricId ? String(product.fabricId) : "",
+    sizeId: product.sizeId ? String(product.sizeId) : "",
+    qtyStock: String(product.qtyStock || product.saleItemQuantity || 1),
+    dressmakerValue: formatCurrencyInput(String(product.dressmakerValue || 0)),
+    finalValue: formatCurrencyInput(String(product.finalValue || 0)),
     employeeId: product.employeeId ? String(product.employeeId) : "",
     statusId: product.statusId ? String(product.statusId) : "",
     testDate: toDateInputValue(product.testDate),
+    measurements: toMeasurementValueMap(product.measurements),
   };
 }
 
@@ -158,24 +257,45 @@ function ReadonlyField({
   return (
     <div>
       <label className={labelClassName}>{label}</label>
-      <div className={`${fieldClassName} mt-2 bg-surface-lowest text-neutral-700`}>{value}</div>
+      <div className={`${fieldClassName} mt-2 bg-surface-low text-neutral-700`}>{value}</div>
     </div>
   );
 }
 
-function formatMeasurementsList(
-  measurements?: Array<{ label: string | null; key: string | null; value: number }>,
-) {
-  if (!Array.isArray(measurements) || !measurements.length) {
-    return "-";
-  }
+function toMeasurementValueMap(
+  measurements: ProductDetails["measurements"] = [],
+): Record<string, string> {
+  return (Array.isArray(measurements) ? measurements : []).reduce<Record<string, string>>(
+    (acc, measurement) => {
+      const key = String(measurement?.key || "").trim();
+      if (!key) return acc;
 
-  return measurements
+      acc[key] =
+        measurement.value === null || measurement.value === undefined
+          ? ""
+          : String(measurement.value);
+      return acc;
+    },
+    {},
+  );
+}
+
+function toMeasurementOptions(
+  measurements: ProductDetails["measurements"] = [],
+): MeasurementsFieldOption[] {
+  return (Array.isArray(measurements) ? measurements : [])
     .map((measurement) => {
-      const label = measurement.label || measurement.key || "Medida";
-      return `${label}: ${measurement.value}`;
+      const key = String(measurement?.key || "").trim();
+      const label = String(measurement?.label || measurement?.key || "").trim();
+
+      if (!key || !label) return null;
+
+      return {
+        value: key,
+        label,
+      };
     })
-    .join(" | ");
+    .filter((item): item is MeasurementsFieldOption => Boolean(item));
 }
 
 export default function OrderDetails() {
@@ -187,12 +307,24 @@ export default function OrderDetails() {
   const [error, setError] = useState("");
   const [product, setProduct] = useState<ProductDetails | null>(null);
   const [form, setForm] = useState<ProductFormState | null>(null);
+  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
+  const [productTypeOptions, setProductTypeOptions] = useState<SelectOption[]>([]);
+  const [clothingTypeOptions, setClothingTypeOptions] = useState<SelectOption[]>([]);
+  const [colorOptions, setColorOptions] = useState<SelectOption[]>([]);
+  const [fabricOptions, setFabricOptions] = useState<SelectOption[]>([]);
+  const [sizeOptions, setSizeOptions] = useState<SelectOption[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<SelectOption[]>([]);
   const [statusOptions, setStatusOptions] = useState<SelectOption[]>([]);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
   const returnTo = useMemo(
     () => searchParams.get("returnTo") || "/producao",
     [searchParams],
+  );
+  const measurementValues = form?.measurements || {};
+  const measurementOptions = useMemo(
+    () => toMeasurementOptions(product?.measurements),
+    [product],
   );
 
   useEffect(() => {
@@ -202,26 +334,108 @@ export default function OrderDetails() {
         setError("");
         setToast(EMPTY_TOAST);
 
-        const [productData, employeesData, statusesData] = await Promise.all([
+        const [
+          productData,
+          customersData,
+          categoriesData,
+          productsTypesData,
+          clothingTypesData,
+          colorsData,
+          fabricsData,
+          sizesData,
+          employeesData,
+          statusesData,
+        ] = await Promise.all([
           getRequest(`/products/${id}`),
+          getRequest("/clients?page=1&pageSize=100&status=ativo"),
+          getRequest("/admin/categories"),
+          getRequest("/admin/products-types"),
+          getRequest("/admin/clothings-types"),
+          getRequest("/admin/colors"),
+          getRequest("/admin/fabrics"),
+          getRequest("/admin/sizes"),
           getRequest("/admin/employees"),
           getRequest("/products/status-options"),
         ]);
 
-        setProduct(productData as ProductDetails);
-        setForm(toFormState(productData as ProductDetails));
-        setEmployeeOptions(
-          mapAdminOptions(employeesData, { idKey: "idEmployee", labelKey: "shortName" }),
+        const parsedProduct = productData as ProductDetails;
+
+        setProduct(parsedProduct);
+        setForm(toFormState(parsedProduct));
+        setCustomerOptions(
+          ensureCustomerOption(
+            mapCustomerOptions(customersData),
+            parsedProduct.customerId,
+            parsedProduct.customerName,
+          ),
         );
-        setStatusOptions(mapAdminOptions(statusesData));
+        setCategoryOptions(
+          ensureSelectOption(
+            mapAdminOptions(categoriesData, { idKey: "id", labelKey: "desc" }),
+            parsedProduct.categoryId,
+            parsedProduct.categoryName,
+          ),
+        );
+        setClothingTypeOptions(
+          ensureSelectOption(
+            mapAdminOptions(clothingTypesData, { idKey: "id", labelKey: "desc" }),
+            parsedProduct.clothingTypeId,
+            parsedProduct.clothingTypeName,
+          ),
+        );
+        setProductTypeOptions(
+          ensureSelectOption(
+            mapAdminOptions(productsTypesData, { idKey: "id", labelKey: "desc" }),
+            parsedProduct.productTypeId,
+            parsedProduct.productTypeName,
+          ),
+        );
+        setColorOptions(
+          ensureSelectOption(
+            mapAdminOptions(colorsData, { idKey: "id", labelKey: "desc" }),
+            parsedProduct.colorId,
+            parsedProduct.colorName,
+          ),
+        );
+        setFabricOptions(
+          ensureSelectOption(
+            mapAdminOptions(fabricsData, { idKey: "id", labelKey: "desc" }),
+            parsedProduct.fabricId,
+            parsedProduct.fabricName,
+          ),
+        );
+        setSizeOptions(
+          ensureSelectOption(
+            mapAdminOptions(sizesData, { idKey: "id", labelKey: "desc" }),
+            parsedProduct.sizeId,
+            parsedProduct.sizeName,
+          ),
+        );
+        setEmployeeOptions(
+          ensureSelectOption(
+            mapAdminOptions(employeesData, { idKey: "idEmployee", labelKey: "shortName" }),
+            parsedProduct.employeeId,
+            parsedProduct.employeeName,
+          ),
+        );
+        setStatusOptions(
+          ensureSelectOption(
+            mapAdminOptions(statusesData),
+            parsedProduct.statusId,
+            parsedProduct.statusName,
+          ),
+        );
       } catch (err: unknown) {
         const maybeAxiosError = err as { response?: { status?: number } };
 
         if (maybeAxiosError.response?.status === 404) {
-          setError("Pedido não encontrado.");
+          setError("Pedido nao encontrado.");
         } else {
           setError(
-            getUserFacingApiErrorMessage(err, "Não foi possível carregar os detalhes do produto."),
+            getUserFacingApiErrorMessage(
+              err,
+              "Nao foi possivel carregar os detalhes do produto.",
+            ),
           );
         }
       } finally {
@@ -235,9 +449,24 @@ export default function OrderDetails() {
   const handleFieldChange = (field: keyof ProductFormState, value: string) => {
     setForm((current) => {
       if (!current) return current;
+
       return {
         ...current,
         [field]: value,
+      };
+    });
+  };
+
+  const handleMeasurementChange = (field: string, value: string) => {
+    setForm((current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        measurements: {
+          ...current.measurements,
+          [field]: value,
+        },
       };
     });
   };
@@ -252,18 +481,25 @@ export default function OrderDetails() {
       setToast(EMPTY_TOAST);
 
       const updated = (await updateRequest(`/products/${product.id}`, {
-        desc: product.desc,
-        customerId: product.customerId,
-        categoryId: product.categoryId,
-        productTypeId: product.productTypeId,
-        clothingTypeId: product.clothingTypeId,
-        colorId: product.colorId,
-        fabricId: product.fabricId,
-        sizeId: product.sizeId,
-        qtyStock: 1,
-        finalValue: product.finalValue,
-        dressmakerValue: product.dressmakerValue,
-        ...form,
+        desc: form.desc.trim(),
+        details: form.details,
+        customerId: form.customerId ? Number(form.customerId) : null,
+        employeeId: form.employeeId ? Number(form.employeeId) : null,
+        statusId: form.statusId ? Number(form.statusId) : null,
+        categoryId: form.categoryId ? Number(form.categoryId) : null,
+        productTypeId: form.productTypeId ? Number(form.productTypeId) : null,
+        clothingTypeId: form.clothingTypeId ? Number(form.clothingTypeId) : null,
+        colorId: form.colorId ? Number(form.colorId) : null,
+        fabricId: form.fabricId ? Number(form.fabricId) : null,
+        sizeId: form.sizeId ? Number(form.sizeId) : null,
+        qtyStock: Math.max(1, Number(form.qtyStock) || 1),
+        testDate: form.testDate,
+        dressmakerValue: parseCurrencyToNumber(form.dressmakerValue),
+        finalValue: parseCurrencyToNumber(form.finalValue),
+        measurements: measurementOptions.map((measurement) => ({
+          key: measurement.value,
+          value: form.measurements[measurement.value] || "",
+        })),
       })) as ProductDetails;
 
       setProduct(updated);
@@ -277,7 +513,7 @@ export default function OrderDetails() {
       setToast({
         open: true,
         tone: "error",
-        message: getUserFacingApiErrorMessage(err, "Não foi possível salvar o pedido."),
+        message: getUserFacingApiErrorMessage(err, "Nao foi possivel salvar o pedido."),
       });
     } finally {
       setSaving(false);
@@ -301,7 +537,7 @@ export default function OrderDetails() {
           <p>{error}</p>
           <div className="mt-4 flex justify-center gap-3">
             <Button variant="secondary" onClick={() => navigate(returnTo)}>
-              Voltar para produção
+              Voltar para producao
             </Button>
           </div>
         </div>
@@ -323,7 +559,7 @@ export default function OrderDetails() {
               onClick={() => navigate(returnTo)}
               className="mb-4 text-sm text-neutral-700 underline-offset-2 hover:underline"
             >
-              Voltar para produção
+              Voltar para producao
             </button>
             <h1 className="font-editorial text-[2rem] text-primary md:text-[1.85rem]">
               Detalhes do Produto
@@ -337,7 +573,7 @@ export default function OrderDetails() {
               </Button>
             ) : null}
             <Button variant="primary" form="order-details-form" type="submit" isLoading={saving}>
-              Salvar alterações
+              Salvar alteracoes
             </Button>
           </div>
         </div>
@@ -346,34 +582,215 @@ export default function OrderDetails() {
           <InfoCard label="Pedido" value={`#${product.id}`} />
           <InfoCard label="Cliente atual" value={product.customerName || "Sem cliente"} />
           <InfoCard label="Status atual" value={product.statusName || "-"} />
-          <InfoCard label="Valor da peça" value={formatCurrency(product.finalValue)} />
-          <InfoCard label="Lucro da peça" value={formatCurrency(product.remainingValue)} />
+          <InfoCard label="Valor da peca" value={formatCurrency(product.finalValue)} />
+          <InfoCard label="Lucro da peca" value={formatCurrency(product.remainingValue)} />
         </div>
 
         <form id="order-details-form" onSubmit={handleSubmit} className="space-y-6">
           <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
             <h2 className="font-editorial text-3xl text-primary">Dados do Produto</h2>
             <p className="mt-2 text-sm text-neutral-600">
-              Aqui você pode ajustar apenas os dados operacionais do pedido. Para alterar valores,
-              acesse a venda vinculada.
+              Todos os dados do produto podem ser ajustados aqui.
             </p>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <ReadonlyField label="Descrição" value={product.desc || "-"} />
-              <ReadonlyField label="Tipo de Produto" value={product.categoryName || "-"} />
-              <ReadonlyField label="Subtipo do Produto" value={product.productTypeName || "-"} />
-              <ReadonlyField label="Tipo de Roupa" value={product.clothingTypeName || "-"} />
-              <ReadonlyField label="Cor" value={product.colorName || "-"} />
-              <ReadonlyField label="Tecido" value={product.fabricName || "-"} />
-              <ReadonlyField label="Tamanho" value={product.sizeName || "-"} />
-              <ReadonlyField
-                label="Quantidade"
-                value={String(product.saleItemQuantity || product.qtyStock || 1)}
-              />
+              <div>
+                <label className={labelClassName} htmlFor="order-desc">
+                  Descricao
+                </label>
+                <input
+                  id="order-desc"
+                  value={form.desc}
+                  onChange={(event) => handleFieldChange("desc", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                />
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-customer">
+                  Cliente
+                </label>
+                <select
+                  id="order-customer"
+                  value={form.customerId}
+                  onChange={(event) => handleFieldChange("customerId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {customerOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-category">
+                  Tipo de Produto
+                </label>
+                <select
+                  id="order-category"
+                  value={form.categoryId}
+                  onChange={(event) => handleFieldChange("categoryId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {categoryOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-product-type">
+                  Subtipo do Produto
+                </label>
+                <select
+                  id="order-product-type"
+                  value={form.productTypeId}
+                  onChange={(event) => handleFieldChange("productTypeId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {productTypeOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-clothing-type">
+                  Tipo de Roupa
+                </label>
+                <select
+                  id="order-clothing-type"
+                  value={form.clothingTypeId}
+                  onChange={(event) => handleFieldChange("clothingTypeId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {clothingTypeOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-color">
+                  Cor
+                </label>
+                <select
+                  id="order-color"
+                  value={form.colorId}
+                  onChange={(event) => handleFieldChange("colorId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {colorOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-fabric">
+                  Tecido
+                </label>
+                <select
+                  id="order-fabric"
+                  value={form.fabricId}
+                  onChange={(event) => handleFieldChange("fabricId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {fabricOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-size">
+                  Tamanho
+                </label>
+                <select
+                  id="order-size"
+                  value={form.sizeId}
+                  onChange={(event) => handleFieldChange("sizeId", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione...</option>
+                  {sizeOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-quantity">
+                  Quantidade
+                </label>
+                <input
+                  id="order-quantity"
+                  type="number"
+                  min={1}
+                  value={form.qtyStock}
+                  onChange={(event) => handleFieldChange("qtyStock", event.target.value)}
+                  className={`${fieldClassName} mt-2`}
+                />
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-final-value">
+                  Valor final
+                </label>
+                <input
+                  id="order-final-value"
+                  value={form.finalValue}
+                  onChange={(event) =>
+                    handleFieldChange("finalValue", formatCurrencyInput(event.target.value))
+                  }
+                  className={`${fieldClassName} mt-2`}
+                />
+              </div>
+
+              <div>
+                <label className={labelClassName} htmlFor="order-dressmaker-value">
+                  Valor da costureira
+                </label>
+                <input
+                  id="order-dressmaker-value"
+                  value={form.dressmakerValue}
+                  onChange={(event) =>
+                    handleFieldChange(
+                      "dressmakerValue",
+                      formatCurrencyInput(event.target.value),
+                    )
+                  }
+                  className={`${fieldClassName} mt-2`}
+                />
+              </div>
+
               <div className="md:col-span-2 xl:col-span-3">
-                <ReadonlyField
-                  label="Medidas"
-                  value={formatMeasurementsList(product.measurements)}
+                <MeasurementsFields
+                  contextKey={`order-${product.id}`}
+                  fieldClassName="h-10 w-full rounded border border-outline-variant/60 bg-white px-3 text-sm text-primary focus:outline-none"
+                  measurements={measurementValues}
+                  measurementOptions={measurementOptions}
+                  onUpdateMeasurement={handleMeasurementChange}
                 />
               </div>
 
@@ -448,10 +865,13 @@ export default function OrderDetails() {
           </section>
 
           <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-            <h2 className="font-editorial text-3xl text-primary">Informações de Controle</h2>
+            <h2 className="font-editorial text-3xl text-primary">Informacoes de Controle</h2>
 
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <InfoCard label="Venda vinculada" value={product.saleId ? `#${product.saleId}` : "Sem venda"} />
+              <InfoCard
+                label="Venda vinculada"
+                value={product.saleId ? `#${product.saleId}` : "Sem venda"}
+              />
               <InfoCard label="Criado em" value={formatDateTime(product.createdAt)} />
               <InfoCard label="Atualizado em" value={formatDateTime(product.updatedAt)} />
             </div>
