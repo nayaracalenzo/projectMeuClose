@@ -3,6 +3,7 @@ const cashRepository = require("../repositories/cashRepository");
 const bankRepository = require("../repositories/bankRepository");
 const cashSessionsRepository = require("../repositories/cashSessionsRepository");
 const financialCategoriesRepository = require("../repositories/financialCategoriesRepository");
+const { normalizeDateToLocalMidnight } = require("../utils/normalizeDate");
 
 function normalizeLegacyCategoryText(value) {
   return String(value || "").trim().toUpperCase();
@@ -86,17 +87,34 @@ async function normalizeFinancialEntryPayload(payload = {}) {
   };
 }
 
-function isPreviousDay(dateValue) {
+function normalizeReferenceDay(referenceDateValue = new Date()) {
+  if (referenceDateValue instanceof Date && !Number.isNaN(referenceDateValue.getTime())) {
+    const normalizedDate = new Date(referenceDateValue);
+    normalizedDate.setHours(0, 0, 0, 0);
+    return normalizedDate;
+  }
+
+  const normalizedFromString = normalizeDateToLocalMidnight(referenceDateValue);
+
+  if (normalizedFromString) {
+    return normalizedFromString;
+  }
+
+  const fallbackDate = new Date();
+  fallbackDate.setHours(0, 0, 0, 0);
+  return fallbackDate;
+}
+
+function isPreviousDay(dateValue, referenceDateValue = new Date()) {
   if (!dateValue) return false;
 
   const openedAt = new Date(dateValue);
   const openedDay = new Date(openedAt);
   openedDay.setHours(0, 0, 0, 0);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const referenceDay = normalizeReferenceDay(referenceDateValue);
 
-  return openedDay.getTime() < today.getTime();
+  return openedDay.getTime() < referenceDay.getTime();
 }
 
 async function createCashEntry(payload, transaction) {
@@ -110,7 +128,7 @@ async function createCashEntry(payload, transaction) {
       throw conflictError("Abra o caixa da loja antes de registrar lancamentos em dinheiro.");
     }
 
-    if (isPreviousDay(openSession.openedAt)) {
+    if (isPreviousDay(openSession.openedAt, normalizedPayload.occurredAt)) {
       throw conflictError(
         "Existe um caixa da loja aberto de dia anterior. Feche o caixa antes de continuar.",
       );

@@ -526,6 +526,18 @@ export default function BankPage() {
       <h1 className="mb-3 pb-1 pt-8 font-editorial text-[2rem] font-extralight leading-[0.98] tracking-tight text-primary md:text-[2.35rem] md:leading-tight">
         Banco
       </h1>
+      <section className="mb-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="bg-surface-lowest p-4">
+            <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+              Saldo geral do banco
+            </p>
+            <p className="mt-2 text-[1.3rem] leading-none text-primary md:text-[1.5rem]">
+              {formatCurrency(overallBankBalance)}
+            </p>
+          </div>
+        </div>
+      </section>
 
       <div className="mb-5 flex flex-wrap gap-2">
         <button
@@ -606,7 +618,9 @@ export default function BankPage() {
             </label>
             <input
               value={startDate}
-              onChange={(e) => setStartDate(maskLegacyShortDateInput(e.target.value))}
+              onChange={(e) =>
+                setStartDate(maskLegacyShortDateInput(e.target.value))
+              }
               inputMode="numeric"
               maxLength={8}
               placeholder="dd/mm/aa"
@@ -619,7 +633,9 @@ export default function BankPage() {
             </label>
             <input
               value={endDate}
-              onChange={(e) => setEndDate(maskLegacyShortDateInput(e.target.value))}
+              onChange={(e) =>
+                setEndDate(maskLegacyShortDateInput(e.target.value))
+              }
               inputMode="numeric"
               maxLength={8}
               placeholder="dd/mm/aa"
@@ -1004,7 +1020,8 @@ export default function BankPage() {
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
             <p className="mt-2 text-xs text-neutral-700">
-              Saldo geral disponivel no banco: {formatCurrency(availableBankBalance)}
+              Saldo geral disponivel no banco:{" "}
+              {formatCurrency(availableBankBalance)}
             </p>
           </div>
 

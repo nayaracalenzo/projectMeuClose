@@ -2,7 +2,9 @@ const service = require("../services/cashSessionService");
 
 async function getStoreSessionStatusController(req, res, next) {
   try {
-    const data = await service.getStoreSessionStatus();
+    const data = await service.getStoreSessionStatus(
+      req.query.referenceDate ?? req.query.occurredAt ?? null,
+    );
     return res.status(200).json(data);
   } catch (error) {
     return next(error);
