@@ -679,7 +679,7 @@ export default function BankPage() {
       </p>
 
       <div className="hidden overflow-auto md:block">
-        <table className="mt-2 min-w-[1100px] w-full border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-275 w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
@@ -689,13 +689,13 @@ export default function BankPage() {
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Parcela
               </th>
-              <th className="w-[180px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-45 px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Categoria
               </th>
               <th className="min-w-[320px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Historico
               </th>
-              <th className="w-[170px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-42.5 px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma pag.
               </th>
               <th className="whitespace-nowrap px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
@@ -756,7 +756,7 @@ export default function BankPage() {
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.parcela || "-"}
                   </td>
-                  <td className="w-[180px] px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="w-45 px-4 py-3 text-[14px] text-neutral-700">
                     <span
                       className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
                         row.category,
@@ -768,7 +768,7 @@ export default function BankPage() {
                   <td className="min-w-[320px] px-4 py-3 text-[14px] uppercase text-neutral-700">
                     {row.description}
                   </td>
-                  <td className="w-[170px] whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
+                  <td className="w-42.5 whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {row.paymentTypeName || "-"}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right text-[14px] text-[#1f7a1f]">
