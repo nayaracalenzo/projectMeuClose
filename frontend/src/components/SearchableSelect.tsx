@@ -10,6 +10,7 @@ type SearchableSelectProps = {
   value: string;
   options: SearchableSelectOption[];
   onChange: (value: string) => void;
+  onSearchChange?: (value: string) => void;
   placeholder?: string;
   className?: string;
   inputClassName?: string;
@@ -32,6 +33,7 @@ export default function SearchableSelect({
   value,
   options,
   onChange,
+  onSearchChange,
   placeholder = "Digite para buscar",
   className,
   inputClassName,
@@ -48,12 +50,17 @@ export default function SearchableSelect({
   );
   const [search, setSearch] = useState(selectedOption?.label || "");
   const [isOpen, setIsOpen] = useState(false);
+  const [showAllOnOpen, setShowAllOnOpen] = useState(false);
 
   useEffect(() => {
     setSearch(selectedOption?.label || "");
-  }, [selectedOption]);
+  }, [value]);
 
   const filteredOptions = useMemo(() => {
+    if (showAllOnOpen) {
+      return options;
+    }
+
     const normalizedSearch = normalizeText(search);
 
     if (!normalizedSearch) {
@@ -75,15 +82,27 @@ export default function SearchableSelect({
           const nextValue = event.target.value;
           setSearch(nextValue);
           setIsOpen(true);
+          setShowAllOnOpen(false);
+          onSearchChange?.(nextValue);
 
           if (!nextValue.trim() && value) {
             onChange("");
           }
         }}
-        onFocus={() => setIsOpen(true)}
+        onFocus={() => {
+          setIsOpen(true);
+          setShowAllOnOpen(true);
+          onSearchChange?.("");
+        }}
+        onClick={() => {
+          setIsOpen(true);
+          setShowAllOnOpen(true);
+          onSearchChange?.("");
+        }}
         onBlur={() => {
           setTimeout(() => {
             setIsOpen(false);
+            setShowAllOnOpen(false);
             setSearch(selectedOption?.label || "");
           }, 120);
         }}
@@ -104,6 +123,7 @@ export default function SearchableSelect({
                   onChange(option.value);
                   setSearch(option.label);
                   setIsOpen(false);
+                  setShowAllOnOpen(false);
                 }}
                 className={optionClassName}
               >
