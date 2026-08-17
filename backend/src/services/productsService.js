@@ -388,6 +388,11 @@ async function normalizeProductPayload(body = {}) {
     throw validationError("Descrição do pedido é obrigatória.");
   }
 
+  const customerId = normalizeNullableId(body.customerId);
+  if (customerId === null) {
+    throw validationError("Cliente e obrigatorio.");
+  }
+
   const qtyStock = normalizeNullableInteger(body.qtyStock, {
     min: 1,
     fieldLabel: "Quantidade",
@@ -417,7 +422,7 @@ async function normalizeProductPayload(body = {}) {
   return {
     desc,
     details: normalizeText(body.details),
-    customerId: normalizeNullableId(body.customerId),
+    customerId,
     employeeId: normalizeNullableId(body.employeeId),
     statusId: normalizeNullableId(body.statusId),
     categoryId: normalizeNullableId(body.categoryId),

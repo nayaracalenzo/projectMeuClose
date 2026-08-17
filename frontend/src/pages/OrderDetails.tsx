@@ -5,6 +5,7 @@ import MeasurementsFields, {
   type MeasurementOption as MeasurementsFieldOption,
 } from "../components/MeasurementsFields";
 import NoticeToast from "../components/NoticeToast";
+import SearchableSelect from "../components/SearchableSelect";
 import { getRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import {
@@ -283,6 +284,20 @@ function toMeasurementOptions(
     .filter((item): item is MeasurementsFieldOption => Boolean(item));
 }
 
+function toSearchableOptions(options: SelectOption[] = []) {
+  return options.map((option) => ({
+    value: String(option.id),
+    label: option.label,
+  }));
+}
+
+function toCustomerSearchableOptions(options: CustomerOption[] = []) {
+  return options.map((option) => ({
+    value: String(option.id),
+    label: option.name,
+  }));
+}
+
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -293,6 +308,7 @@ export default function OrderDetails() {
   const [product, setProduct] = useState<ProductDetails | null>(null);
   const [form, setForm] = useState<ProductFormState | null>(null);
   const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
   const [productTypeOptions, setProductTypeOptions] = useState<SelectOption[]>([]);
   const [clothingTypeOptions, setClothingTypeOptions] = useState<SelectOption[]>([]);
@@ -311,6 +327,42 @@ export default function OrderDetails() {
     () => toMeasurementOptions(product?.measurements),
     [product],
   );
+  const customerSearchableOptions = useMemo(
+    () => toCustomerSearchableOptions(customerOptions),
+    [customerOptions],
+  );
+  const categorySearchableOptions = useMemo(
+    () => toSearchableOptions(categoryOptions),
+    [categoryOptions],
+  );
+  const productTypeSearchableOptions = useMemo(
+    () => toSearchableOptions(productTypeOptions),
+    [productTypeOptions],
+  );
+  const clothingTypeSearchableOptions = useMemo(
+    () => toSearchableOptions(clothingTypeOptions),
+    [clothingTypeOptions],
+  );
+  const colorSearchableOptions = useMemo(
+    () => toSearchableOptions(colorOptions),
+    [colorOptions],
+  );
+  const fabricSearchableOptions = useMemo(
+    () => toSearchableOptions(fabricOptions),
+    [fabricOptions],
+  );
+  const sizeSearchableOptions = useMemo(
+    () => toSearchableOptions(sizeOptions),
+    [sizeOptions],
+  );
+  const employeeSearchableOptions = useMemo(
+    () => toSearchableOptions(employeeOptions),
+    [employeeOptions],
+  );
+  const statusSearchableOptions = useMemo(
+    () => toSearchableOptions(statusOptions),
+    [statusOptions],
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -321,7 +373,6 @@ export default function OrderDetails() {
 
         const [
           productData,
-          customersData,
           categoriesData,
           productsTypesData,
           clothingTypesData,
@@ -332,7 +383,6 @@ export default function OrderDetails() {
           statusesData,
         ] = await Promise.all([
           getRequest(`/products/${id}`),
-          getRequest("/clients?page=1&pageSize=100&status=ativo"),
           getRequest("/admin/categories"),
           getRequest("/admin/products-types"),
           getRequest("/admin/clothings-types"),
@@ -347,9 +397,9 @@ export default function OrderDetails() {
 
         setProduct(parsedProduct);
         setForm(toFormState(parsedProduct));
-        setCustomerOptions(
+        setCustomerOptions((current) =>
           ensureCustomerOption(
-            mapCustomerOptions(customersData),
+            current,
             parsedProduct.customerId,
             parsedProduct.customerName,
           ),
@@ -431,6 +481,42 @@ export default function OrderDetails() {
     void fetchData();
   }, [id]);
 
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: "1",
+          pageSize: "20",
+        });
+
+        if (customerSearchTerm.trim()) {
+          params.set("search", customerSearchTerm.trim());
+        }
+
+        const data = (await getRequest(`/clients?${params.toString()}`)) as CustomersResponse;
+        const parsedOptions = mapCustomerOptions(data);
+
+        setCustomerOptions(
+          ensureCustomerOption(
+            parsedOptions,
+            product?.customerId,
+            product?.customerName,
+          ),
+        );
+      } catch {
+        setCustomerOptions(
+          ensureCustomerOption(
+            [],
+            product?.customerId,
+            product?.customerName,
+          ),
+        );
+      }
+    };
+
+    void fetchCustomers();
+  }, [customerSearchTerm, product?.customerId, product?.customerName]);
+
   const handleFieldChange = (field: keyof ProductFormState, value: string) => {
     setForm((current) => {
       if (!current) return current;
@@ -460,6 +546,16 @@ export default function OrderDetails() {
     event.preventDefault();
 
     if (!form || !product) return;
+
+    if (!form.customerId) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Cliente obrigatorio",
+        message: "Selecione uma cliente antes de salvar o pedido.",
+      });
+      return;
+    }
 
     try {
       setSaving(true);
@@ -557,7 +653,13 @@ export default function OrderDetails() {
                 Abrir venda vinculada
               </Button>
             ) : null}
-            <Button variant="primary" form="order-details-form" type="submit" isLoading={saving}>
+            <Button
+              variant="primary"
+              form="order-details-form"
+              type="submit"
+              isLoading={saving}
+              disabled={!form.customerId}
+            >
               Salvar alteracoes
             </Button>
           </div>
@@ -595,133 +697,120 @@ export default function OrderDetails() {
                 <label className={labelClassName} htmlFor="order-customer">
                   Cliente
                 </label>
-                <select
+                <SearchableSelect
                   id="order-customer"
                   value={form.customerId}
-                  onChange={(event) => handleFieldChange("customerId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {customerOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
+                  options={customerSearchableOptions}
+                  onChange={(value) => handleFieldChange("customerId", value)}
+                  onSearchChange={setCustomerSearchTerm}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-category">
                   Tipo de Produto
                 </label>
-                <select
+                <SearchableSelect
                   id="order-category"
                   value={form.categoryId}
-                  onChange={(event) => handleFieldChange("categoryId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {categoryOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={categorySearchableOptions}
+                  onChange={(value) => handleFieldChange("categoryId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-product-type">
                   Subtipo do Produto
                 </label>
-                <select
+                <SearchableSelect
                   id="order-product-type"
                   value={form.productTypeId}
-                  onChange={(event) => handleFieldChange("productTypeId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {productTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={productTypeSearchableOptions}
+                  onChange={(value) => handleFieldChange("productTypeId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-clothing-type">
                   Tipo de Roupa
                 </label>
-                <select
+                <SearchableSelect
                   id="order-clothing-type"
                   value={form.clothingTypeId}
-                  onChange={(event) => handleFieldChange("clothingTypeId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {clothingTypeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={clothingTypeSearchableOptions}
+                  onChange={(value) => handleFieldChange("clothingTypeId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-color">
                   Cor
                 </label>
-                <select
+                <SearchableSelect
                   id="order-color"
                   value={form.colorId}
-                  onChange={(event) => handleFieldChange("colorId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {colorOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={colorSearchableOptions}
+                  onChange={(value) => handleFieldChange("colorId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-fabric">
                   Tecido
                 </label>
-                <select
+                <SearchableSelect
                   id="order-fabric"
                   value={form.fabricId}
-                  onChange={(event) => handleFieldChange("fabricId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {fabricOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={fabricSearchableOptions}
+                  onChange={(value) => handleFieldChange("fabricId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-size">
                   Tamanho
                 </label>
-                <select
+                <SearchableSelect
                   id="order-size"
                   value={form.sizeId}
-                  onChange={(event) => handleFieldChange("sizeId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {sizeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={sizeSearchableOptions}
+                  onChange={(value) => handleFieldChange("sizeId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
@@ -783,38 +872,34 @@ export default function OrderDetails() {
                 <label className={labelClassName} htmlFor="order-status">
                   Status
                 </label>
-                <select
+                <SearchableSelect
                   id="order-status"
                   value={form.statusId}
-                  onChange={(event) => handleFieldChange("statusId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {statusOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={statusSearchableOptions}
+                  onChange={(value) => handleFieldChange("statusId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
                 <label className={labelClassName} htmlFor="order-seamstress">
                   Costureira
                 </label>
-                <select
+                <SearchableSelect
                   id="order-seamstress"
                   value={form.employeeId}
-                  onChange={(event) => handleFieldChange("employeeId", event.target.value)}
-                  className={`${fieldClassName} mt-2`}
-                >
-                  <option value="">Selecione...</option>
-                  {employeeOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={employeeSearchableOptions}
+                  onChange={(value) => handleFieldChange("employeeId", value)}
+                  className="relative mt-2"
+                  inputClassName={fieldClassName}
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
               </div>
 
               <div>
