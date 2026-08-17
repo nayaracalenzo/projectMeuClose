@@ -247,21 +247,6 @@ function InfoCard({
   );
 }
 
-function ReadonlyField({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div>
-      <label className={labelClassName}>{label}</label>
-      <div className={`${fieldClassName} mt-2 bg-surface-low text-neutral-700`}>{value}</div>
-    </div>
-  );
-}
-
 function toMeasurementValueMap(
   measurements: ProductDetails["measurements"] = [],
 ): Record<string, string> {
