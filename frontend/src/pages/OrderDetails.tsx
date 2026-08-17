@@ -504,7 +504,7 @@ export default function OrderDetails() {
           ),
         );
       } catch {
-        setCustomerOptions((current) =>
+        setCustomerOptions(
           ensureCustomerOption(
             [],
             product?.customerId,
