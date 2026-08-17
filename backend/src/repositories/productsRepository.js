@@ -319,6 +319,30 @@ async function createProductsFromSale(sale, items, transaction) {
   return Products.bulkCreate(payloads, { transaction });
 }
 
+async function syncProductFromSaleItem(productId, customerId, item, transaction) {
+  const normalizedProductId = Number(productId);
+
+  if (!Number.isInteger(normalizedProductId) || normalizedProductId <= 0) {
+    return null;
+  }
+
+  const product = await Products.findOne({
+    where: {
+      id: normalizedProductId,
+      dsbl: false,
+    },
+    transaction,
+  });
+
+  if (!product) {
+    return null;
+  }
+
+  const payload = await buildProductPayload(customerId, item, transaction);
+  await product.update(payload, { transaction });
+  return product;
+}
+
 async function listProducts(filters = {}) {
   const normalizedStatusId =
     filters.statusId === undefined || filters.statusId === null || filters.statusId === ""
@@ -682,6 +706,7 @@ module.exports = {
   listProductStatuses,
   saveMeasurementValuesBySaleId,
   sequelize,
+  syncProductFromSaleItem,
   syncProductsSequence,
   updateProductById,
 };

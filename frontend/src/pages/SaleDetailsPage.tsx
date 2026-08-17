@@ -320,6 +320,10 @@ export default function SaleDetailsPage() {
     () => searchParams.get("returnTo") || "/vendas",
     [searchParams],
   );
+  const saleDetailsPath = useMemo(
+    () => `/venda/${id}?returnTo=${encodeURIComponent(returnTo)}`,
+    [id, returnTo],
+  );
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -655,6 +659,20 @@ export default function SaleDetailsPage() {
                 Editar orçamento
               </Button>
             ) : null}
+            {!isBudgetSale && sale.status === "COMPLETED" ? (
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  navigate(
+                    `/nova-venda?quoteId=${sale.id}&mode=edit&returnTo=${encodeURIComponent(
+                      saleDetailsPath,
+                    )}`,
+                  )
+                }
+              >
+                Editar venda
+              </Button>
+            ) : null}
             {isBudgetSale ? (
               <Button
                 variant="secondary"
@@ -718,10 +736,14 @@ export default function SaleDetailsPage() {
               <Button
                 variant="secondary"
                 onClick={() =>
-                  navigate(`/pedido/${firstProductionItem.productId}`)
+                  navigate(
+                    `/pedido/${firstProductionItem.productId}?returnTo=${encodeURIComponent(
+                      saleDetailsPath,
+                    )}`,
+                  )
                 }
               >
-                Abrir pedido de producao
+                Editar pedido de producao
               </Button>
             ) : null}
           </div>
@@ -919,25 +941,43 @@ export default function SaleDetailsPage() {
                         {formatDate(item.fittingDate)}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {sale.status !== "CANCELLED" &&
-                        !item.isCancelled &&
-                        activeItemsCount > 1 ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedSaleItem(item);
-                              setCancelItemReason("");
-                              setCancelItemResolution("APPLY_REMAINING");
-                              setCancelItemModalOpen(true);
-                            }}
-                          >
-                            Cancelar peca
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-neutral-500">-</span>
-                        )}
+                        <div className="flex justify-end gap-2">
+                          {isProductionItem(item) && item.productId ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() =>
+                                navigate(
+                                  `/pedido/${item.productId}?returnTo=${encodeURIComponent(
+                                    saleDetailsPath,
+                                  )}`,
+                                )
+                              }
+                            >
+                              Editar producao
+                            </Button>
+                          ) : null}
+                          {sale.status !== "CANCELLED" &&
+                          !item.isCancelled &&
+                          activeItemsCount > 1 ? (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedSaleItem(item);
+                                setCancelItemReason("");
+                                setCancelItemResolution("APPLY_REMAINING");
+                                setCancelItemModalOpen(true);
+                              }}
+                            >
+                              Cancelar peca
+                            </Button>
+                          ) : !isProductionItem(item) || !item.productId ? (
+                            <span className="text-xs text-neutral-500">-</span>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))

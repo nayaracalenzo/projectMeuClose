@@ -1802,6 +1802,61 @@ function validateEditableBudgetSale(sale) {
   }
 }
 
+function validateEditableCompletedSale(sale, normalized, debtExemption) {
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  if (resolveSaleStatus(sale) !== "COMPLETED") {
+    throw createSalesValidationError("Somente vendas finalizadas podem ser alteradas por este fluxo.");
+  }
+
+  if (Number(normalized.customerId) !== Number(sale.customerId)) {
+    throw createSalesValidationError(
+      "Nao e possivel trocar a cliente de uma venda finalizada por este fluxo.",
+    );
+  }
+
+  if (Boolean(debtExemption.doesNotGenerateDebt) !== Boolean(sale.doesNotGenerateDebt)) {
+    throw createSalesValidationError(
+      "Nao e possivel alterar a configuracao financeira de uma venda finalizada por este fluxo.",
+    );
+  }
+
+  const currentItems = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
+
+  if (normalized.items.length !== currentItems.length) {
+    throw createSalesValidationError(
+      "Nao e possivel adicionar ou remover itens de uma venda finalizada por este fluxo.",
+    );
+  }
+
+  const currentTotalAmount = roundCurrency(Number(sale.totalAmount || 0));
+  const nextTotalAmount = roundCurrency(Number(normalized.totalAmount || 0));
+  const currentFinalAmount = roundCurrency(Number(sale.finalAmount || 0));
+  const nextFinalAmount = roundCurrency(Number(normalized.finalAmount || 0));
+
+  if (currentTotalAmount !== nextTotalAmount || currentFinalAmount !== nextFinalAmount) {
+    throw createSalesValidationError(
+      "Nao e possivel alterar os valores totais de uma venda finalizada por este fluxo.",
+    );
+  }
+
+  currentItems.forEach((item, index) => {
+    if (item.itemType !== normalized.items[index]?.itemType) {
+      throw createSalesValidationError(
+        "Nao e possivel alterar o tipo dos itens de uma venda finalizada por este fluxo.",
+      );
+    }
+
+    if (item?.metadata?.cancellation?.cancelledAt) {
+      throw createSalesValidationError(
+        "Nao e possivel editar uma venda finalizada com item cancelado por este fluxo.",
+      );
+    }
+  });
+}
+
 async function updateQuote(id, body = {}) {
   const normalizedId = Number(id);
 
@@ -1838,6 +1893,68 @@ async function updateQuote(id, body = {}) {
   return buildSaleResponse(updated, {
     quote: true,
   });
+}
+
+async function updateCompletedSale(id, body = {}) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const normalized = await normalizeQuoteBase(body);
+  const debtExemption = normalizeDebtExemption(body);
+  const sale = await repository.getSaleById(normalizedId);
+  validateEditableCompletedSale(sale, normalized, debtExemption);
+
+  const updated = await repository.updateCompletedSaleStructure(normalizedId, {
+    sale: {
+      customerId: normalized.customerId,
+      userId: normalized.userId,
+      discountType: normalized.discountType,
+      discountValue: normalized.discountValue,
+      doesNotGenerateDebt: debtExemption.doesNotGenerateDebt,
+      internalReason: debtExemption.internalReason,
+      totalAmount: normalized.totalAmount,
+      finalAmount: normalized.finalAmount,
+    },
+    items: normalized.items,
+    customerMeasurements: normalized.customerMeasurements,
+  });
+
+  if (!updated) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  return buildSaleResponse(updated, {
+    completed: true,
+  });
+}
+
+async function updateSale(id, body = {}) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const sale = await repository.getSaleById(normalizedId);
+
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  const resolvedStatus = resolveSaleStatus(sale);
+
+  if (resolvedStatus === "BUDGET") {
+    return updateQuote(normalizedId, body);
+  }
+
+  if (resolvedStatus === "COMPLETED") {
+    return updateCompletedSale(normalizedId, body);
+  }
+
+  throw createSalesValidationError("Este tipo de venda nao pode ser alterado por este fluxo.");
 }
 
 async function finalizeSale(id, body = {}) {
@@ -2572,5 +2689,6 @@ module.exports = {
   getSaleById,
   listSales,
   renegotiateSalePayment,
+  updateSale,
   updateQuote,
 };

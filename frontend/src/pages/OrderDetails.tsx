@@ -224,8 +224,8 @@ function toFormState(product: ProductDetails): ProductFormState {
     fabricId: product.fabricId ? String(product.fabricId) : "",
     sizeId: product.sizeId ? String(product.sizeId) : "",
     qtyStock: String(product.qtyStock || product.saleItemQuantity || 1),
-    dressmakerValue: formatCurrencyInput(String(product.dressmakerValue || 0)),
-    finalValue: formatCurrencyInput(String(product.finalValue || 0)),
+    dressmakerValue: formatCurrency(product.dressmakerValue || 0),
+    finalValue: formatCurrency(product.finalValue || 0),
     employeeId: product.employeeId ? String(product.employeeId) : "",
     statusId: product.statusId ? String(product.statusId) : "",
     testDate: toDateInputValue(product.testDate),
@@ -321,6 +321,10 @@ export default function OrderDetails() {
   const returnTo = useMemo(
     () => searchParams.get("returnTo") || "/producao",
     [searchParams],
+  );
+  const returnLabel = useMemo(
+    () => (returnTo.startsWith("/venda") || returnTo.startsWith("/vendas") ? "vendas" : "producao"),
+    [returnTo],
   );
   const measurementValues = form?.measurements || {};
   const measurementOptions = useMemo(
@@ -618,7 +622,7 @@ export default function OrderDetails() {
           <p>{error}</p>
           <div className="mt-4 flex justify-center gap-3">
             <Button variant="secondary" onClick={() => navigate(returnTo)}>
-              Voltar para producao
+              {`Voltar para ${returnLabel}`}
             </Button>
           </div>
         </div>
@@ -640,7 +644,7 @@ export default function OrderDetails() {
               onClick={() => navigate(returnTo)}
               className="mb-4 text-sm text-neutral-700 underline-offset-2 hover:underline"
             >
-              Voltar para producao
+              {`Voltar para ${returnLabel}`}
             </button>
             <h1 className="font-editorial text-[2rem] text-primary md:text-[1.85rem]">
               Detalhes do Produto
@@ -649,7 +653,14 @@ export default function OrderDetails() {
 
           <div className="flex flex-wrap gap-2">
             {product.saleId ? (
-              <Button variant="secondary" onClick={() => navigate(`/venda/${product.saleId}`)}>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  navigate(
+                    `/venda/${product.saleId}?returnTo=${encodeURIComponent(returnTo)}`,
+                  )
+                }
+              >
                 Abrir venda vinculada
               </Button>
             ) : null}

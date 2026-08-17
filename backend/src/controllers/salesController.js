@@ -11,7 +11,7 @@ async function createSaleController(req, res, next) {
 
 async function updateSaleController(req, res, next) {
   try {
-    const updated = await service.updateQuote(req.params.id, req.body);
+    const updated = await service.updateSale(req.params.id, req.body);
     return res.status(200).json(updated);
   } catch (error) {
     return next(error);
