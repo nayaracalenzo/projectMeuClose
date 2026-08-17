@@ -17,6 +17,22 @@ export function formatCurrencyInput(value: string) {
   return formatCurrencyFromDigits(onlyDigits(value));
 }
 
+export function formatCurrencyValue(value: number | string) {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : Number(String(value).replace(/\./g, "").replace(",", "."));
+
+  if (!Number.isFinite(numericValue)) {
+    return "R$ 0,00";
+  }
+
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(numericValue);
+}
+
 export function parseCurrencyToNumber(value: string) {
   const digitsValue = onlyDigits(value);
 

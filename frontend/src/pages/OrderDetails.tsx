@@ -11,6 +11,7 @@ import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import {
   formatCurrency,
   formatCurrencyInput,
+  formatCurrencyValue,
   parseCurrencyToNumber,
 } from "../utils/currency";
 import {
@@ -224,8 +225,8 @@ function toFormState(product: ProductDetails): ProductFormState {
     fabricId: product.fabricId ? String(product.fabricId) : "",
     sizeId: product.sizeId ? String(product.sizeId) : "",
     qtyStock: String(product.qtyStock || product.saleItemQuantity || 1),
-    dressmakerValue: formatCurrency(product.dressmakerValue || 0),
-    finalValue: formatCurrency(product.finalValue || 0),
+    dressmakerValue: formatCurrencyValue(product.dressmakerValue || 0),
+    finalValue: formatCurrencyValue(product.finalValue || 0),
     employeeId: product.employeeId ? String(product.employeeId) : "",
     statusId: product.statusId ? String(product.statusId) : "",
     testDate: toDateInputValue(product.testDate),
