@@ -162,6 +162,10 @@ interface ExistingQuoteResponse {
   finalAmount: number;
   dueDate: string | null;
   installmentCount: number;
+  paymentType?: {
+    id: number;
+    name: string;
+  } | null;
   items: ExistingQuoteItem[];
   measurements: ExistingQuoteMeasurement[];
   paymentDraft: ExistingQuotePaymentDraft | null;
@@ -507,6 +511,7 @@ export default function NewSalePage() {
   const [searchParams] = useSearchParams();
   const quoteIdParam = searchParams.get("quoteId");
   const quoteModeParam = searchParams.get("mode");
+  const returnToParam = searchParams.get("returnTo") || "/vendas";
   const paymentDraftHydrationRef = useRef(false);
 
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
@@ -580,6 +585,7 @@ export default function NewSalePage() {
   const [cancelSaleModalOpen, setCancelSaleModalOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
   const [loadingExistingQuote, setLoadingExistingQuote] = useState(false);
+  const [editingSaleStatus, setEditingSaleStatus] = useState<string | null>(null);
   const [customerCredits, setCustomerCredits] = useState<CustomerCreditItem[]>(
     [],
   );
@@ -790,6 +796,7 @@ export default function NewSalePage() {
   useEffect(() => {
     const quoteId = Number(quoteIdParam);
     if (!Number.isInteger(quoteId) || quoteId <= 0) {
+      setEditingSaleStatus(null);
       return;
     }
 
@@ -802,13 +809,17 @@ export default function NewSalePage() {
           `/sales/${quoteId}`,
         )) as ExistingQuoteResponse;
 
-        if (data.status !== "BUDGET") {
+        if (
+          data.status !== "BUDGET" &&
+          !(quoteModeParam === "edit" && data.status === "COMPLETED")
+        ) {
           setSaveMessage(
             "Somente orçamentos em aberto podem ser finalizados por este fluxo.",
           );
           return;
         }
 
+        setEditingSaleStatus(data.status);
         setDraftSaleId(data.id);
         setSelectedCustomer(
           data.customer
@@ -824,6 +835,8 @@ export default function NewSalePage() {
         setPaymentTypeId(
           data.paymentDraft?.paymentTypeId
             ? String(data.paymentDraft.paymentTypeId)
+            : data.paymentType?.id
+              ? String(data.paymentType.id)
             : "",
         );
         setInstallmentCount(
@@ -864,7 +877,9 @@ export default function NewSalePage() {
         setInternalReason(data.internalReason || "");
         setStep(quoteModeParam === "edit" ? 3 : 4);
         setSaveMessage(
-          "Orçamento carregado. Informe a forma de pagamento para concluir a venda.",
+          data.status === "COMPLETED" && quoteModeParam === "edit"
+            ? "Venda carregada para edição. O financeiro existente será preservado."
+            : "Orçamento carregado. Informe a forma de pagamento para concluir a venda.",
         );
       } catch (error: unknown) {
         setSaveMessage(
@@ -1188,6 +1203,8 @@ export default function NewSalePage() {
   const canCreateQuote =
     !isSaving && !!selectedCustomer && tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
+  const isEditingCompletedSale =
+    quoteModeParam === "edit" && editingSaleStatus === "COMPLETED";
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", {
@@ -1656,6 +1673,10 @@ export default function NewSalePage() {
   };
 
   const handleRemoveTableItem = (item: SaleTableItem) => {
+    if (isEditingCompletedSale) {
+      return;
+    }
+
     const nextDrafts: DraftCollections = {
       readyMade: [...readyMadeProducts],
       customMade: [...customMadeProducts],
@@ -2113,6 +2134,7 @@ export default function NewSalePage() {
 
   const resetSaleForm = async () => {
     setDraftSaleId(null);
+    setEditingSaleStatus(null);
     setSelectedCustomer(null);
     setSearch("");
     setSaveMessage("");
@@ -2148,6 +2170,11 @@ export default function NewSalePage() {
   };
 
   const handleBackToStart = () => {
+    if (isEditingCompletedSale) {
+      navigate(returnToParam);
+      return;
+    }
+
     if (hasOpenSaleDraft) {
       setPendingExitPath("/vendas");
       setCancelSaleModalOpen(true);
@@ -2292,6 +2319,35 @@ export default function NewSalePage() {
     );
   };
 
+  const handleSaveCompletedSale = async () => {
+    if (!selectedCustomer || tableItems.length === 0 || !draftSaleId) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      setSaveMessage("");
+      const payload = buildQuotePayload();
+
+      if (!payload) {
+        return;
+      }
+
+      await updateRequest(`/sales/${draftSaleId}`, payload);
+      await resetSaleForm();
+      navigate(returnToParam);
+    } catch (error: unknown) {
+      setSaveMessage(
+        getUserFacingApiErrorMessage(
+          error,
+          "Não foi possível salvar a venda finalizada.",
+        ),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleStartFinalizeSale = async () => {
     const createdDraftSaleId = await createDraftSale();
 
@@ -2415,13 +2471,15 @@ export default function NewSalePage() {
     <div className="w-full min-w-0 min-h-full bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5">
         <h1 className="pb-4 pt-8 text-4xl font-semibold text-primary md:text-[2rem]">
-          Nova Venda/Orçamento
+          {isEditingCompletedSale ? "Editar Venda Finalizada" : "Nova Venda/Orçamento"}
         </h1>
         <SaleStepper step={step} />
 
         {loadingExistingQuote ? (
           <div className="mb-4 rounded-lg border border-outline-variant/35 bg-white px-4 py-3 text-sm text-neutral-700">
-            Carregando orçamento para finalização...
+            {isEditingCompletedSale
+              ? "Carregando venda finalizada para edição..."
+              : "Carregando orçamento para finalização..."}
           </div>
         ) : null}
 
@@ -2731,14 +2789,16 @@ export default function NewSalePage() {
                                   >
                                     Editar
                                   </Button>
-                                  <Button
-                                    type="button"
-                                    className="w-full sm:w-auto"
-                                    variant="tertiary"
-                                    onClick={() => handleRemoveTableItem(item)}
-                                  >
-                                    Remover
-                                  </Button>
+                                  {!isEditingCompletedSale ? (
+                                    <Button
+                                      type="button"
+                                      className="w-full sm:w-auto"
+                                      variant="tertiary"
+                                      onClick={() => handleRemoveTableItem(item)}
+                                    >
+                                      Remover
+                                    </Button>
+                                  ) : null}
                                 </div>
                               </td>
                             </tr>
@@ -2760,29 +2820,42 @@ export default function NewSalePage() {
                       Voltar
                     </Button>
                     <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                      <Button
-                        variant="tertiary"
-                        type="button"
-                        className="w-full sm:w-auto"
-                        onClick={handleCreateQuote}
-                        disabled={!canCreateQuote}
-                      >
-                        {isSaving
-                          ? hasGeneratedQuote
-                            ? "Atualizando..."
-                            : "Gerando..."
-                          : hasGeneratedQuote
-                            ? "Atualizar orçamento"
-                            : "Gerar orçamento"}
-                      </Button>
-                      <Button
-                        type="button"
-                        className="w-full sm:w-auto"
-                        onClick={handleOpenPaymentStep}
-                        disabled={!canCreateQuote}
-                      >
-                        {isSaving ? "Preparando..." : "Finalizar venda"}
-                      </Button>
+                      {isEditingCompletedSale ? (
+                        <Button
+                          type="button"
+                          className="w-full sm:w-auto"
+                          onClick={() => void handleSaveCompletedSale()}
+                          disabled={!canCreateQuote || isSaving}
+                        >
+                          {isSaving ? "Salvando..." : "Salvar venda"}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="tertiary"
+                            type="button"
+                            className="w-full sm:w-auto"
+                            onClick={handleCreateQuote}
+                            disabled={!canCreateQuote}
+                          >
+                            {isSaving
+                              ? hasGeneratedQuote
+                                ? "Atualizando..."
+                                : "Gerando..."
+                              : hasGeneratedQuote
+                                ? "Atualizar orçamento"
+                                : "Gerar orçamento"}
+                          </Button>
+                          <Button
+                            type="button"
+                            className="w-full sm:w-auto"
+                            onClick={handleOpenPaymentStep}
+                            disabled={!canCreateQuote}
+                          >
+                            {isSaving ? "Preparando..." : "Finalizar venda"}
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3282,7 +3355,7 @@ export default function NewSalePage() {
                 : selectedPaymentType?.name || "Não definida"}
             </p>
             <p className="text-sm text-neutral-700">
-              Status: {hasGeneratedQuote ? "Orçamento" : "Em montagem"}
+              Status: {isEditingCompletedSale ? "Venda finalizada" : hasGeneratedQuote ? "Orçamento" : "Em montagem"}
             </p>
             <p className="mb-3 text-sm text-neutral-700">
               Parcelas: {previewInstallmentCount}

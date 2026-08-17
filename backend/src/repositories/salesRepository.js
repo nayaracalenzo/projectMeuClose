@@ -483,6 +483,61 @@ async function updateQuote(
   });
 }
 
+async function updateCompletedSaleStructure(
+  idSale,
+  {
+    sale,
+    items,
+    customerMeasurements,
+  },
+) {
+  return sequelize.transaction(async (transaction) => {
+    const existingSale = await getSaleForFinalization(idSale, transaction);
+
+    if (!existingSale) {
+      return null;
+    }
+
+    await existingSale.update(sale, { transaction });
+
+    const existingItems = Array.isArray(existingSale.SaleItems) ? existingSale.SaleItems : [];
+
+    for (const [index, saleItem] of existingItems.entries()) {
+      const nextItem = items[index];
+
+      await saleItem.update(
+        {
+          ...nextItem,
+          productId: saleItem.productId || null,
+        },
+        { transaction },
+      );
+
+      if (saleItem.productId) {
+        await productsRepository.syncProductFromSaleItem(
+          saleItem.productId,
+          existingSale.customerId,
+          nextItem,
+          transaction,
+        );
+      }
+    }
+
+    await productsRepository.saveMeasurementValuesBySaleId(
+      existingSale.idSale,
+      existingSale.customerId,
+      customerMeasurements,
+      transaction,
+    );
+
+    return {
+      sale: existingSale,
+      items: existingItems,
+      measurements: customerMeasurements,
+    };
+  });
+}
+
 async function deleteQuote(idSale) {
   return sequelize.transaction(async (transaction) => {
     const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
@@ -1194,5 +1249,6 @@ module.exports = {
   deleteReceivableInstallmentsByIds,
   updateSaleItem,
   updateSaleSummary,
+  updateCompletedSaleStructure,
   updateQuote,
 };
