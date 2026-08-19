@@ -313,6 +313,44 @@ async function summarizeEntries(filters = {}) {
   };
 }
 
+async function getBalanceBeforeDate({ scope, beforeDate } = {}) {
+  if (!beforeDate) {
+    return 0;
+  }
+
+  const where = {
+    occurredAt: {
+      [Op.lt]: beforeDate,
+    },
+  };
+
+  if (scope) {
+    where.scope = scope;
+  }
+
+  const [summary] = await CashEntries.findAll({
+    where,
+    attributes: [
+      [
+        sequelize.fn(
+          "COALESCE",
+          sequelize.fn(
+            "SUM",
+            sequelize.literal(
+              `CASE WHEN "CashEntries"."movementType" = 'IN' THEN "CashEntries"."amount" ELSE -"CashEntries"."amount" END`,
+            ),
+          ),
+          0,
+        ),
+        "balance",
+      ],
+    ],
+    raw: true,
+  });
+
+  return Number(summary?.balance || 0);
+}
+
 module.exports = {
   createEntry,
   getEntryById,
@@ -322,4 +360,5 @@ module.exports = {
   listEntriesByPaymentReceiptId,
   listEntries,
   summarizeEntries,
+  getBalanceBeforeDate,
 };

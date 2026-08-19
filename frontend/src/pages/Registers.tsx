@@ -43,6 +43,7 @@ interface CashListResponse {
     totalIn: number;
     totalOut: number;
     balance: number;
+    previousBalance: number;
   };
 }
 
@@ -122,6 +123,7 @@ export default function Registers() {
     totalIn: 0,
     totalOut: 0,
     balance: 0,
+    previousBalance: 0,
   });
   const [overallCashBalance, setOverallCashBalance] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -205,6 +207,7 @@ export default function Registers() {
       totalIn: Number(data.summary?.totalIn || 0),
       totalOut: Number(data.summary?.totalOut || 0),
       balance: Number(data.summary?.balance || 0),
+      previousBalance: Number(data.summary?.previousBalance || 0),
     });
   };
 
@@ -276,7 +279,7 @@ export default function Registers() {
         setRows([]);
         setTotalRows(0);
         setTotalPages(1);
-        setSummary({ totalIn: 0, totalOut: 0, balance: 0 });
+        setSummary({ totalIn: 0, totalOut: 0, balance: 0, previousBalance: 0 });
         setOverallCashBalance(0);
         setError(
           getUserFacingApiErrorMessage(
@@ -885,6 +888,12 @@ export default function Registers() {
             </div>
           ))
         )}
+      </div>
+
+      <div className="mt-2 flex justify-end">
+        <p className="text-sm font-semibold text-primary">
+          Saldo anterior: {formatCurrency(summary.previousBalance)}
+        </p>
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
