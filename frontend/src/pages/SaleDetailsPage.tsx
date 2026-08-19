@@ -3,7 +3,8 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import NoticeToast from "../components/NoticeToast";
-import { deleteRequest, getRequest, postRequest } from "../services/request";
+import SearchableSelect from "../components/SearchableSelect";
+import { deleteRequest, getRequest, postRequest, updateRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 import { parseLegacyOrIsoDate } from "../utils/legacyDate";
@@ -77,6 +78,19 @@ type PaymentTypeOption = {
   maxInstallments: number | null;
   defaultInstallments: number;
   financialFlow: "IMMEDIATE_CASH" | "FUTURE_CUSTOMER";
+};
+
+type CustomerOption = {
+  id: number;
+  name: string;
+};
+
+type CustomersResponse = {
+  items?: Array<{
+    id: number;
+    fullName?: string | null;
+    companyName?: string | null;
+  }>;
 };
 
 type SaleDetailsResponse = {
@@ -285,6 +299,51 @@ function isProductionItem(item?: SaleDetailItem | null) {
   return item.itemType === "CUSTOM_MADE" || item.itemType === "SERVICE";
 }
 
+function mapCustomerOptions(data: CustomersResponse | unknown): CustomerOption[] {
+  const items = Array.isArray((data as CustomersResponse)?.items)
+    ? ((data as CustomersResponse).items || [])
+    : [];
+
+  return items
+    .map((item) => {
+      const id = Number(item.id);
+      const name = String(item.fullName || item.companyName || `Cliente ${item.id}`).trim();
+
+      if (!Number.isInteger(id) || !name) {
+        return null;
+      }
+
+      return { id, name };
+    })
+    .filter(Boolean) as CustomerOption[];
+}
+
+function ensureCustomerOption(
+  options: CustomerOption[],
+  value: number | null | undefined,
+  name: string | null | undefined,
+): CustomerOption[] {
+  const normalizedValue = Number(value);
+  const normalizedName = String(name || "").trim();
+
+  if (!Number.isInteger(normalizedValue) || normalizedValue <= 0 || !normalizedName) {
+    return options;
+  }
+
+  if (options.some((option) => option.id === normalizedValue)) {
+    return options;
+  }
+
+  return [{ id: normalizedValue, name: normalizedName }, ...options];
+}
+
+function toCustomerSearchableOptions(options: CustomerOption[] = []) {
+  return options.map((option) => ({
+    value: String(option.id),
+    label: option.name,
+  }));
+}
+
 export default function SaleDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -315,6 +374,11 @@ export default function SaleDetailsPage() {
   const [renegotiateDueDate, setRenegotiateDueDate] = useState(() =>
     getTodayIsoDate(),
   );
+  const [editingCustomer, setEditingCustomer] = useState(false);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [customerOptions, setCustomerOptions] = useState<CustomerOption[]>([]);
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
   const returnTo = useMemo(
     () => searchParams.get("returnTo") || "/vendas",
@@ -323,6 +387,10 @@ export default function SaleDetailsPage() {
   const saleDetailsPath = useMemo(
     () => `/venda/${id}?returnTo=${encodeURIComponent(returnTo)}`,
     [id, returnTo],
+  );
+  const customerSearchableOptions = useMemo(
+    () => toCustomerSearchableOptions(customerOptions),
+    [customerOptions],
   );
 
   useEffect(() => {
@@ -367,6 +435,47 @@ export default function SaleDetailsPage() {
 
     void fetchPaymentTypes();
   }, []);
+
+  useEffect(() => {
+    if (!editingCustomer) {
+      setCustomerSearchTerm("");
+      return;
+    }
+
+    const fetchCustomers = async () => {
+      try {
+        const params = new URLSearchParams({
+          page: "1",
+          pageSize: "20",
+        });
+
+        if (customerSearchTerm.trim()) {
+          params.set("search", customerSearchTerm.trim());
+        }
+
+        const data = (await getRequest(`/clients?${params.toString()}`)) as CustomersResponse;
+        const parsedOptions = mapCustomerOptions(data);
+
+        setCustomerOptions(
+          ensureCustomerOption(
+            parsedOptions,
+            sale?.customer?.id,
+            sale?.customer?.name,
+          ),
+        );
+      } catch {
+        setCustomerOptions(
+          ensureCustomerOption(
+            [],
+            sale?.customer?.id,
+            sale?.customer?.name,
+          ),
+        );
+      }
+    };
+
+    void fetchCustomers();
+  }, [editingCustomer, customerSearchTerm, sale?.customer?.id, sale?.customer?.name]);
 
   const totalItemDiscount = useMemo(() => {
     if (!sale) return 0;
@@ -448,6 +557,50 @@ export default function SaleDetailsPage() {
   async function refreshSale() {
     const data = (await getRequest(`/sales/${id}`)) as SaleDetailsResponse;
     setSale(data);
+  }
+
+  function handleStartCustomerEdit() {
+    setSelectedCustomerId(sale?.customer?.id ? String(sale.customer.id) : "");
+    setEditingCustomer(true);
+  }
+
+  function handleCancelCustomerEdit() {
+    setSelectedCustomerId(sale?.customer?.id ? String(sale.customer.id) : "");
+    setCustomerSearchTerm("");
+    setEditingCustomer(false);
+  }
+
+  async function handleSaveCustomer() {
+    if (!sale || !selectedCustomerId) return;
+
+    try {
+      setSavingCustomer(true);
+
+      const updated = (await updateRequest(`/sales/${sale.id}/customer`, {
+        customerId: Number(selectedCustomerId),
+      })) as SaleDetailsResponse;
+
+      setSale(updated);
+      setEditingCustomer(false);
+      setCustomerSearchTerm("");
+      setToast({
+        open: true,
+        tone: "success",
+        message: "Cliente da venda atualizado com sucesso.",
+      });
+    } catch (err: unknown) {
+      setToast({
+        open: true,
+        tone: "error",
+        title: "Nao foi possivel salvar",
+        message: getUserFacingApiErrorMessage(
+          err,
+          "Nao foi possivel atualizar a cliente da venda.",
+        ),
+      });
+    } finally {
+      setSavingCustomer(false);
+    }
   }
 
   async function handleCancelSale() {
@@ -660,17 +813,8 @@ export default function SaleDetailsPage() {
               </Button>
             ) : null}
             {!isBudgetSale && sale.status === "COMPLETED" ? (
-              <Button
-                variant="secondary"
-                onClick={() =>
-                  navigate(
-                    `/nova-venda?quoteId=${sale.id}&mode=edit&returnTo=${encodeURIComponent(
-                      saleDetailsPath,
-                    )}`,
-                  )
-                }
-              >
-                Editar venda
+              <Button variant="secondary" onClick={handleStartCustomerEdit}>
+                Alterar cliente
               </Button>
             ) : null}
             {isBudgetSale ? (
@@ -773,6 +917,48 @@ export default function SaleDetailsPage() {
           <div className="mb-4 rounded-xl border border-[#c76767] bg-[#fdecec] px-4 py-3 text-sm text-[#7a1717]">
             {error}
           </div>
+        ) : null}
+
+        {sale.status === "COMPLETED" && editingCustomer ? (
+          <section className="mb-6 rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div className="w-full max-w-xl">
+                <label className="mb-2 block text-sm font-medium text-primary">
+                  Cliente da venda
+                </label>
+                <SearchableSelect
+                  id="sale-customer"
+                  value={selectedCustomerId}
+                  options={customerSearchableOptions}
+                  onChange={setSelectedCustomerId}
+                  onSearchChange={setCustomerSearchTerm}
+                  className="relative"
+                  inputClassName="w-full rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
+                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
+                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                  placeholder="Digite para buscar"
+                />
+                <p className="mt-2 text-xs text-neutral-600">
+                  Esta alteracao atualiza apenas a cliente vinculada a venda,
+                  sem editar os dados financeiros desta tela.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={handleCancelCustomerEdit}>
+                  Cancelar
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => void handleSaveCustomer()}
+                  isLoading={savingCustomer}
+                  disabled={!selectedCustomerId}
+                >
+                  Salvar cliente
+                </Button>
+              </div>
+            </div>
+          </section>
         ) : null}
 
         <section className="mb-6 rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
