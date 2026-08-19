@@ -18,6 +18,15 @@ async function updateSaleController(req, res, next) {
   }
 }
 
+async function updateSaleCustomerController(req, res, next) {
+  try {
+    const updated = await service.updateSaleCustomer(req.params.id, req.body);
+    return res.status(200).json(updated);
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function listSalesController(req, res, next) {
   try {
     const data = await service.listSales(req.query);
@@ -90,5 +99,6 @@ module.exports = {
   getSaleByIdController,
   listSalesController,
   renegotiateSalePaymentController,
+  updateSaleCustomerController,
   updateSaleController,
 };

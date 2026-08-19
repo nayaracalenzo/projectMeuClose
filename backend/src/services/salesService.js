@@ -1957,6 +1957,45 @@ async function updateSale(id, body = {}) {
   throw createSalesValidationError("Este tipo de venda nao pode ser alterado por este fluxo.");
 }
 
+async function updateSaleCustomer(id, body = {}) {
+  const normalizedId = Number(id);
+
+  if (!Number.isInteger(normalizedId) || normalizedId <= 0) {
+    throw createSalesValidationError("Venda invalida.");
+  }
+
+  const customerId = normalizeInteger(body.customerId, "Cliente");
+  const sale = await repository.getSaleById(normalizedId);
+
+  if (!sale) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  if (resolveSaleStatus(sale) !== "COMPLETED") {
+    throw createSalesValidationError(
+      "A troca de cliente por este fluxo esta disponivel apenas para vendas concluidas.",
+    );
+  }
+
+  if (Number(sale.customerId) === customerId) {
+    return enrichSaleFinancialSummary(mapSaleDetails(sale));
+  }
+
+  const customer = await repository.getCustomerById(customerId);
+
+  if (!customer) {
+    throw createSalesValidationError("Cliente nao encontrado.");
+  }
+
+  const updated = await repository.updateSaleCustomer(normalizedId, customerId);
+
+  if (!updated) {
+    throw notFoundError("Venda nao encontrada.");
+  }
+
+  return enrichSaleFinancialSummary(mapSaleDetails(updated));
+}
+
 async function finalizeSale(id, body = {}) {
   const normalizedId = Number(id);
 
@@ -2690,5 +2729,6 @@ module.exports = {
   listSales,
   renegotiateSalePayment,
   updateSale,
+  updateSaleCustomer,
   updateQuote,
 };
