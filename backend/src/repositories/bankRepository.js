@@ -192,6 +192,10 @@ async function listAccountOptions(scope) {
 }
 
 async function listEntries(filters = {}) {
+  const runningBalancePartition = filters.accountLabel
+    ? `AND COALESCE(be_balance."accountLabel", '') = COALESCE("BankEntries"."accountLabel", '')`
+    : "";
+
   return BankEntries.findAndCountAll({
     where: buildWhere(filters),
     attributes: {
@@ -210,7 +214,7 @@ async function listEntries(filters = {}) {
               )
               FROM "bank_entries" be_balance
               WHERE be_balance.scope = "BankEntries".scope
-                AND COALESCE(be_balance."accountLabel", '') = COALESCE("BankEntries"."accountLabel", '')
+                ${runningBalancePartition}
                 AND (
                   be_balance."occurredAt" < "BankEntries"."occurredAt"
                   OR (

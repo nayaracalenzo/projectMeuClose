@@ -99,7 +99,9 @@ const getCurrentSearchDateInputValue = () =>
   formatLegacyShortDateInput(getCurrentDateInputValue());
 
 const formatDate = (dateString: string) =>
-  new Intl.DateTimeFormat("pt-BR").format(new Date(dateString));
+  new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(
+    new Date(dateString),
+  );
 
 export default function BankPage() {
   const [search, setSearch] = useState("");
