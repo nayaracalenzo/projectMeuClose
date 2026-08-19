@@ -198,12 +198,27 @@ async function listEntries(filters = {}) {
       include: [
         [
           sequelize.literal(`
-            SUM(
-              CASE
-                WHEN "BankEntries"."movementType" = 'IN' THEN "BankEntries"."amount"
-                ELSE -"BankEntries"."amount"
-              END
-            ) OVER (ORDER BY "BankEntries"."occurredAt" ASC, "BankEntries"."idBankEntry" ASC)
+            (
+              SELECT COALESCE(
+                SUM(
+                  CASE
+                    WHEN be_balance."movementType" = 'IN' THEN be_balance."amount"
+                    ELSE -be_balance."amount"
+                  END
+                ),
+                0
+              )
+              FROM "bank_entries" be_balance
+              WHERE be_balance.scope = "BankEntries".scope
+                AND COALESCE(be_balance."accountLabel", '') = COALESCE("BankEntries"."accountLabel", '')
+                AND (
+                  be_balance."occurredAt" < "BankEntries"."occurredAt"
+                  OR (
+                    be_balance."occurredAt" = "BankEntries"."occurredAt"
+                    AND be_balance."idBankEntry" <= "BankEntries"."idBankEntry"
+                  )
+                )
+            )
           `),
           "runningBalance",
         ],
