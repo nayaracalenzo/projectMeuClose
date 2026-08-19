@@ -4,6 +4,7 @@ const repository = require("../repositories/cashRepository");
 const bankRepository = require("../repositories/bankRepository");
 const auditsRepository = require("../repositories/auditsRepository");
 const financialCategoriesRepository = require("../repositories/financialCategoriesRepository");
+const cashSessionsRepository = require("../repositories/cashSessionsRepository");
 const { createCashEntry, createBankEntry } = require("./financialEntriesService");
 const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
 
@@ -216,12 +217,31 @@ async function listEntries(query = {}) {
     endDate,
   });
 
-  const previousBalance = startDate
-    ? await repository.getBalanceBeforeDate({
+  let previousBalance = 0;
+
+  if (startDate) {
+    const sessionLookupDate = new Date(startDate);
+    sessionLookupDate.setDate(sessionLookupDate.getDate() + 1);
+
+    const session = await cashSessionsRepository.findLatestSessionOpenedOnOrBefore(
+      sessionLookupDate,
+    );
+
+    if (session) {
+      const sessionEntries = await cashSessionsRepository.sumSessionEntriesBeforeDate(
+        session.idCashSession,
+        startDate,
+      );
+      previousBalance = Number(session.openingBalance || 0);
+      previousBalance += Number(sessionEntries.totalIn || 0);
+      previousBalance -= Number(sessionEntries.totalOut || 0);
+    } else {
+      previousBalance = await repository.getBalanceBeforeDate({
         scope,
         beforeDate: startDate,
-      })
-    : 0;
+      });
+    }
+  }
 
   return {
     items: result.rows.map((item) => {
