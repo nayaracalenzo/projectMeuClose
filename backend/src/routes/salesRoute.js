@@ -8,6 +8,7 @@ router.use(authMiddleware);
 
 router.get("/", controller.listSalesController);
 router.get("/:id", controller.getSaleByIdController);
+router.put("/:id/customer", controller.updateSaleCustomerController);
 router.put("/:id", controller.updateSaleController);
 router.delete("/:id", controller.deleteSaleController);
 router.post("/:id/items/:itemId/cancel", controller.cancelSaleItemController);

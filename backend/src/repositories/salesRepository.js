@@ -538,6 +538,78 @@ async function updateCompletedSaleStructure(
   });
 }
 
+async function updateSaleCustomer(idSale, customerId) {
+  return sequelize.transaction(async (transaction) => {
+    const existingSale = await getSaleForFinalization(idSale, transaction);
+
+    if (!existingSale) {
+      return null;
+    }
+
+    await existingSale.update(
+      {
+        customerId,
+      },
+      { transaction },
+    );
+
+    await CustomerMeasurementValues.update(
+      {
+        customerId,
+      },
+      {
+        where: {
+          saleId: existingSale.idSale,
+        },
+        transaction,
+      },
+    );
+
+    await CustomerCredits.update(
+      {
+        customerId,
+      },
+      {
+        where: {
+          saleId: existingSale.idSale,
+        },
+        transaction,
+      },
+    );
+
+    const productIds = Array.isArray(existingSale.SaleItems)
+      ? existingSale.SaleItems.map((item) => Number(item.productId) || null).filter(Boolean)
+      : [];
+
+    if (productIds.length) {
+      await Products.update(
+        {
+          customerId,
+        },
+        {
+          where: {
+            id: productIds,
+          },
+          transaction,
+        },
+      );
+    }
+
+    const receivable = existingSale.Receivable || existingSale.Receivables || null;
+
+    if (receivable && receivable.debtorType === "CUSTOMER") {
+      await receivable.update(
+        {
+          customerId,
+        },
+        { transaction },
+      );
+    }
+
+    return getSaleById(existingSale.idSale);
+  });
+}
+
 async function deleteQuote(idSale) {
   return sequelize.transaction(async (transaction) => {
     const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
@@ -1162,6 +1234,10 @@ async function getSaleById(idSale) {
   });
 }
 
+async function getCustomerById(customerId) {
+  return Customers.findByPk(customerId);
+}
+
 async function listSales({ page = 1, pageSize = 10, status, search, customerId } = {}) {
   const where = buildStatusWhere(status);
   const legacyCompletedSignal = buildLegacyCompletedSignal();
@@ -1233,6 +1309,7 @@ module.exports = {
   cancelSale,
   deleteQuote,
   finalizeSale,
+  getCustomerById,
   getSaleById,
   getSaleForCancellation,
   getSaleForItemCancellation,
@@ -1250,5 +1327,6 @@ module.exports = {
   updateSaleItem,
   updateSaleSummary,
   updateCompletedSaleStructure,
+  updateSaleCustomer,
   updateQuote,
 };
