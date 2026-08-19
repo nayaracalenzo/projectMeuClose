@@ -216,6 +216,13 @@ async function listEntries(query = {}) {
     endDate,
   });
 
+  const previousBalance = startDate
+    ? await repository.getBalanceBeforeDate({
+        scope,
+        beforeDate: startDate,
+      })
+    : 0;
+
   return {
     items: result.rows.map((item) => {
       const paymentTypeName = resolveEntryPaymentTypeName(item);
@@ -254,6 +261,7 @@ async function listEntries(query = {}) {
       totalIn: Number(Number(summary.totalIn || 0).toFixed(2)),
       totalOut: Number(Number(summary.totalOut || 0).toFixed(2)),
       balance: Number((Number(summary.totalIn || 0) - Number(summary.totalOut || 0)).toFixed(2)),
+      previousBalance: Number(Number(previousBalance || 0).toFixed(2)),
     },
   };
 }
