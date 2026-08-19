@@ -224,7 +224,6 @@ async function listEntries(query = {}) {
   const previousBalance = startDate
     ? await repository.getBalanceBeforeDate({
         scope,
-        accountLabel,
         beforeDate: startDate,
       })
     : 0;
