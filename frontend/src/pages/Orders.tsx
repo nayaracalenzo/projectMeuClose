@@ -113,6 +113,21 @@ const formatProductionType = (item: ProductOrderRow) => {
   return String(item.productType || "-").trim().toUpperCase() || "-";
 };
 
+const buildProductionDescription = (item: ProductOrderRow) => {
+  const details = [
+    `Qtd: ${item.qtyStock || 1}`,
+    `Tecido: ${item.fabric || "-"}`,
+    `Cor: ${item.color || "-"}`,
+    `Tamanho: ${item.size || "-"}`,
+    item.details ? `Detalhes: ${item.details}` : null,
+    item.measurementsSummary ? `Medidas: ${item.measurementsSummary}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  return [item.description, details].filter(Boolean).join(" | ");
+};
+
 const getProductionStatusBadgeClassName = (status?: string | null) => {
   const normalized = String(status || "")
     .trim()
@@ -1118,9 +1133,9 @@ export default function Orders() {
                   <td className="px-4 py-3 text-[14px] uppercase text-neutral-700">
                     <div
                       className="max-w-[280px] truncate whitespace-nowrap"
-                      title={order.description || "-"}
+                      title={buildProductionDescription(order) || "-"}
                     >
-                      {order.description || "-"}
+                      {buildProductionDescription(order) || "-"}
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-[14px] font-semibold uppercase text-neutral-700">
@@ -1191,7 +1206,7 @@ export default function Orders() {
                 Código: {order.id}
               </p>
               <p className="text-xs uppercase text-neutral-700">
-                Descrição: {order.description || "-"}
+                Descrição: {buildProductionDescription(order) || "-"}
               </p>
               <p className="text-sm font-semibold uppercase text-primary">
                 {formatCustomerName(order.customer)}
