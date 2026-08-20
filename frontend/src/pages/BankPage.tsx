@@ -229,7 +229,12 @@ export default function BankPage() {
   const fetchOverallBankBalance = async () => {
     try {
       const data = (await getRequest("/bank?page=1&pageSize=1")) as BankListResponse;
-      setOverallBankBalance(Number(data.summary?.balance || 0));
+      const latestRowBalance = Array.isArray(data.items)
+        ? Number(data.items[0]?.balance || 0)
+        : 0;
+      setOverallBankBalance(
+        latestRowBalance || Number(data.summary?.balance || 0),
+      );
     } catch {
       setOverallBankBalance(0);
     }
