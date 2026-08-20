@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import CustomerModal from "../components/CustomerModal";
+import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import { getRequest, postRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
@@ -11,7 +12,6 @@ import {
 } from "../utils/currency";
 import {
   formatLegacyShortDateInput,
-  maskLegacyShortDateInput,
 } from "../utils/legacyDate";
 
 interface BankRow {
@@ -626,13 +626,10 @@ export default function BankPage() {
             <label className="mb-2 block text-sm font-semibold text-primary">
               De
             </label>
-            <input
+            <DatePickerInput
               value={startDate}
-              onChange={(e) =>
-                setStartDate(maskLegacyShortDateInput(e.target.value))
-              }
-              inputMode="numeric"
-              maxLength={8}
+              onChange={setStartDate}
+              format="short"
               placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
             />
@@ -641,13 +638,10 @@ export default function BankPage() {
             <label className="mb-2 block text-sm font-semibold text-primary">
               Ate
             </label>
-            <input
+            <DatePickerInput
               value={endDate}
-              onChange={(e) =>
-                setEndDate(maskLegacyShortDateInput(e.target.value))
-              }
-              inputMode="numeric"
-              maxLength={8}
+              onChange={setEndDate}
+              format="short"
               placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
             />
@@ -735,7 +729,7 @@ export default function BankPage() {
                   colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
-                  Nenhuma movimentacao bancaria cadastrada.
+                  Nenhuma movimentacao bancaria cadastrada nesta data.
                 </td>
               </tr>
             ) : (
@@ -804,7 +798,7 @@ export default function BankPage() {
           </div>
         ) : rows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
-            Nenhuma movimentacao bancaria cadastrada.
+            Nenhuma movimentacao bancaria cadastrada nesta data
           </div>
         ) : (
           rows.map((row) => (
@@ -959,10 +953,10 @@ export default function BankPage() {
             <label className="mb-2 block text-sm font-semibold text-primary">
               Data
             </label>
-            <input
-              type="date"
+            <DatePickerInput
               value={manualDate}
-              onChange={(e) => setManualDate(e.target.value)}
+              onChange={setManualDate}
+              format="iso"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
           </div>
@@ -1045,10 +1039,10 @@ export default function BankPage() {
             <label className="mb-2 block text-sm font-semibold text-primary">
               Data
             </label>
-            <input
-              type="date"
+            <DatePickerInput
               value={transferDate}
-              onChange={(e) => setTransferDate(e.target.value)}
+              onChange={setTransferDate}
+              format="iso"
               className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
             />
           </div>

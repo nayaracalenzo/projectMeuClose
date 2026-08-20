@@ -4,6 +4,7 @@ import { Button } from "../components/Button";
 import MeasurementsFields, {
   type MeasurementOption as MeasurementsFieldOption,
 } from "../components/MeasurementsFields";
+import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import SearchableSelect from "../components/SearchableSelect";
 import { getRequest, updateRequest } from "../services/request";
@@ -16,7 +17,6 @@ import {
 } from "../utils/currency";
 import {
   formatLegacyShortDateInput,
-  maskLegacyShortDateInput,
 } from "../utils/legacyDate";
 
 type ProductDetails = {
@@ -918,14 +918,13 @@ export default function OrderDetails() {
                 <label className={labelClassName} htmlFor="order-test-date">
                   Data da Prova
                 </label>
-                <input
+                <DatePickerInput
                   id="order-test-date"
                   value={form.testDate}
-                  onChange={(event) =>
-                    handleFieldChange("testDate", maskLegacyShortDateInput(event.target.value))
+                  onChange={(nextValue) =>
+                    handleFieldChange("testDate", nextValue)
                   }
-                  inputMode="numeric"
-                  maxLength={8}
+                  format="short"
                   placeholder="dd/mm/aa"
                   className={`${fieldClassName} mt-2`}
                 />

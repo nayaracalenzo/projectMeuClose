@@ -4,12 +4,12 @@ import { Printer } from "lucide-react";
 import { Button } from "../components/Button";
 import SearchableSelect from "../components/SearchableSelect";
 import CustomerModal from "../components/CustomerModal";
+import DatePickerInput from "../components/DatePickerInput";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 import {
   formatLegacyShortDateInput,
-  maskLegacyShortDateInput,
 } from "../utils/legacyDate";
 import {
   downloadWeeklyOrdersPdf,
@@ -756,14 +756,11 @@ export default function Orders() {
           >
             Data da prova/produção
           </label>
-          <input
+          <DatePickerInput
             id="orders-start-date-filter"
             value={startDateFilter}
-            onChange={(event) =>
-              setStartDateFilter(maskLegacyShortDateInput(event.target.value))
-            }
-            inputMode="numeric"
-            maxLength={8}
+            onChange={setStartDateFilter}
+            format="short"
             placeholder="dd/mm/aa"
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           />
@@ -776,14 +773,11 @@ export default function Orders() {
           >
             Até
           </label>
-          <input
+          <DatePickerInput
             id="orders-end-date-filter"
             value={endDateFilter}
-            onChange={(event) =>
-              setEndDateFilter(maskLegacyShortDateInput(event.target.value))
-            }
-            inputMode="numeric"
-            maxLength={8}
+            onChange={setEndDateFilter}
+            format="short"
             placeholder="dd/mm/aa"
             className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
           />
@@ -1010,11 +1004,11 @@ export default function Orders() {
             >
               Data de prova inicial
             </label>
-            <input
+            <DatePickerInput
               id="pdf-start-date"
-              type="date"
               value={pdfStartDate}
-              onChange={(event) => setPdfStartDate(event.target.value)}
+              onChange={setPdfStartDate}
+              format="iso"
               className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
             />
           </div>
@@ -1026,11 +1020,11 @@ export default function Orders() {
             >
               Data de prova final
             </label>
-            <input
+            <DatePickerInput
               id="pdf-end-date"
-              type="date"
               value={pdfEndDate}
-              onChange={(event) => setPdfEndDate(event.target.value)}
+              onChange={setPdfEndDate}
+              format="iso"
               className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
             />
           </div>

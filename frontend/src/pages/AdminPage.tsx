@@ -3,6 +3,7 @@ import { AlertCircle, Pencil, Trash2 } from "lucide-react";
 import { CircularProgress, FormControl, MenuItem, Select } from "@mui/material";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
+import DatePickerInput from "../components/DatePickerInput";
 import {
   deleteRequest,
   getRequest,
@@ -1087,16 +1088,16 @@ export default function AdminPage() {
           >
             Data inicial
           </label>
-          <input
+          <DatePickerInput
             id="audit-start-date"
-            type="date"
             value={auditFilters.startDate}
-            onChange={(event) =>
+            onChange={(value) =>
               setAuditFilters((prev) => ({
                 ...prev,
-                startDate: event.target.value,
+                startDate: value,
               }))
             }
+            format="iso"
             className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
           />
         </div>
@@ -1108,16 +1109,16 @@ export default function AdminPage() {
           >
             Data final
           </label>
-          <input
+          <DatePickerInput
             id="audit-end-date"
-            type="date"
             value={auditFilters.endDate}
-            onChange={(event) =>
+            onChange={(value) =>
               setAuditFilters((prev) => ({
                 ...prev,
-                endDate: event.target.value,
+                endDate: value,
               }))
             }
+            format="iso"
             className="h-11 w-full border border-outline-variant/50 bg-white px-3 text-sm text-primary"
           />
         </div>
@@ -1586,15 +1587,15 @@ export default function AdminPage() {
                   placeholder="Email"
                   className={getAdminInputClassName("email")}
                 />
-                <input
-                  type="date"
+                <DatePickerInput
                   value={employeeForm.birthDate}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     setEmployeeForm((prev) => ({
                       ...prev,
-                      birthDate: e.target.value,
+                      birthDate: value,
                     }))
                   }
+                  format="iso"
                   className={getAdminInputClassName("birthDate")}
                 />
                 <div className="grid gap-3 md:grid-cols-2">

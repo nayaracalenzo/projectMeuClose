@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
+import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import {
   deleteRequest,
@@ -17,7 +18,6 @@ import {
   parseCurrencyToNumber,
 } from "../utils/currency";
 import {
-  maskLegacyShortDateInput,
 } from "../utils/legacyDate";
 
 type ReceivableFilter =
@@ -866,10 +866,10 @@ export default function ReceivablesPage() {
             <label className="mb-1 block text-sm font-semibold text-primary">
               Vencimento
             </label>
-            <input
-              type="date"
+            <DatePickerInput
               value={formDueDate}
-              onChange={(e) => setFormDueDate(e.target.value)}
+              onChange={setFormDueDate}
+              format="iso"
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
@@ -930,11 +930,10 @@ export default function ReceivablesPage() {
             <label className="mb-2 block text-sm font-semibold text-primary">
               De
             </label>
-            <input
+            <DatePickerInput
               value={startDate}
-              onChange={(e) => setStartDate(maskLegacyShortDateInput(e.target.value))}
-              inputMode="numeric"
-              maxLength={8}
+              onChange={setStartDate}
+              format="short"
               placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
@@ -944,11 +943,10 @@ export default function ReceivablesPage() {
             <label className="mb-2 block text-sm font-semibold text-primary">
               Até
             </label>
-            <input
+            <DatePickerInput
               value={endDate}
-              onChange={(e) => setEndDate(maskLegacyShortDateInput(e.target.value))}
-              inputMode="numeric"
-              maxLength={8}
+              onChange={setEndDate}
+              format="short"
               placeholder="dd/mm/aa"
               className="h-11 min-w-44 rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
@@ -1285,10 +1283,10 @@ export default function ReceivablesPage() {
                   <label className="mb-1 block text-sm font-semibold text-primary">
                     Data pgto
                   </label>
-                  <input
-                    type="date"
+                  <DatePickerInput
                     value={receiptPaidAt}
-                    onChange={(e) => setReceiptPaidAt(e.target.value)}
+                    onChange={setReceiptPaidAt}
+                    format="iso"
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                   />
                 </div>

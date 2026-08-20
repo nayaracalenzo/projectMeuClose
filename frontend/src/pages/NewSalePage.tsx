@@ -2,6 +2,7 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
+import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import CustomMadeClothing, {
   type CustomMadeProductDraft,
@@ -3204,10 +3205,10 @@ export default function NewSalePage() {
                           <label className="mb-1 block text-sm font-medium text-primary">
                             Primeiro vencimento
                           </label>
-                          <input
-                            type="date"
+                          <DatePickerInput
                             value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
+                            onChange={setDueDate}
+                            format="iso"
                             className={paymentFieldClassName}
                           />
                         </div>
