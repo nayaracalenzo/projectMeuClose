@@ -6,6 +6,16 @@ function expandTwoDigitYear(year: number) {
   return 2000 + year;
 }
 
+function isValidDateParts(year: number, month: number, day: number) {
+  const date = new Date(year, month - 1, day, 0, 0, 0, 0);
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+}
+
 export function maskLegacyShortDateInput(value: string) {
   const digits = String(value || "").replace(/\D/g, "").slice(0, 6);
 
@@ -29,13 +39,8 @@ export function parseLegacyOrIsoDate(value?: string | null) {
     const year = Number(isoMatch[1]);
     const month = Number(isoMatch[2]);
     const day = Number(isoMatch[3]);
-    const date = new Date(year, month - 1, day, 0, 0, 0, 0);
-
-    if (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
-    ) {
+    if (isValidDateParts(year, month, day)) {
+      const date = new Date(year, month - 1, day, 0, 0, 0, 0);
       return date;
     }
 
@@ -47,13 +52,8 @@ export function parseLegacyOrIsoDate(value?: string | null) {
     const day = Number(shortMatch[1]);
     const month = Number(shortMatch[2]);
     const year = expandTwoDigitYear(Number(shortMatch[3]));
-    const date = new Date(year, month - 1, day, 0, 0, 0, 0);
-
-    if (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
-    ) {
+    if (isValidDateParts(year, month, day)) {
+      const date = new Date(year, month - 1, day, 0, 0, 0, 0);
       return date;
     }
 
@@ -65,13 +65,8 @@ export function parseLegacyOrIsoDate(value?: string | null) {
     const day = Number(longMatch[1]);
     const month = Number(longMatch[2]);
     const year = Number(longMatch[3]);
-    const date = new Date(year, month - 1, day, 0, 0, 0, 0);
-
-    if (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
-    ) {
+    if (isValidDateParts(year, month, day)) {
+      const date = new Date(year, month - 1, day, 0, 0, 0, 0);
       return date;
     }
 
@@ -87,5 +82,14 @@ export function formatLegacyShortDateInput(value?: string | null) {
 
   return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${pad(
     date.getFullYear() % 100,
+  )}`;
+}
+
+export function formatIsoDateInput(value?: string | null) {
+  const date = parseLegacyOrIsoDate(value);
+  if (!date) return "";
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
   )}`;
 }

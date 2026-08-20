@@ -3,11 +3,11 @@ import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
 import {
   formatLegacyShortDateInput,
-  maskLegacyShortDateInput,
 } from "../utils/legacyDate";
 import { getRequest, postRequest } from "../services/request";
 import MeasurementsFields from "./MeasurementsFields";
 import CustomerModal from "./CustomerModal";
+import DatePickerInput from "./DatePickerInput";
 import NoticeToast from "./NoticeToast";
 import SearchableSelect from "./SearchableSelect";
 
@@ -743,18 +743,13 @@ export default function CustomMadeClothing({
                   >
                     Data Prova
                   </label>
-                  <input
+                  <DatePickerInput
                     id={`fittingDate-${product.id}`}
                     value={product.fittingDate}
-                    onChange={(e) =>
-                      updateProduct(
-                        product.id,
-                        "fittingDate",
-                        maskLegacyShortDateInput(e.target.value),
-                      )
+                    onChange={(nextValue) =>
+                      updateProduct(product.id, "fittingDate", nextValue)
                     }
-                    inputMode="numeric"
-                    maxLength={8}
+                    format="short"
                     placeholder="dd/mm/aa"
                     className={fieldClassName}
                   />

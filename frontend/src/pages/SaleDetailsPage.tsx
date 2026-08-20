@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
+import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import SearchableSelect from "../components/SearchableSelect";
 import { deleteRequest, getRequest, postRequest, updateRequest } from "../services/request";
@@ -1618,11 +1619,11 @@ export default function SaleDetailsPage() {
               >
                 Primeiro vencimento
               </label>
-              <input
+              <DatePickerInput
                 id="renegotiate-due-date"
-                type="date"
                 value={renegotiateDueDate}
-                onChange={(event) => setRenegotiateDueDate(event.target.value)}
+                onChange={setRenegotiateDueDate}
+                format="iso"
                 className="h-11 w-full rounded-lg border border-outline-variant/60 bg-white px-3 text-sm text-primary outline-none transition focus:border-primary"
               />
             </div>
