@@ -364,11 +364,6 @@ export default function OrderDetails() {
     () => toSearchableOptions(employeeOptions),
     [employeeOptions],
   );
-  const statusSearchableOptions = useMemo(
-    () => toSearchableOptions(statusOptions),
-    [statusOptions],
-  );
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -884,17 +879,21 @@ export default function OrderDetails() {
                 <label className={labelClassName} htmlFor="order-status">
                   Status
                 </label>
-                <SearchableSelect
+                <select
                   id="order-status"
                   value={form.statusId}
-                  options={statusSearchableOptions}
-                  onChange={(value) => handleFieldChange("statusId", value)}
-                  className="relative mt-2"
-                  inputClassName={fieldClassName}
-                  dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-outline-variant/45 bg-white shadow-lg"
-                  optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
-                  placeholder="Digite para buscar"
-                />
+                  onChange={(event) =>
+                    handleFieldChange("statusId", event.target.value)
+                  }
+                  className={`${fieldClassName} mt-2`}
+                >
+                  <option value="">Selecione</option>
+                  {statusOptions.map((option) => (
+                    <option key={option.id} value={String(option.id)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
