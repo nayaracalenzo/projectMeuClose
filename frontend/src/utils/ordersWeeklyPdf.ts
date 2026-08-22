@@ -15,6 +15,7 @@ export interface PrintableOrder {
   id: number;
   customer: string;
   kind: string;
+  productionType: string;
   date: string;
   status: string;
   total: number;
@@ -25,14 +26,7 @@ interface WeeklyPdfParams {
   orders: PrintableOrder[];
   logoUrl?: string;
   weekLabel: string;
-  includeValues?: boolean;
 }
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
 
 const formatDate = (value: string) => {
   const raw = String(value || "").trim();
@@ -60,31 +54,55 @@ const loadImageAsDataUrl = async (imageUrl: string) => {
   });
 };
 
-const drawTableHeader = (doc: jsPDF, startY: number, includeValues: boolean) => {
+const TYPE_COLUMN_END_X = 50;
+const CUSTOMER_COLUMN_END_X = 136;
+const SEAMSTRESS_COLUMN_END_X = 180;
+const TABLE_END_X = 285;
+const CUSTOMER_TEXT_X = TYPE_COLUMN_END_X + 4.8;
+const CUSTOMER_TEXT_WIDTH = CUSTOMER_COLUMN_END_X - CUSTOMER_TEXT_X - 4;
+const SEAMSTRESS_TEXT_X = CUSTOMER_COLUMN_END_X + 4.8;
+const SEAMSTRESS_TEXT_WIDTH = SEAMSTRESS_COLUMN_END_X - SEAMSTRESS_TEXT_X - 4;
+const DESCRIPTION_TEXT_X = SEAMSTRESS_COLUMN_END_X + 4.8;
+const DESCRIPTION_TEXT_WIDTH = TABLE_END_X - DESCRIPTION_TEXT_X - 6;
+
+const drawSingleLineWithAutoFontSize = (
+  doc: jsPDF,
+  value: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  preferredFontSize = 9.5,
+  minFontSize = 7,
+) => {
+  const normalized = String(value || "").trim() || "-";
+  let fontSize = preferredFontSize;
+
+  doc.setFontSize(fontSize);
+
+  while (fontSize > minFontSize && doc.getTextWidth(normalized) > maxWidth) {
+    fontSize -= 0.2;
+    doc.setFontSize(fontSize);
+  }
+
+  doc.text(normalized, x, y);
+  doc.setFontSize(preferredFontSize);
+};
+
+const drawTableHeader = (doc: jsPDF, startY: number) => {
   doc.setFillColor(246, 243, 241);
   doc.rect(12, startY, 273, 10, "F");
   doc.setDrawColor(210, 205, 203);
   doc.rect(12, startY, 273, 10);
-  doc.line(38, startY, 38, startY + 10);
-  doc.line(96, startY, 96, startY + 10);
-  doc.line(138, startY, 138, startY + 10);
-  if (includeValues) {
-    doc.line(188, startY, 188, startY + 10);
-    doc.line(252, startY, 252, startY + 10);
-  }
+  doc.line(TYPE_COLUMN_END_X, startY, TYPE_COLUMN_END_X, startY + 10);
+  doc.line(CUSTOMER_COLUMN_END_X, startY, CUSTOMER_COLUMN_END_X, startY + 10);
+  doc.line(SEAMSTRESS_COLUMN_END_X, startY, SEAMSTRESS_COLUMN_END_X, startY + 10);
   doc.setTextColor(43, 36, 37);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text("Data prova", 16, startY + 6.5);
-  doc.text("Cliente", 42, startY + 6.5);
-  doc.text("Costureira", 100, startY + 6.5);
-  if (includeValues) {
-    doc.text("Roupa", 142, startY + 6.5);
-    doc.text("Detalhes", 192, startY + 6.5);
-    doc.text("Valor", 282, startY + 6.5, { align: "right" });
-  } else {
-    doc.text("Descricao", 142, startY + 6.5);
-  }
+  doc.text("Tipo / prova", 16, startY + 6.5);
+  doc.text("Cliente", TYPE_COLUMN_END_X + 4, startY + 6.5);
+  doc.text("Costureira", CUSTOMER_COLUMN_END_X + 4, startY + 6.5);
+  doc.text("Descricao", SEAMSTRESS_COLUMN_END_X + 4, startY + 6.5);
 };
 
 const drawPageHeader = (
@@ -128,7 +146,6 @@ export const downloadWeeklyOrdersPdf = async ({
   orders,
   logoUrl,
   weekLabel,
-  includeValues = true,
 }: WeeklyPdfParams) => {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const logoDataUrl = logoUrl ? await loadImageAsDataUrl(logoUrl) : null;
@@ -138,12 +155,15 @@ export const downloadWeeklyOrdersPdf = async ({
   );
 
   drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
-  drawTableHeader(doc, 66, includeValues);
+  drawTableHeader(doc, 66);
 
   let currentY = 79;
 
   orders.forEach((order) => {
     order.items.forEach((item, index) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.2);
+
       const details = [
         `Qtd: ${item.quantity}`,
         `Tecido: ${item.fabric}`,
@@ -155,22 +175,26 @@ export const downloadWeeklyOrdersPdf = async ({
         .filter(Boolean)
         .join(" | ");
 
+      const productionTypeLabel = index === 0 ? order.productionType : "";
       const dateLabel = index === 0 ? formatDate(order.date) : "";
       const customerLabel = index === 0 ? order.customer : "";
       const seamstressLabel = item.seamstress || "-";
       const mergedDescription = [item.name, details].filter(Boolean).join(" | ");
-      const detailsLines = doc.splitTextToSize(details, 60);
-      const clothingLines = doc.splitTextToSize(item.name, 44);
-      const mergedDescriptionLines = doc.splitTextToSize(mergedDescription, 138);
-      const seamstressLines = doc.splitTextToSize(seamstressLabel, 38);
-      const customerLines = doc.splitTextToSize(customerLabel, 50);
-      const dateLines = doc.splitTextToSize(dateLabel, 18);
+      const mergedDescriptionLines = doc.splitTextToSize(
+        mergedDescription,
+        DESCRIPTION_TEXT_WIDTH,
+      );
+      const seamstressLines = doc.splitTextToSize(seamstressLabel, SEAMSTRESS_TEXT_WIDTH);
+      const customerLines = customerLabel
+        ? doc.splitTextToSize(customerLabel, CUSTOMER_TEXT_WIDTH)
+        : [];
+      const typeLines = productionTypeLabel ? [productionTypeLabel] : [];
+      const dateLines = dateLabel ? [dateLabel] : [];
       const baseHeight = Math.max(
-        dateLines.length,
+        typeLines.length + dateLines.length,
         customerLines.length,
         seamstressLines.length,
-        includeValues ? clothingLines.length : mergedDescriptionLines.length,
-        includeValues ? detailsLines.length : 1,
+        mergedDescriptionLines.length,
         1,
       );
       const rowHeight = Math.max(14, baseHeight * 5.2);
@@ -178,41 +202,43 @@ export const downloadWeeklyOrdersPdf = async ({
       if (currentY + rowHeight > 192) {
         doc.addPage();
         drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
-        drawTableHeader(doc, 66, includeValues);
+        drawTableHeader(doc, 66);
         currentY = 79;
       }
 
       doc.setDrawColor(227, 218, 214);
       doc.rect(12, currentY - 4, 273, rowHeight);
-      doc.line(38, currentY - 4, 38, currentY - 4 + rowHeight);
-      doc.line(96, currentY - 4, 96, currentY - 4 + rowHeight);
-      doc.line(138, currentY - 4, 138, currentY - 4 + rowHeight);
-      if (includeValues) {
-        doc.line(188, currentY - 4, 188, currentY - 4 + rowHeight);
-        doc.line(252, currentY - 4, 252, currentY - 4 + rowHeight);
-      }
+      doc.line(TYPE_COLUMN_END_X, currentY - 4, TYPE_COLUMN_END_X, currentY - 4 + rowHeight);
+      doc.line(CUSTOMER_COLUMN_END_X, currentY - 4, CUSTOMER_COLUMN_END_X, currentY - 4 + rowHeight);
+      doc.line(SEAMSTRESS_COLUMN_END_X, currentY - 4, SEAMSTRESS_COLUMN_END_X, currentY - 4 + rowHeight);
 
-      const textStartY = currentY + 1.5;
+      const textStartY = currentY + 2.5;
 
       doc.setTextColor(43, 36, 37);
       doc.setFont("helvetica", index === 0 ? "bold" : "normal");
-      doc.setFontSize(9.5);
-      doc.text(dateLines, 16, textStartY);
+      if (typeLines.length) {
+        drawSingleLineWithAutoFontSize(
+          doc,
+          typeLines[0],
+          16.8,
+          textStartY,
+          TYPE_COLUMN_END_X - 18,
+          9.2,
+          6.4,
+        );
+      }
+      if (dateLines.length) {
+        doc.text(dateLines, 16.8, textStartY + (typeLines.length ? 5.4 : 0));
+      }
 
       doc.setFont("helvetica", "normal");
-      doc.text(customerLines, 42, textStartY);
-      doc.text(seamstressLines, 100, textStartY);
-      if (includeValues) {
-        doc.text(clothingLines, 142, textStartY);
-        doc.text(detailsLines, 192, textStartY);
-      } else {
-        doc.text(mergedDescriptionLines, 142, textStartY);
+      doc.setFontSize(9.2);
+      if (customerLines.length) {
+        doc.text(customerLines, CUSTOMER_TEXT_X, textStartY);
       }
-
-      if (includeValues && index === 0) {
-        doc.setFont("helvetica", "bold");
-        doc.text(formatCurrency(order.total), 282, textStartY, { align: "right" });
-      }
+      doc.text(seamstressLines, SEAMSTRESS_TEXT_X, textStartY);
+      doc.text(mergedDescriptionLines, DESCRIPTION_TEXT_X, textStartY);
+      doc.setFontSize(9.5);
 
       currentY += rowHeight + 2;
     });
@@ -231,6 +257,6 @@ export const downloadWeeklyOrdersPdf = async ({
     doc.text(`Pagina ${page} de ${totalPages}`, 285, 205, { align: "right" });
   }
 
-  const safeWeekLabel = weekLabel.replace(/[\\/:?\s]+/g, "-");
+  const safeWeekLabel = weekLabel.replace(/[\\/:?\s]+/g, "-").toLowerCase();
   doc.save(`pedidos-periodo-${safeWeekLabel}.pdf`);
 };
