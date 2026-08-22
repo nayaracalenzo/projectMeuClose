@@ -1,11 +1,15 @@
 const express = require("express");
 const controller = require("../controllers/salesController");
+const saleDraftsController = require("../controllers/saleDraftsController");
 const authMiddleware = require("../middlewars/authMiddleware.js");
 
 const router = express.Router();
 
 router.use(authMiddleware);
 
+router.get("/draft", saleDraftsController.getActiveSaleDraftController);
+router.put("/draft", saleDraftsController.upsertActiveSaleDraftController);
+router.delete("/draft", saleDraftsController.discardActiveSaleDraftController);
 router.get("/", controller.listSalesController);
 router.get("/:id", controller.getSaleByIdController);
 router.put("/:id/customer", controller.updateSaleCustomerController);
