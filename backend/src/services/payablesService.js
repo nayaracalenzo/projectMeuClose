@@ -62,6 +62,61 @@ function normalizeOptionalDate(value, fieldName, options = {}) {
   );
 }
 
+function normalizeInteger(value, fieldName) {
+  const normalized = Number(value);
+
+  if (!Number.isInteger(normalized) || normalized <= 0) {
+    throw createPayablesValidationError(`${fieldName} invalida.`);
+  }
+
+  return normalized;
+}
+
+function roundCurrency(value) {
+  return Number(Number(value).toFixed(2));
+}
+
+function addMonthsPreservingDay(baseDate, monthsToAdd) {
+  const year = baseDate.getFullYear();
+  const monthIndex = baseDate.getMonth() + monthsToAdd;
+  const day = baseDate.getDate();
+  const lastDayOfTargetMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+  return new Date(
+    year,
+    monthIndex,
+    Math.min(day, lastDayOfTargetMonth),
+    0,
+    0,
+    0,
+    0,
+  );
+}
+
+function buildPayableInstallments(totalAmount, installmentCount, dueDate) {
+  const amounts = [];
+  let allocated = 0;
+
+  for (let index = 0; index < installmentCount; index += 1) {
+    const remainingInstallments = installmentCount - index;
+    const remainingAmount = roundCurrency(totalAmount - allocated);
+    const installmentAmount =
+      remainingInstallments === 1
+        ? remainingAmount
+        : roundCurrency(remainingAmount / remainingInstallments);
+
+    allocated = roundCurrency(allocated + installmentAmount);
+    amounts.push(installmentAmount);
+  }
+
+  return amounts.map((amount, index) => ({
+    amount,
+    dueDate: addMonthsPreservingDay(dueDate, index),
+    installmentNumber: index + 1,
+    totalInstallments: installmentCount,
+  }));
+}
+
 async function resolvePlannedPaymentType(paymentTypeId, fieldName = "Forma de pagamento") {
   const normalizedId = Number(paymentTypeId);
 
@@ -241,27 +296,40 @@ async function createPayable(body = {}) {
   }
 
   const amount = normalizeAmount(body.amount, "Valor");
+  const installmentCount =
+    body.installmentCount === null || body.installmentCount === undefined || body.installmentCount === ""
+      ? 1
+      : normalizeInteger(body.installmentCount, "Quantidade de parcelas");
   const plannedPaymentType = await resolvePlannedPaymentType(body.plannedPaymentTypeId);
   const financialRouting = resolvePayableSettlementByPaymentType(plannedPaymentType);
+  const normalizedDueDate = normalizeDate(body.dueDate, "Data de vencimento");
+  const installments = buildPayableInstallments(amount, installmentCount, normalizedDueDate);
 
-  const created = await repository.createPayable({
-    scope,
-    description,
-    category,
-    beneficiary,
-    supplierId: supplier?.idSupplier || null,
-    amount,
-    openAmount: amount,
-    dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
-    status: "OPEN",
-    settlementTarget: financialRouting.settlementTarget,
-    accountLabel: financialRouting.accountLabel,
-    plannedPaymentTypeId: plannedPaymentType.id,
-  });
+  const created = await repository.createPayables(
+    installments.map((installment) => ({
+      scope,
+      description,
+      category,
+      beneficiary,
+      supplierId: supplier?.idSupplier || null,
+      amount: installment.amount,
+      openAmount: installment.amount,
+      dueDate: installment.dueDate,
+      status: "OPEN",
+      settlementTarget: financialRouting.settlementTarget,
+      accountLabel: financialRouting.accountLabel,
+      plannedPaymentTypeId: plannedPaymentType.id,
+    })),
+  );
 
   return {
-    id: created.idPayable,
-    message: "Conta a pagar criada com sucesso.",
+    id: created[0]?.idPayable || null,
+    ids: created.map((item) => item.idPayable),
+    installmentCount,
+    message:
+      installmentCount > 1
+        ? `${installmentCount} contas a pagar parceladas criadas com sucesso.`
+        : "Conta a pagar criada com sucesso.",
   };
 }
 

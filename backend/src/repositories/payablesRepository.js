@@ -153,6 +153,12 @@ async function createPayable(payload) {
   return Payables.create(payload);
 }
 
+async function createPayables(payloads, transaction) {
+  return Payables.bulkCreate(payloads, {
+    transaction,
+  });
+}
+
 async function getSupplierById(supplierId) {
   return Suppliers.findOne({
     where: {
@@ -277,6 +283,7 @@ module.exports = {
   listPayables,
   summarizePayables,
   createPayable,
+  createPayables,
   getSupplierById,
   getPayableById,
   getPayableForManagement,
