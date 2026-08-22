@@ -2,9 +2,8 @@
 import { useNavigate } from "react-router-dom";
 import { Printer } from "lucide-react";
 import { Button } from "../components/Button";
-import SearchableSelect from "../components/SearchableSelect";
-import CustomerModal from "../components/CustomerModal";
 import DatePickerInput from "../components/DatePickerInput";
+import SearchableSelect from "../components/SearchableSelect";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
@@ -86,14 +85,6 @@ const formatDate = (value?: string | null) => {
   if (!date) return "-";
 
   return new Intl.DateTimeFormat("pt-BR").format(date);
-};
-
-const toInputDate = (value: Date) => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
 };
 
 const formatCustomerName = (value?: string | null) => {
@@ -218,12 +209,6 @@ export default function Orders() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfModalOpen, setPdfModalOpen] = useState(false);
-  const [pdfStartDate, setPdfStartDate] = useState("");
-  const [pdfEndDate, setPdfEndDate] = useState("");
-  const [pdfValueMode, setPdfValueMode] = useState<
-    "withoutValue" | "withValue"
-  >("withoutValue");
   const [error, setError] = useState("");
   const filteredProductTypeOptions = useMemo(
     () =>
@@ -540,47 +525,130 @@ export default function Orders() {
     statusFilter,
   ]);
 
-  const handleOpenPdfModal = () => {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() + diffToMonday);
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-    setPdfStartDate(toInputDate(startOfWeek));
-    setPdfEndDate(toInputDate(endOfWeek));
-    setPdfValueMode("withoutValue");
-    setPdfModalOpen(true);
-  };
-
   const handleDownloadWeeklyPdf = async () => {
     try {
-      if (!pdfStartDate || !pdfEndDate) {
-        setError("Informe a data inicial e a data final para gerar o PDF.");
-        return;
-      }
-
-      if (pdfStartDate > pdfEndDate) {
-        setError("A data inicial não pode ser maior que a data final.");
-        return;
-      }
-
       setPdfLoading(true);
       setError("");
       const params = new URLSearchParams({
         page: "1",
         pageSize: "100",
-        sortBy: "testDateAsc",
-        startDate: pdfStartDate,
-        endDate: pdfEndDate,
+        sortBy,
         productionOnly: "true",
       });
 
       if (statusFilter !== "todos") {
         params.set("statusId", statusFilter);
+      }
+
+      if (productIdFilter.trim()) {
+        params.set("productId", productIdFilter.trim());
+      }
+
+      if (customerFilter.trim()) {
+        params.set("customer", customerFilter.trim());
+      }
+
+      if (startDateFilter) {
+        params.set("startDate", startDateFilter);
+      }
+
+      if (endDateFilter) {
+        params.set("endDate", endDateFilter);
+      }
+
+      if (productTypeFilter) {
+        params.set("productTypeId", productTypeFilter);
+      }
+
+      if (clothingTypeFilter) {
+        params.set("clothingTypeId", clothingTypeFilter);
+      }
+
+      if (employeeFilter) {
+        params.set("employeeId", employeeFilter);
+      }
+
+      if (fabricFilter) {
+        params.set("fabricId", fabricFilter);
+      }
+
+      if (colorFilter) {
+        params.set("colorId", colorFilter);
+      }
+
+      if (sizeFilter) {
+        params.set("sizeId", sizeFilter);
+      }
+
+      const summaryFilters: string[] = [];
+      if (customerFilter.trim()) {
+        summaryFilters.push(`Cliente ${customerFilter.trim()}`);
+      }
+      if (productIdFilter.trim()) {
+        summaryFilters.push(`Pedido ${productIdFilter.trim()}`);
+      }
+      if (startDateFilter || endDateFilter) {
+        summaryFilters.push(
+          `Prova ${startDateFilter || "..."} a ${endDateFilter || "..."}`,
+        );
+      }
+      if (statusFilter !== "todos") {
+        const selectedStatus = statusOptions.find(
+          (status) => String(status.id) === statusFilter,
+        );
+        if (selectedStatus?.desc) {
+          summaryFilters.push(`Status ${selectedStatus.desc}`);
+        }
+      }
+      if (productTypeFilter) {
+        const selectedProductType = filteredProductTypeOptions.find(
+          (option) => String(option.id) === productTypeFilter,
+        );
+        if (selectedProductType?.desc) {
+          summaryFilters.push(`Tipo ${selectedProductType.desc}`);
+        }
+      }
+      if (clothingTypeFilter) {
+        const selectedClothingType = clothingTypeOptions.find(
+          (option) => String(option.id) === clothingTypeFilter,
+        );
+        if (selectedClothingType?.desc) {
+          summaryFilters.push(`Roupa ${selectedClothingType.desc}`);
+        }
+      }
+      if (employeeFilter) {
+        const selectedEmployee = seamstressOptions.find(
+          (option) => String(option.idEmployee) === employeeFilter,
+        );
+        if (selectedEmployee) {
+          summaryFilters.push(
+            `Costureira ${String(selectedEmployee.shortName || selectedEmployee.fullName || "").trim()}`,
+          );
+        }
+      }
+      if (fabricFilter) {
+        const selectedFabric = fabricOptions.find(
+          (option) => String(option.id) === fabricFilter,
+        );
+        if (selectedFabric?.desc) {
+          summaryFilters.push(`Tecido ${selectedFabric.desc}`);
+        }
+      }
+      if (colorFilter) {
+        const selectedColor = colorOptions.find(
+          (option) => String(option.id) === colorFilter,
+        );
+        if (selectedColor?.desc) {
+          summaryFilters.push(`Cor ${selectedColor.desc}`);
+        }
+      }
+      if (sizeFilter) {
+        const selectedSize = sizeOptions.find(
+          (option) => String(option.id) === sizeFilter,
+        );
+        if (selectedSize?.desc) {
+          summaryFilters.push(`Tam. ${selectedSize.desc}`);
+        }
       }
 
       const firstPage = (await getRequest(
@@ -617,6 +685,7 @@ export default function Orders() {
         customer: item.customer,
         kind:
           item.clothingType || item.productType || item.category || "Produção",
+        productionType: formatProductionType(item),
         date: item.testDate || item.createdAt,
         status: item.status || "-",
         total: item.finalValue,
@@ -634,28 +703,20 @@ export default function Orders() {
         ],
       }));
 
-      const [startYear, startMonth, startDay] = pdfStartDate
-        .split("-")
-        .map(Number);
-      const [endYear, endMonth, endDay] = pdfEndDate.split("-").map(Number);
-      const startDate = new Date(startYear, startMonth - 1, startDay);
-      const endDate = new Date(endYear, endMonth - 1, endDay);
-      const weekLabel = `${new Intl.DateTimeFormat("pt-BR").format(startDate)} a ${new Intl.DateTimeFormat(
-        "pt-BR",
-      ).format(endDate)}`;
+      const weekLabel = summaryFilters.length
+        ? summaryFilters.join(" | ")
+        : "Todos os filtros atuais";
 
       await downloadWeeklyOrdersPdf({
         orders: printableOrders,
         weekLabel,
         logoUrl: "/manequim.png",
-        includeValues: pdfValueMode === "withValue",
       });
-      setPdfModalOpen(false);
     } catch (err: unknown) {
       setError(
         getUserFacingApiErrorMessage(
           err,
-          "Não foi possível gerar o PDF do período.",
+          "Não foi possível gerar o PDF da produção.",
         ),
       );
     } finally {
@@ -681,7 +742,7 @@ export default function Orders() {
             variant="primary"
             size="md"
             className="px-5"
-            onClick={handleOpenPdfModal}
+            onClick={() => void handleDownloadWeeklyPdf()}
             disabled={loading || pdfLoading}
           >
             <span className="flex items-center gap-2">
@@ -697,7 +758,7 @@ export default function Orders() {
           variant="secondary"
           size="md"
           className="w-full"
-          onClick={handleOpenPdfModal}
+          onClick={() => void handleDownloadWeeklyPdf()}
           disabled={loading || pdfLoading}
         >
           <span className="flex items-center justify-center gap-2">
@@ -971,99 +1032,6 @@ export default function Orders() {
           {error}
         </div>
       ) : null}
-
-      <CustomerModal
-        open={pdfModalOpen}
-        onClose={() => {
-          if (!pdfLoading) {
-            setPdfModalOpen(false);
-          }
-        }}
-        title="Gerar PDF de produção"
-        subtitle="Selecione o intervalo da data de prova para montar o relatório."
-      >
-        <div className="my-4 flex flex-col gap-2">
-          <span className="text-sm font-medium text-primary">
-            Exibir valores no PDF
-          </span>
-          <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
-            <label className="flex items-center gap-2 text-sm text-neutral-800">
-              <input
-                type="radio"
-                name="pdf-value-mode"
-                value="withoutValue"
-                checked={pdfValueMode === "withoutValue"}
-                onChange={() => setPdfValueMode("withoutValue")}
-                className="h-4 w-4  border-outline-variant/45 text-primary focus:ring-primary"
-              />
-              Sem valor
-            </label>
-            <label className="flex items-center gap-2 text-sm text-neutral-800">
-              <input
-                type="radio"
-                name="pdf-value-mode"
-                value="withValue"
-                checked={pdfValueMode === "withValue"}
-                onChange={() => setPdfValueMode("withValue")}
-                className="h-4 w-4 border-outline-variant/45 text-primary focus:ring-primary"
-              />
-              Com valor
-            </label>
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="pdf-start-date"
-              className="text-sm font-medium text-primary"
-            >
-              Data de prova inicial
-            </label>
-            <DatePickerInput
-              id="pdf-start-date"
-              value={pdfStartDate}
-              onChange={setPdfStartDate}
-              format="iso"
-              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label
-              htmlFor="pdf-end-date"
-              className="text-sm font-medium text-primary"
-            >
-              Data de prova final
-            </label>
-            <DatePickerInput
-              id="pdf-end-date"
-              value={pdfEndDate}
-              onChange={setPdfEndDate}
-              format="iso"
-              className="rounded-md border border-outline-variant/45 bg-white px-3 py-2 text-sm text-neutral-800 outline-none transition focus:border-primary"
-            />
-          </div>
-        </div>
-
-        <div className="mt-5 flex justify-end gap-3">
-          <Button
-            variant="secondary"
-            size="md"
-            onClick={() => setPdfModalOpen(false)}
-            disabled={pdfLoading}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={handleDownloadWeeklyPdf}
-            disabled={pdfLoading}
-          >
-            {pdfLoading ? "Gerando PDF..." : "Gerar PDF"}
-          </Button>
-        </div>
-      </CustomerModal>
 
       <div className="hidden w-full overflow-x-auto md:block">
         <table className="mt-2 min-w-[1180px] w-full table-fixed border-separate border-spacing-y-2">
