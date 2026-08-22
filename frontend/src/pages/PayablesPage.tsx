@@ -20,6 +20,7 @@ import {
 
 type Scope = "LOJA" | "PESSOAL";
 type SettlementTarget = "BANCO" | "CAIXA";
+type PayableAmountMode = "TOTAL" | "INSTALLMENT";
 type PayableFilter =
   | "EM_ABERTO"
   | "ATRASADAS"
@@ -82,6 +83,13 @@ interface RegisterPaymentResponse {
   paymentId: number;
 }
 
+interface CreatePayableResponse {
+  message: string;
+  id: number | null;
+  ids?: number[];
+  installmentCount?: number;
+}
+
 interface CashSessionSummary {
   id: number;
   openedAt: string;
@@ -125,6 +133,61 @@ const formatDate = (value: string) =>
   new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 
 const getCurrentDateInputValue = () => new Date().toISOString().slice(0, 10);
+
+const roundCurrency = (value: number) => Number(value.toFixed(2));
+
+const addMonthsPreservingDay = (baseDate: Date, monthsToAdd: number) => {
+  const year = baseDate.getFullYear();
+  const monthIndex = baseDate.getMonth() + monthsToAdd;
+  const day = baseDate.getDate();
+  const lastDayOfTargetMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+  return new Date(
+    year,
+    monthIndex,
+    Math.min(day, lastDayOfTargetMonth),
+    0,
+    0,
+    0,
+    0,
+  );
+};
+
+const buildPayableInstallmentsPreview = (
+  totalAmount: number,
+  installmentCount: number,
+  dueDateValue: string,
+) => {
+  if (!Number.isFinite(totalAmount) || totalAmount <= 0 || installmentCount <= 0) {
+    return [];
+  }
+
+  const baseDate = dueDateValue ? new Date(`${dueDateValue}T00:00:00`) : new Date();
+  if (Number.isNaN(baseDate.getTime())) {
+    return [];
+  }
+
+  const amounts: number[] = [];
+  let allocated = 0;
+
+  for (let index = 0; index < installmentCount; index += 1) {
+    const remainingInstallments = installmentCount - index;
+    const remainingAmount = roundCurrency(totalAmount - allocated);
+    const installmentAmount =
+      remainingInstallments === 1
+        ? remainingAmount
+        : roundCurrency(remainingAmount / remainingInstallments);
+
+    allocated = roundCurrency(allocated + installmentAmount);
+    amounts.push(installmentAmount);
+  }
+
+  return amounts.map((value, index) => ({
+    installmentNumber: index + 1,
+    dueDate: addMonthsPreservingDay(baseDate, index).toISOString().slice(0, 10),
+    amount: value,
+  }));
+};
 
 const normalizeUppercasePayloadText = (value: string) =>
   String(value || "").trim().toUpperCase();
@@ -184,7 +247,9 @@ export default function PayablesPage() {
   const [category, setCategory] = useState("");
   const [beneficiary, setBeneficiary] = useState("");
   const [supplierId, setSupplierId] = useState("");
+  const [amountMode, setAmountMode] = useState<PayableAmountMode>("INSTALLMENT");
   const [amount, setAmount] = useState("");
+  const [installmentCount, setInstallmentCount] = useState("1");
   const [dueDate, setDueDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
@@ -337,7 +402,9 @@ export default function PayablesPage() {
     setCategory("");
     setBeneficiary("");
     setSupplierId("");
+    setAmountMode("INSTALLMENT");
     setAmount("");
+    setInstallmentCount("1");
     setDueDate(new Date().toISOString().slice(0, 10));
     setPlannedPaymentTypeId("");
     setPayableFormMode("create");
@@ -356,7 +423,9 @@ export default function PayablesPage() {
     setCategory(selectedRow.category);
     setBeneficiary(selectedRow.supplierName ? "" : selectedRow.beneficiary);
     setSupplierId(selectedRow.supplierId ? String(selectedRow.supplierId) : "");
+    setAmountMode("TOTAL");
     setAmount(formatCurrencyInput(String(selectedRow.amount.toFixed(2))));
+    setInstallmentCount("1");
     setDueDate(selectedRow.dueDate.slice(0, 10));
     setPlannedPaymentTypeId(
       selectedRow.plannedPaymentTypeId
@@ -368,13 +437,20 @@ export default function PayablesPage() {
 
   const handleSubmitPayable = async () => {
     try {
+      const parsedInstallmentCount = Math.max(1, Number(installmentCount) || 1);
+      const rawAmount = parseCurrencyToNumber(amount);
+      const effectiveTotalAmount =
+        payableFormMode === "create" && amountMode === "INSTALLMENT"
+          ? roundCurrency(rawAmount * parsedInstallmentCount)
+          : rawAmount;
       const payload = {
         scope: "LOJA" as Scope,
         description: normalizeUppercasePayloadText(description),
         category: normalizeUppercasePayloadText(category),
         beneficiary: normalizeUppercasePayloadText(beneficiary),
         supplierId: supplierId ? Number(supplierId) : null,
-        amount: parseCurrencyToNumber(amount),
+        amount: effectiveTotalAmount,
+        installmentCount: parsedInstallmentCount,
         dueDate,
         plannedPaymentTypeId: plannedPaymentTypeId
           ? Number(plannedPaymentTypeId)
@@ -382,12 +458,12 @@ export default function PayablesPage() {
       };
 
       if (payableFormMode === "create") {
-        await postRequest("/payables", payload);
+        const data = (await postRequest("/payables", payload)) as CreatePayableResponse;
         setToast({
           open: true,
           tone: "success",
           title: "Conta a pagar",
-          message: "Conta a pagar criada com sucesso.",
+          message: data?.message || "Conta a pagar criada com sucesso.",
         });
       } else {
         if (!selectedRow) return;
@@ -711,6 +787,24 @@ export default function PayablesPage() {
     }
   };
 
+  const parsedRawAmount = parseCurrencyToNumber(amount);
+  const parsedInstallmentCount = Math.max(1, Number(installmentCount) || 1);
+  const parsedTotalAmount =
+    payableFormMode === "create" && amountMode === "INSTALLMENT"
+      ? roundCurrency(parsedRawAmount * parsedInstallmentCount)
+      : parsedRawAmount;
+  const installmentsPreview =
+    payableFormMode === "create"
+      ? buildPayableInstallmentsPreview(
+          parsedTotalAmount,
+          parsedInstallmentCount,
+          dueDate,
+        )
+      : [];
+  const previewMidpoint = Math.ceil(installmentsPreview.length / 2);
+  const leftInstallmentsPreview = installmentsPreview.slice(0, previewMidpoint);
+  const rightInstallmentsPreview = installmentsPreview.slice(previewMidpoint);
+
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
       <h1 className="mb-3 pb-1 pt-8 font-editorial text-[2rem] font-extralight leading-[0.98] tracking-tight text-primary md:text-[2.35rem] md:leading-tight">
@@ -730,104 +824,221 @@ export default function PayablesPage() {
         }
         subtitle="Preencha os dados da conta a pagar."
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Descrição
-            </label>
-            <input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Categoria
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-              >
-                <option value="">Selecione...</option>
-                {financialCategories.map((item) => (
-                  <option key={item.id} value={item.description}>
-                    {item.description}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => {
-                  setNewCategoryDescription(category.trim());
-                  setCategoryModalOpen(true);
-                }}
-                className="h-11 rounded border border-outline-variant/60 bg-white px-4 text-lg font-semibold text-primary"
-                aria-label="Adicionar categoria"
-              >
-                +
-              </button>
+        <div className="space-y-4">
+          <section className="rounded-2xl border border-outline-variant/50 bg-surface-lowest px-4 py-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-1 block text-sm font-semibold text-primary">
+                  Descrição
+                </label>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-primary">
+                  Categoria
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                  >
+                    <option value="">Selecione...</option>
+                    {financialCategories.map((item) => (
+                      <option key={item.id} value={item.description}>
+                        {item.description}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewCategoryDescription(category.trim());
+                      setCategoryModalOpen(true);
+                    }}
+                    className="h-11 rounded border border-outline-variant/60 bg-white px-4 text-lg font-semibold text-primary"
+                    aria-label="Adicionar categoria"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-primary">
+                  Fornecedor
+                </label>
+                <select
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                >
+                  <option value="">Selecione...</option>
+                  {suppliers.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Fornecedor
-            </label>
-            <select
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {suppliers.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Valor
-            </label>
-            <input
-              value={amount}
-              onChange={(e) => setAmount(formatCurrencyInput(e.target.value))}
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Vencimento
-            </label>
-            <DatePickerInput
-              value={dueDate}
-              onChange={setDueDate}
-              format="iso"
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Forma de pagamento
-            </label>
-            <select
-              value={plannedPaymentTypeId}
-              onChange={(e) => setPlannedPaymentTypeId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {paymentTypes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex gap-2 md:col-span-2">
+          </section>
+
+          <section className=" bg-white px-4 py-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              {payableFormMode === "create" ? (
+                <div className="md:col-span-2">
+                  <div className="flex flex-wrap gap-5">
+                    <label className="flex items-center gap-2 text-sm font-medium text-primary">
+                      <input
+                        type="radio"
+                        name="payable-amount-mode"
+                        checked={amountMode === "INSTALLMENT"}
+                        onChange={() => setAmountMode("INSTALLMENT")}
+                        className="h-4 w-4 border-outline-variant/60 text-primary focus:ring-primary"
+                      />
+                      Valor da parcela
+                    </label>
+                    <label className="flex items-center gap-2 text-sm font-medium text-primary">
+                      <input
+                        type="radio"
+                        name="payable-amount-mode"
+                        checked={amountMode === "TOTAL"}
+                        onChange={() => setAmountMode("TOTAL")}
+                        className="h-4 w-4 border-outline-variant/60 text-primary focus:ring-primary"
+                      />
+                      Valor total
+                    </label>
+                  </div>
+                </div>
+              ) : null}
+              {payableFormMode === "create" ? (
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Quantidade de parcelas
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={installmentCount}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      if (!nextValue) {
+                        setInstallmentCount("");
+                        return;
+                      }
+
+                      setInstallmentCount(
+                        String(Math.max(1, Number(nextValue) || 1)),
+                      );
+                    }}
+                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                  />
+                </div>
+              ) : null}
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-primary">
+                  {payableFormMode === "create"
+                    ? amountMode === "INSTALLMENT"
+                      ? "Valor da parcela"
+                      : "Valor total"
+                    : "Valor"}
+                </label>
+                <input
+                  value={amount}
+                  onChange={(e) =>
+                    setAmount(formatCurrencyInput(e.target.value))
+                  }
+                  placeholder="R$ 0,00"
+                  className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                />
+                {payableFormMode === "create" ? (
+                  <p className="mt-1 text-xs text-neutral-700">
+                    {amountMode === "INSTALLMENT"
+                      ? `Total calculado automaticamente: ${formatCurrency(parsedTotalAmount)}`
+                      : "O valor total será distribuído entre as parcelas."}
+                  </p>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-primary">
+                  {payableFormMode === "create"
+                    ? "Primeiro vencimento"
+                    : "Vencimento"}
+                </label>
+                <DatePickerInput
+                  value={dueDate}
+                  onChange={setDueDate}
+                  format="iso"
+                  className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-semibold text-primary">
+                  Forma de pagamento
+                </label>
+                <select
+                  value={plannedPaymentTypeId}
+                  onChange={(e) => setPlannedPaymentTypeId(e.target.value)}
+                  className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                >
+                  <option value="">Selecione...</option>
+                  {paymentTypes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </section>
+          {payableFormMode === "create" && installmentsPreview.length > 0 ? (
+            <div className="md:col-span-2 rounded border border-outline-variant/60 bg-white px-3 py-3">
+              <p className="text-sm font-semibold text-primary">
+                Prévia das parcelas
+              </p>
+              <p className="mt-1 text-sm text-neutral-700">
+                {amountMode === "INSTALLMENT"
+                  ? `${parsedInstallmentCount} parcelas de ${formatCurrency(parsedRawAmount)} cada. Total final: ${formatCurrency(parsedTotalAmount)}.`
+                  : `${parsedInstallmentCount} parcelas geradas a partir do total de ${formatCurrency(parsedTotalAmount)}.`}
+              </p>
+              <div className="mt-2 grid gap-2 md:grid-cols-2">
+                <div className="grid gap-2">
+                  {leftInstallmentsPreview.map((item) => (
+                    <div
+                      key={`${item.installmentNumber}-${item.dueDate}`}
+                      className="rounded bg-surface-lowest px-3 py-2 text-sm text-primary"
+                    >
+                      <span className="font-semibold">
+                        {item.installmentNumber}/{parsedInstallmentCount}
+                      </span>{" "}
+                      • {formatCurrency(item.amount)} • vence em{" "}
+                      {formatDate(item.dueDate)}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-2">
+                  {rightInstallmentsPreview.map((item) => (
+                    <div
+                      key={`${item.installmentNumber}-${item.dueDate}`}
+                      className="rounded bg-surface-lowest px-3 py-2 text-sm text-primary"
+                    >
+                      <span className="font-semibold">
+                        {item.installmentNumber}/{parsedInstallmentCount}
+                      </span>{" "}
+                      • {formatCurrency(item.amount)} • vence em{" "}
+                      {formatDate(item.dueDate)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={handleSubmitPayable}
@@ -1211,11 +1422,7 @@ export default function PayablesPage() {
             >
               Confirmar pagamento
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={resetPaymentFlow}
-            >
+            <Button variant="secondary" size="sm" onClick={resetPaymentFlow}>
               Cancelar
             </Button>
           </div>
@@ -1243,11 +1450,7 @@ export default function PayablesPage() {
             >
               Confirmar
             </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={resetPaymentFlow}
-            >
+            <Button variant="secondary" size="sm" onClick={resetPaymentFlow}>
               Cancelar
             </Button>
           </div>
