@@ -16,12 +16,19 @@ import ReadyMadeClothing, {
 import { SaleStepper } from "../components/SaleStepper";
 import type { ICustomer } from "../interfaces/ICustomer";
 import {
-  deleteRequest,
   getRequest,
   postRequest,
   updateRequest,
 } from "../services/request";
+import {
+  deleteSaleDraftRequest,
+  getSaleDraftRequest,
+  persistSaleDraftKeepalive,
+  upsertSaleDraftRequest,
+  type SaleDraftResponse,
+} from "../services/saleDraft";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
+import { getStoredUserId } from "../utils/auth";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
 import { parseLegacyOrIsoDate } from "../utils/legacyDate";
 
@@ -161,6 +168,7 @@ interface ExistingQuoteResponse {
     name: string;
   } | null;
   finalAmount: number;
+  updatedAt: string;
   dueDate: string | null;
   installmentCount: number;
   paymentType?: {
@@ -218,11 +226,52 @@ type ToastState = {
   message: string;
 };
 
+type SaleDraftPayload = {
+  version: 1;
+  contextKey: string;
+  quoteId: number | null;
+  quoteMode: string | null;
+  returnTo: string;
+  step: number;
+  search: string;
+  selectedCustomer: CustomerOption | null;
+  selectedCustomerMeasurements: Record<string, string>;
+  selectedCategoryCode: SaleCategoryCode | "";
+  selectedClothingSubtype: ClothingSubtype | "";
+  readyMadeProducts: ReadyMadeProductDraft[];
+  customMadeProducts: CustomMadeProductDraft[];
+  accessoryProducts: GeneralCatalogProductDraft[];
+  serviceProducts: GeneralCatalogProductDraft[];
+  miscProducts: GeneralCatalogProductDraft[];
+  paymentTypeId: string;
+  installmentCount: string;
+  installmentIntervalDays: string;
+  dueDate: string;
+  entryAmount: string;
+  entryPaymentTypeId: string;
+  entryReferenceCode: string;
+  paymentReferenceCode: string;
+  cashReceivedAmount: string;
+  useCustomerCredit: boolean;
+  customerCreditAmountInput: string;
+  doesNotGenerateDebt: boolean;
+  internalReason: string;
+  draftSaleId: number | null;
+  editingSaleStatus: string | null;
+};
+
+type LocalSaleDraftRecord = {
+  version: 1;
+  payload: SaleDraftPayload;
+  lastClientSavedAt: string;
+};
+
 const EMPTY_TOAST: ToastState = {
   open: false,
   tone: "success",
   message: "",
 };
+const SALE_DRAFT_STORAGE_VERSION = 1;
 
 const CATEGORY_CODE_BY_ID: Record<number, SaleCategoryCode> = {
   1: "CLOTHING",
@@ -506,6 +555,48 @@ function getSaveMessageTone(message: string): ToastState["tone"] {
   return "error";
 }
 
+function createSaleDraftContextKey(
+  quoteId: string | null,
+  quoteMode: string | null,
+) {
+  const normalizedQuoteId = Number(quoteId);
+
+  if (Number.isInteger(normalizedQuoteId) && normalizedQuoteId > 0) {
+    return `sale:${normalizedQuoteId}:${quoteMode || "default"}`;
+  }
+
+  return "sale:new";
+}
+
+function toDraftTimestamp(value?: string | null) {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function hasSaleDraftPayloadContent(payload: SaleDraftPayload | null | undefined) {
+  if (!payload) return false;
+
+  return Boolean(
+    payload.search.trim() ||
+      payload.selectedCustomer ||
+      payload.readyMadeProducts.length ||
+      payload.customMadeProducts.length ||
+      payload.accessoryProducts.length ||
+      payload.serviceProducts.length ||
+      payload.miscProducts.length ||
+      payload.paymentTypeId ||
+      payload.entryAmount.trim() ||
+      payload.entryPaymentTypeId ||
+      payload.entryReferenceCode.trim() ||
+      payload.paymentReferenceCode.trim() ||
+      payload.cashReceivedAmount.trim() ||
+      payload.useCustomerCredit ||
+      payload.customerCreditAmountInput.trim() ||
+      payload.doesNotGenerateDebt ||
+      payload.internalReason.trim(),
+  );
+}
+
 export default function NewSalePage() {
   const [step, setStep] = useState(1);
   const navigate = useNavigate();
@@ -513,7 +604,21 @@ export default function NewSalePage() {
   const quoteIdParam = searchParams.get("quoteId");
   const quoteModeParam = searchParams.get("mode");
   const returnToParam = searchParams.get("returnTo") || "/vendas";
+  const storedUserId = useMemo(() => getStoredUserId(), []);
+  const saleDraftContextKey = useMemo(
+    () => createSaleDraftContextKey(quoteIdParam, quoteModeParam),
+    [quoteIdParam, quoteModeParam],
+  );
+  const saleDraftStorageKey = useMemo(
+    () => `sale-draft:v${SALE_DRAFT_STORAGE_VERSION}:${storedUserId || "anonymous"}`,
+    [storedUserId],
+  );
   const paymentDraftHydrationRef = useRef(false);
+  const restoringSaleDraftRef = useRef(false);
+  const saleDraftHydrationRef = useRef(false);
+  const saleDraftReadyRef = useRef(false);
+  const localDraftTimerRef = useRef<number | null>(null);
+  const remoteDraftTimerRef = useRef<number | null>(null);
 
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [search, setSearch] = useState("");
@@ -597,6 +702,9 @@ export default function NewSalePage() {
   const [doesNotGenerateDebt, setDoesNotGenerateDebt] = useState(false);
   const [internalReason, setInternalReason] = useState("");
   const [pendingExitPath, setPendingExitPath] = useState<string | null>(null);
+  const [loadedQuoteUpdatedAt, setLoadedQuoteUpdatedAt] = useState<string | null>(
+    null,
+  );
 
   const formatDate = (dateString: string) =>
     new Intl.DateTimeFormat("pt-BR").format(getDateFromInputValue(dateString));
@@ -798,6 +906,7 @@ export default function NewSalePage() {
     const quoteId = Number(quoteIdParam);
     if (!Number.isInteger(quoteId) || quoteId <= 0) {
       setEditingSaleStatus(null);
+      setLoadedQuoteUpdatedAt(null);
       return;
     }
 
@@ -821,6 +930,7 @@ export default function NewSalePage() {
         }
 
         setEditingSaleStatus(data.status);
+        setLoadedQuoteUpdatedAt(data.updatedAt || null);
         setDraftSaleId(data.id);
         setSelectedCustomer(
           data.customer
@@ -883,6 +993,7 @@ export default function NewSalePage() {
             : "Orçamento carregado. Informe a forma de pagamento para concluir a venda.",
         );
       } catch (error: unknown) {
+        setLoadedQuoteUpdatedAt(null);
         setSaveMessage(
           getUserFacingApiErrorMessage(
             error,
@@ -896,33 +1007,6 @@ export default function NewSalePage() {
 
     void loadExistingQuote();
   }, [quoteIdParam, quoteModeParam]);
-
-  const filteredCustomers = useMemo(() => customers, [customers]);
-  const hasOpenSaleDraft = tableItems.length > 0 || draftSaleId !== null;
-
-  useEffect(() => {
-    const handleNavigationIntent = (event: Event) => {
-      const customEvent = event as CustomEvent<{ path?: string }>;
-
-      if (!hasOpenSaleDraft) {
-        return;
-      }
-
-      event.preventDefault();
-      setPendingExitPath(customEvent.detail?.path || "/vendas");
-      setCancelSaleModalOpen(true);
-    };
-
-    window.addEventListener(
-      "app:navigate-intent",
-      handleNavigationIntent as EventListener,
-    );
-    return () =>
-      window.removeEventListener(
-        "app:navigate-intent",
-        handleNavigationIntent as EventListener,
-      );
-  }, [hasOpenSaleDraft]);
 
   const selectedTypesLabel = useMemo(() => {
     const labels = Array.from(new Set(tableItems.map((item) => item.type)));
@@ -1221,6 +1305,467 @@ export default function NewSalePage() {
     setMiscProducts(drafts.misc);
     setTableItems(buildTableItemsFromDraftCollections(drafts, formatCurrency));
   }, []);
+
+  const buildCurrentSaleDraftPayload = useCallback(
+    (): SaleDraftPayload => ({
+      version: 1,
+      contextKey: saleDraftContextKey,
+      quoteId: quoteIdParam ? Number(quoteIdParam) || null : null,
+      quoteMode: quoteModeParam || null,
+      returnTo: returnToParam,
+      step,
+      search,
+      selectedCustomer,
+      selectedCustomerMeasurements,
+      selectedCategoryCode,
+      selectedClothingSubtype,
+      readyMadeProducts,
+      customMadeProducts,
+      accessoryProducts,
+      serviceProducts,
+      miscProducts,
+      paymentTypeId,
+      installmentCount,
+      installmentIntervalDays,
+      dueDate,
+      entryAmount,
+      entryPaymentTypeId,
+      entryReferenceCode,
+      paymentReferenceCode,
+      cashReceivedAmount,
+      useCustomerCredit,
+      customerCreditAmountInput,
+      doesNotGenerateDebt,
+      internalReason,
+      draftSaleId,
+      editingSaleStatus,
+    }),
+    [
+      accessoryProducts,
+      cashReceivedAmount,
+      customMadeProducts,
+      customerCreditAmountInput,
+      doesNotGenerateDebt,
+      draftSaleId,
+      dueDate,
+      editingSaleStatus,
+      entryAmount,
+      entryPaymentTypeId,
+      entryReferenceCode,
+      installmentCount,
+      installmentIntervalDays,
+      internalReason,
+      miscProducts,
+      paymentReferenceCode,
+      paymentTypeId,
+      quoteIdParam,
+      quoteModeParam,
+      readyMadeProducts,
+      returnToParam,
+      saleDraftContextKey,
+      search,
+      selectedCategoryCode,
+      selectedClothingSubtype,
+      selectedCustomer,
+      selectedCustomerMeasurements,
+      serviceProducts,
+      step,
+      useCustomerCredit,
+    ],
+  );
+
+  const persistSaleDraftLocally = useCallback(
+    (record: LocalSaleDraftRecord) => {
+      try {
+        localStorage.setItem(saleDraftStorageKey, JSON.stringify(record));
+      } catch {
+        // Best-effort local protection.
+      }
+    },
+    [saleDraftStorageKey],
+  );
+
+  const readLocalSaleDraft = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(saleDraftStorageKey);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as LocalSaleDraftRecord | null;
+      if (
+        !parsed ||
+        parsed.version !== 1 ||
+        !parsed.payload ||
+        typeof parsed.payload !== "object"
+      ) {
+        return null;
+      }
+
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, [saleDraftStorageKey]);
+
+  const clearPersistedSaleDraft = useCallback(async () => {
+    try {
+      localStorage.removeItem(saleDraftStorageKey);
+    } catch {
+      // Ignore local cleanup failures.
+    }
+
+    try {
+      await deleteSaleDraftRequest();
+    } catch {
+      // Ignore remote cleanup failures.
+    }
+  }, [saleDraftStorageKey]);
+
+  const restoreSaleDraftPayload = useCallback(
+    (payload: SaleDraftPayload) => {
+      restoringSaleDraftRef.current = true;
+      saleDraftHydrationRef.current = true;
+      paymentDraftHydrationRef.current = true;
+
+      setDraftSaleId(payload.draftSaleId ?? null);
+      setEditingSaleStatus(payload.editingSaleStatus ?? null);
+      setSelectedCustomer(payload.selectedCustomer ?? null);
+      setSearch(
+        payload.search ||
+          normalizeCustomerDisplayName(payload.selectedCustomer?.name),
+      );
+      setSelectedCustomerMeasurements(payload.selectedCustomerMeasurements || {});
+      setSelectedCategoryCode(payload.selectedCategoryCode || "");
+      setSelectedClothingSubtype(payload.selectedClothingSubtype || "");
+      applyDraftCollections({
+        readyMade: Array.isArray(payload.readyMadeProducts)
+          ? payload.readyMadeProducts
+          : [],
+        customMade: Array.isArray(payload.customMadeProducts)
+          ? payload.customMadeProducts
+          : [],
+        accessory: Array.isArray(payload.accessoryProducts)
+          ? payload.accessoryProducts
+          : [],
+        service: Array.isArray(payload.serviceProducts)
+          ? payload.serviceProducts
+          : [],
+        misc: Array.isArray(payload.miscProducts) ? payload.miscProducts : [],
+      });
+      setPaymentTypeId(payload.paymentTypeId || "");
+      setInstallmentCount(payload.installmentCount || "1");
+      setInstallmentIntervalDays(payload.installmentIntervalDays || "30");
+      setDueDate(payload.dueDate || getDueDateInputValue());
+      setEntryAmount(payload.entryAmount || "");
+      setEntryPaymentTypeId(payload.entryPaymentTypeId || "");
+      setEntryReferenceCode(payload.entryReferenceCode || "");
+      setPaymentReferenceCode(payload.paymentReferenceCode || "");
+      setCashReceivedAmount(payload.cashReceivedAmount || "");
+      setUseCustomerCredit(Boolean(payload.useCustomerCredit));
+      setCustomerCreditAmountInput(payload.customerCreditAmountInput || "");
+      setDoesNotGenerateDebt(Boolean(payload.doesNotGenerateDebt));
+      setInternalReason(payload.internalReason || "");
+      setStep(Math.max(1, Math.min(4, Number(payload.step) || 1)));
+
+      window.setTimeout(() => {
+        saleDraftHydrationRef.current = false;
+      }, 0);
+    },
+    [applyDraftCollections],
+  );
+
+  useEffect(() => {
+    if (loadingExistingQuote) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const restorePersistedDraft = async () => {
+      saleDraftReadyRef.current = false;
+      saleDraftHydrationRef.current = true;
+
+      try {
+        const localDraft = readLocalSaleDraft();
+        let remoteDraft: SaleDraftResponse<SaleDraftPayload> = null;
+
+        try {
+          remoteDraft = await getSaleDraftRequest<SaleDraftPayload>();
+        } catch {
+          remoteDraft = null;
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        const matchingLocalDraft =
+          localDraft?.payload?.contextKey === saleDraftContextKey
+            ? localDraft
+            : null;
+        const matchingRemoteDraft =
+          remoteDraft?.payload?.contextKey === saleDraftContextKey
+            ? remoteDraft
+            : null;
+
+        const localDraftTimestamp = toDraftTimestamp(
+          matchingLocalDraft?.lastClientSavedAt,
+        );
+        const remoteDraftTimestamp = Math.max(
+          toDraftTimestamp(matchingRemoteDraft?.lastServerSavedAt),
+          toDraftTimestamp(matchingRemoteDraft?.lastClientSavedAt),
+        );
+        const quoteTimestamp = toDraftTimestamp(loadedQuoteUpdatedAt);
+
+        let selectedDraftPayload: SaleDraftPayload | null = null;
+        let selectedDraftSavedAt = "";
+
+        if (matchingLocalDraft && matchingRemoteDraft) {
+          if (localDraftTimestamp >= remoteDraftTimestamp) {
+            selectedDraftPayload = matchingLocalDraft.payload;
+            selectedDraftSavedAt = matchingLocalDraft.lastClientSavedAt;
+          } else {
+            selectedDraftPayload = matchingRemoteDraft.payload;
+            selectedDraftSavedAt =
+              matchingRemoteDraft.lastServerSavedAt ||
+              matchingRemoteDraft.lastClientSavedAt ||
+              "";
+          }
+        } else if (matchingLocalDraft) {
+          selectedDraftPayload = matchingLocalDraft.payload;
+          selectedDraftSavedAt = matchingLocalDraft.lastClientSavedAt;
+        } else if (matchingRemoteDraft) {
+          selectedDraftPayload = matchingRemoteDraft.payload;
+          selectedDraftSavedAt =
+            matchingRemoteDraft.lastServerSavedAt ||
+            matchingRemoteDraft.lastClientSavedAt ||
+            "";
+        }
+
+        if (
+          selectedDraftPayload &&
+          hasSaleDraftPayloadContent(selectedDraftPayload) &&
+          toDraftTimestamp(selectedDraftSavedAt) >= quoteTimestamp
+        ) {
+          restoreSaleDraftPayload(selectedDraftPayload);
+          setSaveMessage(
+            "Encontramos uma venda não finalizada e continuamos de onde você parou.",
+          );
+        } else if (
+          matchingRemoteDraft &&
+          hasSaleDraftPayloadContent(matchingRemoteDraft.payload) &&
+          remoteDraftTimestamp > localDraftTimestamp
+        ) {
+          persistSaleDraftLocally({
+            version: 1,
+            payload: matchingRemoteDraft.payload,
+            lastClientSavedAt:
+              matchingRemoteDraft.lastClientSavedAt ||
+              matchingRemoteDraft.lastServerSavedAt ||
+              new Date().toISOString(),
+          });
+        }
+      } finally {
+        saleDraftReadyRef.current = true;
+        window.setTimeout(() => {
+          saleDraftHydrationRef.current = false;
+        }, 0);
+      }
+    };
+
+    void restorePersistedDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    loadedQuoteUpdatedAt,
+    loadingExistingQuote,
+    persistSaleDraftLocally,
+    readLocalSaleDraft,
+    restoreSaleDraftPayload,
+    saleDraftContextKey,
+  ]);
+
+  const filteredCustomers = useMemo(() => customers, [customers]);
+  const hasOpenSaleDraft =
+    hasSaleDraftPayloadContent(buildCurrentSaleDraftPayload()) ||
+    draftSaleId !== null;
+  const shouldBlockSaleExit = hasOpenSaleDraft || isSaving;
+
+  useEffect(() => {
+    if (!saleDraftReadyRef.current || saleDraftHydrationRef.current) {
+      return;
+    }
+
+    if (localDraftTimerRef.current !== null) {
+      window.clearTimeout(localDraftTimerRef.current);
+    }
+
+    if (remoteDraftTimerRef.current !== null) {
+      window.clearTimeout(remoteDraftTimerRef.current);
+    }
+
+    if (!hasOpenSaleDraft) {
+      try {
+        localStorage.removeItem(saleDraftStorageKey);
+      } catch {
+        // Ignore local cleanup failures.
+      }
+
+      remoteDraftTimerRef.current = window.setTimeout(() => {
+        void deleteSaleDraftRequest().catch(() => {});
+      }, 500);
+
+      return () => {
+        if (remoteDraftTimerRef.current !== null) {
+          window.clearTimeout(remoteDraftTimerRef.current);
+        }
+      };
+    }
+
+    const payload = buildCurrentSaleDraftPayload();
+    const lastClientSavedAt = new Date().toISOString();
+    const localRecord: LocalSaleDraftRecord = {
+      version: 1,
+      payload,
+      lastClientSavedAt,
+    };
+
+    localDraftTimerRef.current = window.setTimeout(() => {
+      persistSaleDraftLocally(localRecord);
+    }, 150);
+
+    remoteDraftTimerRef.current = window.setTimeout(() => {
+      void upsertSaleDraftRequest({
+        payload: payload as unknown as Record<string, unknown>,
+        lastClientSavedAt,
+      }).catch(() => {});
+    }, 1200);
+
+    return () => {
+      if (localDraftTimerRef.current !== null) {
+        window.clearTimeout(localDraftTimerRef.current);
+      }
+      if (remoteDraftTimerRef.current !== null) {
+        window.clearTimeout(remoteDraftTimerRef.current);
+      }
+    };
+  }, [
+    buildCurrentSaleDraftPayload,
+    hasOpenSaleDraft,
+    persistSaleDraftLocally,
+    saleDraftStorageKey,
+  ]);
+
+  const flushSaleDraft = useCallback(
+    async (options?: { keepalive?: boolean }) => {
+      const payload = buildCurrentSaleDraftPayload();
+
+      if (!hasSaleDraftPayloadContent(payload)) {
+        try {
+          localStorage.removeItem(saleDraftStorageKey);
+        } catch {
+          // Ignore local cleanup failures.
+        }
+
+        if (!options?.keepalive) {
+          try {
+            await deleteSaleDraftRequest();
+          } catch {
+            // Ignore remote cleanup failures.
+          }
+        }
+
+        return;
+      }
+
+      const lastClientSavedAt = new Date().toISOString();
+      persistSaleDraftLocally({
+        version: 1,
+        payload,
+        lastClientSavedAt,
+      });
+
+      if (options?.keepalive) {
+        void persistSaleDraftKeepalive({
+          payload: payload as unknown as Record<string, unknown>,
+          lastClientSavedAt,
+        });
+        return;
+      }
+
+      try {
+        await upsertSaleDraftRequest({
+          payload: payload as unknown as Record<string, unknown>,
+          lastClientSavedAt,
+        });
+      } catch {
+        // Ignore remote save failures and preserve local draft.
+      }
+    },
+    [buildCurrentSaleDraftPayload, persistSaleDraftLocally, saleDraftStorageKey],
+  );
+
+  useEffect(() => {
+    const handleNavigationIntent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ path?: string }>;
+
+      if (!shouldBlockSaleExit) {
+        return;
+      }
+
+      event.preventDefault();
+      setPendingExitPath(customEvent.detail?.path || "/vendas");
+      setCancelSaleModalOpen(true);
+    };
+
+    window.addEventListener(
+      "app:navigate-intent",
+      handleNavigationIntent as EventListener,
+    );
+    return () =>
+      window.removeEventListener(
+        "app:navigate-intent",
+        handleNavigationIntent as EventListener,
+      );
+  }, [shouldBlockSaleExit]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isSaving) return;
+
+      void flushSaleDraft({ keepalive: true });
+      event.preventDefault();
+      event.returnValue = "";
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [flushSaleDraft, isSaving]);
+
+  useEffect(() => {
+    if (!shouldBlockSaleExit) {
+      return;
+    }
+
+    window.history.pushState({ saleDraftGuard: true }, "", window.location.href);
+
+    const handlePopState = () => {
+      if (!shouldBlockSaleExit) return;
+
+      window.history.pushState(
+        { saleDraftGuard: true },
+        "",
+        window.location.href,
+      );
+      void flushSaleDraft({ keepalive: true });
+      setPendingExitPath(returnToParam || "/vendas");
+      setCancelSaleModalOpen(true);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [flushSaleDraft, returnToParam, shouldBlockSaleExit]);
 
   const buildPaymentDraftPayload = () => ({
     paymentTypeId:
@@ -1521,6 +2066,11 @@ export default function NewSalePage() {
   ]);
 
   useEffect(() => {
+    if (restoringSaleDraftRef.current) {
+      restoringSaleDraftRef.current = false;
+      return;
+    }
+
     if (!doesNotGenerateDebt) {
       return;
     }
@@ -2171,18 +2721,13 @@ export default function NewSalePage() {
   };
 
   const handleBackToStart = () => {
-    if (isEditingCompletedSale) {
-      navigate(returnToParam);
-      return;
-    }
-
-    if (hasOpenSaleDraft) {
-      setPendingExitPath("/vendas");
+    if (shouldBlockSaleExit) {
+      setPendingExitPath(isEditingCompletedSale ? returnToParam : "/vendas");
       setCancelSaleModalOpen(true);
       return;
     }
 
-    navigate("/vendas");
+    navigate(isEditingCompletedSale ? returnToParam : "/vendas");
   };
 
   const handleContinueOpenSale = () => {
@@ -2192,66 +2737,9 @@ export default function NewSalePage() {
 
   const handleDiscardOpenSale = async () => {
     setCancelSaleModalOpen(false);
-
-    if (draftSaleId !== null) {
-      try {
-        setIsSaving(true);
-        setSaveMessage("");
-        await deleteRequest(`/sales/${draftSaleId}`, {});
-      } catch (error: unknown) {
-        setSaveMessage(
-          getUserFacingApiErrorMessage(
-            error,
-            "Não foi possível descartar o orçamento.",
-          ),
-        );
-        setIsSaving(false);
-        return;
-      } finally {
-        setIsSaving(false);
-      }
-    }
-
+    await clearPersistedSaleDraft();
     await resetSaleForm();
     navigate(pendingExitPath || "/vendas");
-  };
-
-  const createDraftSale = async () => {
-    if (!selectedCustomer || tableItems.length === 0) {
-      return null;
-    }
-
-    if (hasGeneratedQuote) {
-      return draftSaleId;
-    }
-
-    try {
-      setIsSaving(true);
-      setSaveMessage("");
-      const payload = buildQuotePayload();
-
-      if (!payload) {
-        return null;
-      }
-
-      const created = await postRequest("/sales", payload);
-
-      const nextDraftSaleId = Number((created as { id?: number }).id);
-      setDraftSaleId(nextDraftSaleId);
-      setSaveMessage(
-        "Orçamento gerado com sucesso. Agora informe a forma de pagamento para concluir o pedido.",
-      );
-      return nextDraftSaleId;
-    } catch (error: unknown) {
-      setSaveMessage(
-        getUserFacingApiErrorMessage(
-          error,
-          "Não foi possível gerar o orçamento.",
-        ),
-      );
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   const saveOrUpdateDraftSale = async () => {
@@ -2262,6 +2750,7 @@ export default function NewSalePage() {
     try {
       setIsSaving(true);
       setSaveMessage("");
+      await flushSaleDraft();
       const payload = buildQuotePayload();
 
       if (!payload) {
@@ -2285,10 +2774,10 @@ export default function NewSalePage() {
       return nextDraftSaleId;
     } catch (error: unknown) {
       setSaveMessage(
-        getUserFacingApiErrorMessage(
+        `${getUserFacingApiErrorMessage(
           error,
           "Não foi possível salvar o orçamento.",
-        ),
+        )} O rascunho desta venda continua salvo.`,
       );
       return null;
     } finally {
@@ -2303,21 +2792,8 @@ export default function NewSalePage() {
       return;
     }
 
+    await clearPersistedSaleDraft();
     navigate(`/vendas?tab=budgets&highlight=${createdDraftSaleId}`);
-  };
-
-  const handleSaveQuoteAndExit = async () => {
-    const persistedDraftSaleId = await saveOrUpdateDraftSale();
-
-    if (!persistedDraftSaleId) {
-      return;
-    }
-
-    setCancelSaleModalOpen(false);
-    navigate(
-      pendingExitPath ||
-        `/vendas?tab=budgets&highlight=${persistedDraftSaleId}`,
-    );
   };
 
   const handleSaveCompletedSale = async () => {
@@ -2328,6 +2804,7 @@ export default function NewSalePage() {
     try {
       setIsSaving(true);
       setSaveMessage("");
+      await flushSaleDraft();
       const payload = buildQuotePayload();
 
       if (!payload) {
@@ -2335,72 +2812,23 @@ export default function NewSalePage() {
       }
 
       await updateRequest(`/sales/${draftSaleId}`, payload);
+      await clearPersistedSaleDraft();
       await resetSaleForm();
       navigate(returnToParam);
     } catch (error: unknown) {
       setSaveMessage(
-        getUserFacingApiErrorMessage(
+        `${getUserFacingApiErrorMessage(
           error,
           "Não foi possível salvar a venda finalizada.",
-        ),
+        )} O rascunho desta venda continua salvo.`,
       );
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleStartFinalizeSale = async () => {
-    const createdDraftSaleId = await createDraftSale();
-
-    if (!createdDraftSaleId) {
-      return;
-    }
-
-    setSaveMessage(
-      "Orçamento gerado com sucesso. Agora informe a forma de pagamento para concluir o pedido.",
-    );
-    setStep(4);
-  };
-
-  const handleFinalizeQuote = async () => {
-    if (!selectedCustomer || tableItems.length === 0 || !draftSaleId) {
-      return;
-    }
-
-    try {
-      setIsSaving(true);
-      setSaveMessage("");
-
-      const payload = buildFinalizePayload();
-      if (!payload) {
-        return;
-      }
-
-      await updateRequest(`/sales/${draftSaleId}/finalize`, payload);
-
-      await resetSaleForm();
-      navigate("/vendas");
-    } catch (error: unknown) {
-      const message = getUserFacingApiErrorMessage(
-        error,
-        "Não foi possível concluir o pedido.",
-      );
-
-      if (
-        message.includes("Existe um caixa da loja aberto de dia anterior") ||
-        message.includes("Feche o caixa antes de continuar") ||
-        message.includes("Abra o caixa da loja antes de registrar")
-      ) {
-        await ensureCashSessionBeforeCashPayment();
-      } else {
-        setSaveMessage(message);
-      }
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleOpenPaymentStep = async () => {
+    await flushSaleDraft();
     setSaveMessage("");
     setStep(4);
   };
@@ -2428,6 +2856,7 @@ export default function NewSalePage() {
     try {
       setIsSaving(true);
       setSaveMessage("");
+      await flushSaleDraft();
       const payload = buildFinalizePayload();
 
       if (!payload) {
@@ -2440,6 +2869,7 @@ export default function NewSalePage() {
         await postRequest("/sales", payload);
       }
 
+      await clearPersistedSaleDraft();
       await resetSaleForm();
       navigate("/vendas");
     } catch (error: unknown) {
@@ -2455,7 +2885,7 @@ export default function NewSalePage() {
       ) {
         await ensureCashSessionBeforeCashPayment();
       } else {
-        setSaveMessage(message);
+        setSaveMessage(`${message} O rascunho desta venda continua salvo.`);
       }
     } finally {
       setIsSaving(false);
@@ -2463,8 +2893,6 @@ export default function NewSalePage() {
   };
 
   void handleSaveSale;
-  void handleStartFinalizeSale;
-  void handleFinalizeQuote;
 
   const currentModalType = resolveModalTypeFromSelection();
 
@@ -3552,8 +3980,8 @@ export default function NewSalePage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-neutral-700">
-            Deseja gerar ou atualizar o orçamento antes de sair, ou prefere
-            descartar esta venda em andamento?
+            Encontramos um rascunho desta venda em andamento. Você pode
+            continuar editando ou descartar apenas o rascunho antes de sair.
           </p>
 
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -3568,19 +3996,11 @@ export default function NewSalePage() {
             <Button
               type="button"
               className="w-full sm:w-auto"
-              onClick={() => void handleSaveQuoteAndExit()}
-              disabled={!canCreateQuote || isSaving}
-            >
-              {hasGeneratedQuote ? "Atualizar orçamento" : "Gerar orçamento"}
-            </Button>
-            <Button
-              type="button"
-              className="w-full sm:w-auto"
               variant="secondary"
               onClick={() => void handleDiscardOpenSale()}
               disabled={isSaving}
             >
-              Descartar
+              Descartar rascunho
             </Button>
           </div>
         </div>

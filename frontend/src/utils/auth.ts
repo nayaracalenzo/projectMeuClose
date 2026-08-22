@@ -1,6 +1,7 @@
 const AUTH_NOTICE_KEY = "auth_notice";
 
 type AuthNotice = "expired" | "logged_out";
+type JwtPayload = { exp?: number; id?: number; userId?: number };
 
 function normalizeToken(token?: string | null) {
   return token?.replace(/^"|"$/g, "").trim() || "";
@@ -15,7 +16,7 @@ function parseJwtPayload(token: string) {
     const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
     const decoded = window.atob(padded);
-    return JSON.parse(decoded) as { exp?: number };
+    return JSON.parse(decoded) as JwtPayload;
   } catch {
     return null;
   }
@@ -40,6 +41,13 @@ export function isTokenExpired(token = getStoredToken()) {
   if (!payload?.exp) return false;
 
   return payload.exp * 1000 <= Date.now();
+}
+
+export function getStoredUserId() {
+  const payload = parseJwtPayload(getStoredToken());
+  const normalized = Number(payload?.id ?? payload?.userId);
+
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
 }
 
 export function setAuthNotice(notice: AuthNotice) {
