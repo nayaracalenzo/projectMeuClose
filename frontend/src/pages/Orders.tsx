@@ -210,6 +210,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [error, setError] = useState("");
+  const [didHydrateFilters, setDidHydrateFilters] = useState(false);
   const filteredProductTypeOptions = useMemo(
     () =>
       productTypeOptions.filter((option) => {
@@ -307,6 +308,11 @@ export default function Orders() {
   ]);
 
   useEffect(() => {
+    if (!didHydrateFilters) {
+      setDidHydrateFilters(true);
+      return;
+    }
+
     setPage(1);
   }, [
     colorFilter,
