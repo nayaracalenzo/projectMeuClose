@@ -1,7 +1,6 @@
 import {
   ArrowDownCircle,
   ArrowUpCircle,
-  Banknote,
   Home,
   LogOut,
   Menu,
@@ -35,7 +34,6 @@ export default function Sidebar() {
       { title: "Clientes", path: "/clientes", icon: Users },
       { title: "A Receber", path: "/a-receber", icon: ArrowDownCircle },
       { title: "A Pagar", path: "/a-pagar", icon: ArrowUpCircle },
-      { title: "Banco", path: "/banco", icon: Banknote },
       { title: "Caixa", path: "/caixa", icon: Wallet },
       { title: "Administração", path: "/admin", icon: UserLock },
     ],

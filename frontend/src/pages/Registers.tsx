@@ -10,9 +10,7 @@ import {
   formatCurrencyInput,
   parseCurrencyToNumber,
 } from "../utils/currency";
-import {
-  formatLegacyShortDateInput,
-} from "../utils/legacyDate";
+import { formatLegacyShortDateInput } from "../utils/legacyDate";
 
 interface CashRow {
   id: number;
@@ -33,18 +31,48 @@ interface CashRow {
   sourceType: string;
 }
 
+interface BankRow {
+  id: number;
+  date: string;
+  scope: "LOJA" | "PESSOAL";
+  bank: string;
+  accountLabel?: string | null;
+  parcela?: string;
+  category: string;
+  financialCategoryId: number | null;
+  description: string;
+  paymentTypeName?: string | null;
+  amountIn: number;
+  amountOut: number;
+  balance: number;
+  sourceType: string;
+  hasReversal?: boolean;
+  canReverse: boolean;
+}
+
+interface FinancialListSummary {
+  totalIn: number;
+  totalOut: number;
+  balance: number;
+  previousBalance: number;
+}
+
 interface CashListResponse {
   items: CashRow[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
-  summary: {
-    totalIn: number;
-    totalOut: number;
-    balance: number;
-    previousBalance: number;
-  };
+  summary: FinancialListSummary;
+}
+
+interface BankListResponse {
+  items: BankRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  summary: FinancialListSummary;
 }
 
 interface CashSessionSummary {
@@ -78,6 +106,40 @@ interface BankAccountOption {
   value: string;
 }
 
+interface PaymentTypeOption {
+  id: number;
+  name: string;
+  kind: string | null;
+  active: boolean;
+  requiresDueDate: boolean;
+  allowsEntryAmount: boolean;
+  allowedEntryPaymentKinds: string[];
+  allowsInstallments: boolean;
+  maxInstallments: number | null;
+  defaultInstallments: number;
+  financialFlow: "IMMEDIATE_CASH" | "FUTURE_CUSTOMER";
+}
+
+type UnifiedRow = {
+  key: string;
+  id: number;
+  origin: "cash" | "bank";
+  originLabel: "Caixa" | "Banco";
+  date: string;
+  accountLabel?: string | null;
+  bank?: string;
+  parcela?: string;
+  description: string;
+  paymentTypeName?: string | null;
+  category: string;
+  financialCategoryId: number | null;
+  movementType?: "IN" | "OUT";
+  amountIn: number;
+  amountOut: number;
+  balance: number;
+  canReverse: boolean;
+};
+
 type ToastState = {
   open: boolean;
   tone: "success" | "warning" | "error";
@@ -90,6 +152,9 @@ const EMPTY_TOAST: ToastState = {
   tone: "success",
   message: "",
 };
+
+const PAGE_SIZE = 10;
+const FETCH_BATCH_SIZE = 200;
 
 const formatDateInputValue = (date: Date) => {
   const year = date.getFullYear();
@@ -107,49 +172,112 @@ const formatDate = (dateString: string) =>
     new Date(dateString),
   );
 
+const normalizePaymentTypeName = (value?: string | null) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+
+const isCashPaymentType = (paymentType: PaymentTypeOption | null) =>
+  normalizePaymentTypeName(paymentType?.name) === "DINHEIRO" ||
+  (paymentType?.kind === "CASH" &&
+    paymentType.financialFlow === "IMMEDIATE_CASH");
+
+const buildFinancialQueryParams = ({
+  search,
+  categoryFilter,
+  startDate,
+  endDate,
+  page,
+  pageSize,
+}: {
+  search: string;
+  categoryFilter: string;
+  startDate: string;
+  endDate: string;
+  page: number;
+  pageSize: number;
+}) => {
+  const params = new URLSearchParams({
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+
+  if (search.trim()) params.set("search", search.trim());
+  if (categoryFilter) params.set("financialCategoryId", categoryFilter);
+  if (startDate) params.set("startDate", startDate);
+  if (endDate) params.set("endDate", endDate);
+
+  return params;
+};
+
+async function fetchAllRows<T extends { items: unknown[]; totalPages: number }>(
+  endpoint: "/cash" | "/bank",
+  filters: {
+    search: string;
+    categoryFilter: string;
+    startDate: string;
+    endDate: string;
+  },
+) {
+  const firstParams = buildFinancialQueryParams({
+    ...filters,
+    page: 1,
+    pageSize: FETCH_BATCH_SIZE,
+  });
+  const firstResponse = (await getRequest(
+    `${endpoint}?${firstParams.toString()}`,
+  )) as T;
+  const items = Array.isArray(firstResponse.items)
+    ? [...firstResponse.items]
+    : [];
+  const totalPages = Math.max(1, Number(firstResponse.totalPages) || 1);
+
+  for (let currentPage = 2; currentPage <= totalPages; currentPage += 1) {
+    const nextParams = buildFinancialQueryParams({
+      ...filters,
+      page: currentPage,
+      pageSize: FETCH_BATCH_SIZE,
+    });
+    const nextResponse = (await getRequest(
+      `${endpoint}?${nextParams.toString()}`,
+    )) as T;
+
+    if (Array.isArray(nextResponse.items)) {
+      items.push(...nextResponse.items);
+    }
+  }
+
+  return items;
+}
+
 export default function Registers() {
-  const pageSize = 10;
   const [search, setSearch] = useState("");
-  const [accountFilter, setAccountFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [startDate, setStartDate] = useState(getCurrentSearchDateInputValue());
   const [endDate, setEndDate] = useState(getCurrentSearchDateInputValue());
-  const [rows, setRows] = useState<CashRow[]>([]);
-  const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
+  const [cashRows, setCashRows] = useState<CashRow[]>([]);
+  const [bankRows, setBankRows] = useState<BankRow[]>([]);
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [totalRows, setTotalRows] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [summary, setSummary] = useState({
-    totalIn: 0,
-    totalOut: 0,
-    balance: 0,
-    previousBalance: 0,
-  });
   const [overallCashBalance, setOverallCashBalance] = useState(0);
+  const [overallBankBalance, setOverallBankBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sessionStatus, setSessionStatus] =
     useState<CashSessionStatusResponse | null>(null);
-  const [sessionLoading, setSessionLoading] = useState(false);
   const [sessionActionLoading, setSessionActionLoading] = useState(false);
   const [openSessionModal, setOpenSessionModal] = useState(false);
-  const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [manualEntryModalOpen, setManualEntryModalOpen] = useState(false);
   const [rolloverCashModalOpen, setRolloverCashModalOpen] = useState(false);
   const [reverseModalOpen, setReverseModalOpen] = useState(false);
   const [reverseReason, setReverseReason] = useState("");
   const [sessionNotes, setSessionNotes] = useState("");
-  const [pendingCashActionAfterRollover, setPendingCashActionAfterRollover] =
-    useState<{
-      action: "manual-entry" | "transfer-to-bank";
-      launchDate: string;
-    } | null>(null);
-  const [transferAmountInput, setTransferAmountInput] = useState("");
-  const [transferDate, setTransferDate] = useState(getCurrentDateInputValue());
-  const [transferDescription, setTransferDescription] = useState(
-    "Transferencia do caixa para o banco",
-  );
-  const [transferReferenceCode, setTransferReferenceCode] = useState("");
+  const [pendingManualCashEntry, setPendingManualCashEntry] = useState(false);
+  const [pendingManualLaunchDate, setPendingManualLaunchDate] = useState<
+    string | null
+  >(null);
   const [manualMovementType, setManualMovementType] = useState<"IN" | "OUT">(
     "IN",
   );
@@ -159,6 +287,7 @@ export default function Registers() {
     useState("");
   const [manualFinancialCategoryOpen, setManualFinancialCategoryOpen] =
     useState(false);
+  const [manualPaymentTypeId, setManualPaymentTypeId] = useState("");
   const [manualAmountInput, setManualAmountInput] = useState("");
   const [manualDate, setManualDate] = useState(getCurrentDateInputValue());
   const [manualDescription, setManualDescription] = useState("");
@@ -169,23 +298,26 @@ export default function Registers() {
   const [bankAccountOptions, setBankAccountOptions] = useState<
     BankAccountOption[]
   >([]);
+  const [paymentTypes, setPaymentTypes] = useState<PaymentTypeOption[]>([]);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
 
-  const selectedRow = useMemo(
-    () => rows.find((row) => row.id === selectedRowId) || null,
-    [rows, selectedRowId],
+  const filters = useMemo(
+    () => ({
+      search,
+      categoryFilter,
+      startDate,
+      endDate,
+    }),
+    [categoryFilter, endDate, search, startDate],
   );
 
-  const currentSession = sessionStatus?.currentSession || null;
-  const requiresOpenStoreSession = !currentSession;
-  const canOpenTransferModal = !requiresOpenStoreSession;
-  const currentCashLaunchDateLabel = formatDate(
-    pendingCashActionAfterRollover?.launchDate || getCurrentDateInputValue(),
+  const selectedPaymentType = useMemo(
+    () =>
+      paymentTypes.find((item) => String(item.id) === manualPaymentTypeId) ||
+      null,
+    [manualPaymentTypeId, paymentTypes],
   );
-  const previousCashLaunchDateLabel = currentSession
-    ? formatDate(currentSession.openedAt)
-    : "-";
-  const availableCashBalance = Number(currentSession?.expectedBalance || 0);
+
   const filteredManualFinancialCategories = useMemo(() => {
     const normalizedValue = manualFinancialCategoryInput.trim().toLowerCase();
 
@@ -198,44 +330,121 @@ export default function Registers() {
     );
   }, [financialCategories, manualFinancialCategoryInput]);
 
-  const fetchRows = async () => {
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-    });
+  const unifiedRows = useMemo<UnifiedRow[]>(
+    () =>
+      [
+        ...cashRows.map((row) => ({
+          key: `cash-${row.id}`,
+          id: row.id,
+          origin: "cash" as const,
+          originLabel: "Caixa" as const,
+          date: row.date,
+          accountLabel: row.accountLabel,
+          parcela: row.parcela,
+          description: row.description,
+          paymentTypeName: row.paymentTypeName,
+          category: row.category,
+          financialCategoryId: row.financialCategoryId,
+          movementType: row.movementType,
+          amountIn: Number(row.amountIn || 0),
+          amountOut: Number(row.amountOut || 0),
+          balance: Number(row.balance || 0),
+          canReverse: Boolean(row.canReverse),
+        })),
+        ...bankRows.map((row) => ({
+          key: `bank-${row.id}`,
+          id: row.id,
+          origin: "bank" as const,
+          originLabel: "Banco" as const,
+          date: row.date,
+          accountLabel: row.accountLabel,
+          bank: row.bank,
+          parcela: row.parcela,
+          description: row.description,
+          paymentTypeName: row.paymentTypeName,
+          category: row.category,
+          financialCategoryId: row.financialCategoryId,
+          amountIn: Number(row.amountIn || 0),
+          amountOut: Number(row.amountOut || 0),
+          balance: Number(row.balance || 0),
+          canReverse: Boolean(row.canReverse),
+        })),
+      ].sort((left, right) => {
+        const dateDifference =
+          new Date(right.date).getTime() - new Date(left.date).getTime();
 
-    if (search.trim()) params.set("search", search.trim());
-    if (accountFilter && accountFilter !== "Caixa") {
-      params.set("accountLabel", accountFilter);
+        if (dateDifference !== 0) {
+          return dateDifference;
+        }
+
+        return right.id - left.id;
+      }),
+    [bankRows, cashRows],
+  );
+
+  const selectedRow = useMemo(
+    () => unifiedRows.find((row) => row.key === selectedRowKey) || null,
+    [selectedRowKey, unifiedRows],
+  );
+
+  const currentSession = sessionStatus?.currentSession || null;
+  const requiresOpenStoreSession = !currentSession;
+  const currentCashLaunchDateLabel = formatDate(
+    pendingManualLaunchDate || getCurrentDateInputValue(),
+  );
+  const previousCashLaunchDateLabel = currentSession
+    ? formatDate(currentSession.openedAt)
+    : "-";
+  const totalRows = unifiedRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));
+  const paginatedRows = useMemo(
+    () => unifiedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [page, unifiedRows],
+  );
+
+  const periodSummary = useMemo(() => {
+    const totalIn = unifiedRows.reduce((sum, row) => sum + row.amountIn, 0);
+    const totalOut = unifiedRows.reduce((sum, row) => sum + row.amountOut, 0);
+
+    return {
+      totalIn,
+      totalOut,
+      balance: totalIn - totalOut,
+    };
+  }, [unifiedRows]);
+
+  const totalCombinedBalance = useMemo(
+    () => overallCashBalance + overallBankBalance,
+    [overallBankBalance, overallCashBalance],
+  );
+
+  const defaultBankAccount = bankAccountOptions[0]?.value || "";
+
+  useEffect(() => {
+    setPage(1);
+  }, [categoryFilter, endDate, search, startDate]);
+
+  useEffect(() => {
+    if (
+      selectedRowKey &&
+      !unifiedRows.some((row) => row.key === selectedRowKey)
+    ) {
+      setSelectedRowKey(null);
     }
-    if (categoryFilter) params.set("financialCategoryId", categoryFilter);
-    if (startDate) params.set("startDate", startDate);
-    if (endDate) params.set("endDate", endDate);
+  }, [selectedRowKey, unifiedRows]);
 
-    const data = (await getRequest(
-      `/cash?${params.toString()}`,
-    )) as CashListResponse;
-    setRows(Array.isArray(data.items) ? data.items : []);
-    setTotalRows(Number(data.total) || 0);
-    setTotalPages(Number(data.totalPages) || 1);
-    setSummary({
-      totalIn: Number(data.summary?.totalIn || 0),
-      totalOut: Number(data.summary?.totalOut || 0),
-      balance: Number(data.summary?.balance || 0),
-      previousBalance: Number(data.summary?.previousBalance || 0),
-    });
-  };
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const fetchSessionStatus = async () => {
-    setSessionLoading(true);
-
     try {
       const data = await getRequest("/cash/session-status");
       setSessionStatus((data as CashSessionStatusResponse) || null);
-    } catch (err: unknown) {
+    } catch {
       setSessionStatus(null);
-    } finally {
-      setSessionLoading(false);
     }
   };
 
@@ -245,6 +454,20 @@ export default function Registers() {
       setOverallCashBalance(Number(data.summary?.balance || 0));
     } catch {
       setOverallCashBalance(0);
+    }
+  };
+
+  const fetchOverallBankBalance = async () => {
+    try {
+      const data = (await getRequest("/bank?page=1&pageSize=1")) as BankListResponse;
+      const latestRowBalance = Array.isArray(data.items)
+        ? Number(data.items[0]?.balance || 0)
+        : 0;
+      setOverallBankBalance(
+        latestRowBalance || Number(data.summary?.balance || 0),
+      );
+    } catch {
+      setOverallBankBalance(0);
     }
   };
 
@@ -261,7 +484,7 @@ export default function Registers() {
 
   const fetchBankAccountOptions = async () => {
     try {
-      const data = await getRequest("/cash/account-options");
+      const data = await getRequest("/bank/account-options");
       setBankAccountOptions(
         Array.isArray(data) ? (data as BankAccountOption[]) : [],
       );
@@ -270,36 +493,65 @@ export default function Registers() {
     }
   };
 
-  useEffect(() => {
-    setPage(1);
-  }, [accountFilter, categoryFilter, search, startDate, endDate]);
-
-  useEffect(() => {
-    if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
-      setSelectedRowId(null);
+  const fetchPaymentTypes = async () => {
+    try {
+      const data = await getRequest("/payment-types");
+      setPaymentTypes(
+        ((Array.isArray(data) ? data : []) as PaymentTypeOption[])
+          .map((item) => ({
+            id: Number(item.id),
+            name: item.name,
+            kind: item.kind,
+            active: Boolean(item.active),
+            requiresDueDate: Boolean(item.requiresDueDate),
+            allowsEntryAmount: Boolean(item.allowsEntryAmount),
+            allowedEntryPaymentKinds: item.allowedEntryPaymentKinds || [],
+            allowsInstallments: Boolean(item.allowsInstallments),
+            maxInstallments:
+              item.maxInstallments === null || item.maxInstallments === undefined
+                ? null
+                : Number(item.maxInstallments),
+            defaultInstallments: Number(item.defaultInstallments || 1),
+            financialFlow: item.financialFlow,
+          }))
+          .filter((item) => item.active),
+      );
+    } catch {
+      setPaymentTypes([]);
     }
-  }, [rows, selectedRowId]);
+  };
+
+  const fetchFinancialData = async () => {
+    const [cashData, bankData] = await Promise.all([
+      fetchAllRows<CashListResponse>("/cash", filters),
+      fetchAllRows<BankListResponse>("/bank", filters),
+    ]);
+
+    setCashRows(cashData as CashRow[]);
+    setBankRows(bankData as BankRow[]);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
         setError("");
-        await fetchRows();
+        await fetchFinancialData();
         void fetchSessionStatus();
         void fetchFinancialCategories();
         void fetchBankAccountOptions();
+        void fetchPaymentTypes();
         void fetchOverallCashBalance();
+        void fetchOverallBankBalance();
       } catch (err: unknown) {
-        setRows([]);
-        setTotalRows(0);
-        setTotalPages(1);
-        setSummary({ totalIn: 0, totalOut: 0, balance: 0, previousBalance: 0 });
+        setCashRows([]);
+        setBankRows([]);
         setOverallCashBalance(0);
+        setOverallBankBalance(0);
         setError(
           getUserFacingApiErrorMessage(
             err,
-            "Nao foi possivel carregar o caixa.",
+            "Nao foi possivel carregar as movimentacoes financeiras.",
           ),
         );
       } finally {
@@ -308,19 +560,11 @@ export default function Registers() {
     };
 
     void fetchData();
-  }, [accountFilter, categoryFilter, endDate, page, search, startDate]);
+  }, [filters]);
 
   const resetOpenModal = () => {
     setSessionNotes("");
     setOpenSessionModal(false);
-  };
-
-  const resetTransferModal = () => {
-    setTransferAmountInput("");
-    setTransferDate(getCurrentDateInputValue());
-    setTransferDescription("Transferencia do caixa para o banco");
-    setTransferReferenceCode("");
-    setTransferModalOpen(false);
   };
 
   const resetManualEntryModal = () => {
@@ -328,11 +572,17 @@ export default function Registers() {
     setManualFinancialCategoryId("");
     setManualFinancialCategoryInput("");
     setManualFinancialCategoryOpen(false);
+    setManualPaymentTypeId("");
     setManualAmountInput("");
     setManualDate(getCurrentDateInputValue());
     setManualDescription("");
     setManualReferenceCode("");
     setManualEntryModalOpen(false);
+  };
+
+  const resetReverseModal = () => {
+    setReverseReason("");
+    setReverseModalOpen(false);
   };
 
   const handleManualFinancialCategoryChange = (nextValue: string) => {
@@ -357,59 +607,22 @@ export default function Registers() {
     setManualFinancialCategoryOpen(false);
   };
 
-  const resetReverseModal = () => {
-    setReverseReason("");
-    setReverseModalOpen(false);
-  };
-
   async function refreshData() {
     await Promise.all([
-      fetchRows(),
+      fetchFinancialData(),
       fetchSessionStatus(),
       fetchBankAccountOptions(),
+      fetchPaymentTypes(),
       fetchOverallCashBalance(),
+      fetchOverallBankBalance(),
     ]);
   }
 
-  async function handleOpenSession() {
-    try {
-      setSessionActionLoading(true);
-      await postRequest("/cash/sessions/open", {
-        notes: sessionNotes.trim() || null,
-      });
-      resetOpenModal();
-      await refreshData();
-      setToast({
-        open: true,
-        tone: "success",
-        title: "Caixa aberto",
-        message: "O caixa da loja foi aberto com sucesso.",
-      });
-    } catch (err: unknown) {
-      setToast({
-        open: true,
-        tone: "error",
-        title: "Nao foi possivel abrir",
-        message: getUserFacingApiErrorMessage(
-          err,
-          "Nao foi possivel abrir o caixa.",
-        ),
-      });
-    } finally {
-      setSessionActionLoading(false);
-    }
-  }
-
-  async function ensureCashSessionBeforeFinalizingAction(
-    action: "manual-entry" | "transfer-to-bank",
-  ) {
-    const launchDate =
-      action === "transfer-to-bank" ? transferDate : manualDate;
-
+  async function ensureCashSessionBeforeManualEntry() {
     try {
       const params = new URLSearchParams();
-      if (launchDate) {
-        params.set("referenceDate", launchDate);
+      if (manualDate) {
+        params.set("referenceDate", manualDate);
       }
 
       const data = await getRequest(
@@ -419,8 +632,16 @@ export default function Registers() {
       setSessionStatus(parsed);
 
       if (parsed?.currentSession?.pendingPreviousDay) {
-        setPendingCashActionAfterRollover({ action, launchDate });
+        setPendingManualCashEntry(true);
+        setPendingManualLaunchDate(manualDate);
         setRolloverCashModalOpen(true);
+        return false;
+      }
+
+      if (!parsed?.hasOpenSession || !parsed.currentSession) {
+        setPendingManualCashEntry(true);
+        setPendingManualLaunchDate(manualDate);
+        setOpenSessionModal(true);
         return false;
       }
 
@@ -439,50 +660,33 @@ export default function Registers() {
     }
   }
 
-  async function handleTransferToBank() {
-    const transferAmount = parseCurrencyToNumber(transferAmountInput);
-
-    if (transferAmount > availableCashBalance) {
-      setToast({
-        open: true,
-        tone: "warning",
-        title: "Saldo insuficiente",
-        message: "A transferencia nao pode ser maior que o valor disponivel no caixa.",
-      });
-      return;
-    }
-
-    if (
-      !(await ensureCashSessionBeforeFinalizingAction("transfer-to-bank"))
-    ) {
-      return;
-    }
-
+  async function handleOpenSession() {
     try {
       setSessionActionLoading(true);
-      await postRequest("/cash/transfers/to-bank", {
-        amount: transferAmount,
-        occurredAt: transferDate,
-        description: transferDescription.trim(),
-        referenceCode: transferReferenceCode.trim() || null,
+      await postRequest("/cash/sessions/open", {
+        notes: sessionNotes.trim() || null,
       });
-      resetTransferModal();
+      resetOpenModal();
       await refreshData();
       setToast({
         open: true,
         tone: "success",
-        title: "Transferencia registrada",
-        message:
-          "A saida do caixa e a entrada no banco foram registradas com sucesso.",
+        title: "Caixa aberto",
+        message: "O caixa da loja foi aberto com sucesso.",
       });
+
+      if (pendingManualCashEntry) {
+        setPendingManualCashEntry(false);
+        await handleCreateManualEntry({ skipCashValidation: true });
+      }
     } catch (err: unknown) {
       setToast({
         open: true,
         tone: "error",
-        title: "Nao foi possivel transferir",
+        title: "Nao foi possivel abrir",
         message: getUserFacingApiErrorMessage(
           err,
-          "Nao foi possivel registrar a transferencia para o banco.",
+          "Nao foi possivel abrir o caixa.",
         ),
       });
     } finally {
@@ -490,8 +694,23 @@ export default function Registers() {
     }
   }
 
-  async function handleCreateManualEntry() {
-    if (!(await ensureCashSessionBeforeFinalizingAction("manual-entry"))) {
+  async function handleCreateManualEntry(options?: { skipCashValidation?: boolean }) {
+    const shouldCreateInCash = isCashPaymentType(selectedPaymentType);
+
+    if (shouldCreateInCash && !options?.skipCashValidation) {
+      if (!(await ensureCashSessionBeforeManualEntry())) {
+        return;
+      }
+    }
+
+    if (!shouldCreateInCash && !defaultBankAccount) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Conta bancaria nao encontrada",
+        message:
+          "Nao foi encontrada uma conta bancaria disponivel para esse lancamento.",
+      });
       return;
     }
 
@@ -499,17 +718,33 @@ export default function Registers() {
 
     try {
       setSessionActionLoading(true);
-      await postRequest("/cash/manual-entry", {
-        movementType: manualMovementType,
-        financialCategoryId: Number(manualFinancialCategoryId),
-        amount: parseCurrencyToNumber(manualAmountInput),
-        occurredAt: manualDate,
-        description: manualDescription.trim(),
-        referenceCode: manualReferenceCode.trim() || null,
-      });
+
+      if (shouldCreateInCash) {
+        await postRequest("/cash/manual-entry", {
+          movementType: manualMovementType,
+          financialCategoryId: Number(manualFinancialCategoryId),
+          amount: parseCurrencyToNumber(manualAmountInput),
+          occurredAt: manualDate,
+          description: manualDescription.trim(),
+          referenceCode: manualReferenceCode.trim() || null,
+        });
+      } else {
+        await postRequest("/bank/manual-entry", {
+          movementType: manualMovementType,
+          financialCategoryId: Number(manualFinancialCategoryId),
+          amount: parseCurrencyToNumber(manualAmountInput),
+          occurredAt: manualDate,
+          description: manualDescription.trim(),
+          referenceCode: manualReferenceCode.trim() || null,
+          accountLabel: defaultBankAccount,
+        });
+      }
+
       setStartDate(formatLegacyShortDateInput(manualLaunchDate));
       setEndDate(getCurrentSearchDateInputValue());
       setPage(1);
+      setPendingManualCashEntry(false);
+      setPendingManualLaunchDate(null);
       resetManualEntryModal();
       await refreshData();
       setToast({
@@ -550,12 +785,9 @@ export default function Registers() {
           "O caixa pendente foi encerrado e o caixa do dia foi aberto.",
       });
 
-      if (pendingCashActionAfterRollover?.action === "manual-entry") {
-        setPendingCashActionAfterRollover(null);
-        await handleCreateManualEntry();
-      } else if (pendingCashActionAfterRollover?.action === "transfer-to-bank") {
-        setPendingCashActionAfterRollover(null);
-        await handleTransferToBank();
+      if (pendingManualCashEntry) {
+        setPendingManualCashEntry(false);
+        await handleCreateManualEntry({ skipCashValidation: true });
       }
     } catch (err: unknown) {
       setToast({
@@ -577,7 +809,7 @@ export default function Registers() {
 
     try {
       setSessionActionLoading(true);
-      await postRequest(`/cash/${selectedRow.id}/reverse`, {
+      await postRequest(`/${selectedRow.origin}/${selectedRow.id}/reverse`, {
         reason: reverseReason.trim(),
       });
       resetReverseModal();
@@ -586,7 +818,10 @@ export default function Registers() {
         open: true,
         tone: "success",
         title: "Extorno registrado",
-        message: "O extorno foi registrado com sucesso.",
+        message:
+          selectedRow.origin === "cash"
+            ? "O extorno do caixa foi registrado com sucesso."
+            : "O extorno bancario foi registrado com sucesso.",
       });
     } catch (err: unknown) {
       setToast({
@@ -595,7 +830,9 @@ export default function Registers() {
         title: "Nao foi possivel extornar",
         message: getUserFacingApiErrorMessage(
           err,
-          "Nao foi possivel extornar o lancamento.",
+          selectedRow.origin === "cash"
+            ? "Nao foi possivel extornar o lancamento do caixa."
+            : "Nao foi possivel extornar o lancamento bancario.",
         ),
       });
     } finally {
@@ -603,14 +840,14 @@ export default function Registers() {
     }
   }
 
-  const handleSelectRow = (rowId: number) => {
-    const row = rows.find((item) => item.id === rowId);
+  const handleSelectRow = (rowKey: string) => {
+    const row = unifiedRows.find((item) => item.key === rowKey);
 
     if (!row?.canReverse) {
       return;
     }
 
-    setSelectedRowId((current) => (current === rowId ? null : rowId));
+    setSelectedRowKey((current) => (current === rowKey ? null : rowKey));
   };
 
   return (
@@ -620,45 +857,50 @@ export default function Registers() {
       </h1>
 
       <section className="mb-5">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="w-[30%]">
           <div className="bg-surface-lowest p-4">
             <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
-              Saldo geral do caixa
+              Saldo geral
             </p>
-            {sessionLoading ? (
-              <p className="mt-2 text-sm text-neutral-700">Carregando sessao...</p>
-            ) : (
-              <p className="mt-2 text-[1.3rem] leading-none text-primary md:text-[1.5rem]">
-                {formatCurrency(overallCashBalance)}
-              </p>
-            )}
+            <p className="mt-2 text-[1.3rem] leading-none text-primary md:text-[1.5rem]">
+              {formatCurrency(totalCombinedBalance)}
+            </p>
           </div>
         </div>
       </section>
+
+      {requiresOpenStoreSession ? (
+        <div className="mb-5 flex flex-col gap-3 rounded border border-outline-variant/40 bg-surface-lowest p-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-primary">
+              Caixa da loja fechado
+            </p>
+            <p className="text-sm text-neutral-700">
+              Lancamentos em dinheiro exigem um caixa aberto.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpenSessionModal(true)}
+            className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+          >
+            Abrir caixa
+          </button>
+        </div>
+      ) : null}
 
       <div className="mb-5 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setManualEntryModalOpen(true)}
-          disabled={requiresOpenStoreSession}
-          className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
         >
           Incluir
         </button>
         <button
           type="button"
-          onClick={() => setTransferModalOpen(true)}
-          disabled={!canOpenTransferModal}
-          className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm font-medium text-primary disabled:opacity-60"
-        >
-          Transferir para banco
-        </button>
-        <button
-          type="button"
           onClick={() => setReverseModalOpen(true)}
-          disabled={
-            !selectedRow?.canReverse || requiresOpenStoreSession
-          }
+          disabled={!selectedRow?.canReverse}
           className="rounded border border-outline-variant/50 bg-white px-4 py-2 text-sm font-medium text-primary disabled:opacity-60"
         >
           Extornar
@@ -673,26 +915,9 @@ export default function Registers() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Descricao do lancamento"
+            placeholder="Descricao, categoria, banco ou forma de pagamento"
             className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
           />
-        </div>
-        <div className="md:min-w-56">
-          <label className="mb-2 block text-sm font-semibold text-primary">
-            Conta
-          </label>
-          <select
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
-            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
-          >
-            <option value="">Todos</option>
-            {bankAccountOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
         </div>
         <div className="md:min-w-56">
           <label className="mb-2 block text-sm font-semibold text-primary">
@@ -747,28 +972,28 @@ export default function Registers() {
 
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Entradas do dia</p>
+          <p className="text-xs uppercase text-neutral-700">Entradas no periodo</p>
           <p className="text-lg font-semibold text-primary">
-            {formatCurrency(summary.totalIn)}
+            {formatCurrency(periodSummary.totalIn)}
           </p>
         </div>
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Saidas do dia</p>
+          <p className="text-xs uppercase text-neutral-700">Saidas no periodo</p>
           <p className="text-lg font-semibold text-primary">
-            {formatCurrency(summary.totalOut)}
+            {formatCurrency(periodSummary.totalOut)}
           </p>
         </div>
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Saldo do dia</p>
+          <p className="text-xs uppercase text-neutral-700">Saldo no periodo</p>
           <p className="text-lg font-semibold text-primary">
-            {formatCurrency(summary.balance)}
+            {formatCurrency(periodSummary.balance)}
           </p>
         </div>
       </div>
 
       <div className="hidden overflow-auto md:block">
-        <table className="mt-2 min-w-[1100px] w-full border-separate border-spacing-y-2">
-          <thead className="bg-[#dbd1d1] rounded-t-md">
+        <table className="mt-2 min-w-[1220px] w-full border-separate border-spacing-y-2">
+          <thead className="rounded-t-md bg-[#dbd1d1]">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
@@ -807,22 +1032,22 @@ export default function Registers() {
                   Carregando lancamentos...
                 </td>
               </tr>
-            ) : rows.length === 0 ? (
+            ) : paginatedRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={9}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
-                  Nenhum lancamento de caixa cadastrado.
+                  Nenhuma movimentacao encontrada.
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              paginatedRows.map((row) => (
                 <tr
-                  key={row.id}
-                  onClick={() => handleSelectRow(row.id)}
+                  key={row.key}
+                  onClick={() => handleSelectRow(row.key)}
                   className={`cursor-pointer transition-colors ${
-                    selectedRowId === row.id
+                    selectedRowKey === row.key
                       ? "bg-surface"
                       : "bg-surface-lowest hover:bg-surface"
                   }`}
@@ -830,11 +1055,11 @@ export default function Registers() {
                   <td className="px-4 py-3 text-center">
                     <input
                       type="checkbox"
-                      checked={selectedRowId === row.id}
-                      onChange={() => handleSelectRow(row.id)}
+                      checked={selectedRowKey === row.key}
+                      onChange={() => handleSelectRow(row.key)}
                       onClick={(event) => event.stopPropagation()}
                       disabled={!row.canReverse}
-                      aria-label={`Selecionar lancamento de caixa ${row.description}`}
+                      aria-label={`Selecionar lancamento ${row.description}`}
                       className="h-4 w-4 cursor-pointer rounded border border-outline-variant/60 accent-primary"
                     />
                   </td>
@@ -880,20 +1105,20 @@ export default function Registers() {
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
             Carregando lancamentos...
           </div>
-        ) : rows.length === 0 ? (
+        ) : paginatedRows.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-neutral-700">
-            Nenhum lancamento de caixa cadastrado.
+            Nenhuma movimentacao encontrada.
           </div>
         ) : (
-          rows.map((row) => (
-            <div key={row.id} className="px-4 py-4">
+          paginatedRows.map((row) => (
+            <div key={row.key} className="px-4 py-4">
               <button
                 type="button"
-                onClick={() => handleSelectRow(row.id)}
+                onClick={() => handleSelectRow(row.key)}
                 disabled={!row.canReverse}
                 className="block w-full text-left disabled:cursor-default disabled:opacity-100"
               >
-                <p className="text-sm font-semibold text-primary">
+                <p className="mb-2 text-sm font-semibold text-primary">
                   {formatDate(row.date)}
                 </p>
                 <p className="text-xs uppercase text-neutral-700">
@@ -927,12 +1152,6 @@ export default function Registers() {
         )}
       </div>
 
-      <div className="mt-2 flex justify-end">
-        <p className="text-sm font-semibold text-primary">
-          Saldo anterior: {formatCurrency(summary.previousBalance)}
-        </p>
-      </div>
-
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
           {loading
@@ -962,97 +1181,10 @@ export default function Registers() {
       </div>
 
       <CustomerModal
-        open={transferModalOpen}
-        onClose={resetTransferModal}
-        title="Transferir caixa para banco"
-        subtitle="Registre a saida do caixa e a entrada correspondente no banco."
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">
-                Valor
-              </label>
-              <input
-                value={transferAmountInput}
-                onChange={(e) =>
-                  setTransferAmountInput(formatCurrencyInput(e.target.value))
-                }
-                placeholder="R$ 0,00"
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              />
-              <p className="mt-2 text-xs text-neutral-700">
-                Disponivel no caixa: {formatCurrency(availableCashBalance)}
-              </p>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">
-                Data
-              </label>
-              <DatePickerInput
-                value={transferDate}
-                onChange={setTransferDate}
-                format="iso"
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">
-                Descricao
-              </label>
-              <input
-                value={transferDescription}
-                onChange={(e) => setTransferDescription(e.target.value)}
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-primary">
-                Referencia
-              </label>
-              <input
-                value={transferReferenceCode}
-                onChange={(e) => setTransferReferenceCode(e.target.value)}
-                placeholder="Opcional"
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleTransferToBank}
-              disabled={
-                sessionActionLoading ||
-                !transferAmountInput ||
-                !transferDescription.trim()
-              }
-              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-            >
-              {sessionActionLoading
-                ? "Transferindo..."
-                : "Confirmar transferencia"}
-            </button>
-            <button
-              type="button"
-              onClick={resetTransferModal}
-              className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </CustomerModal>
-
-      <CustomerModal
         open={manualEntryModalOpen}
         onClose={resetManualEntryModal}
         title="Incluir lancamento manual"
-        subtitle="Registre uma entrada ou saida no caixa."
+        subtitle="Registre uma entrada ou saida e escolha a forma de pagamento."
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1069,6 +1201,24 @@ export default function Registers() {
               >
                 <option value="IN">Entrada</option>
                 <option value="OUT">Saida</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Forma de pagamento
+              </label>
+              <select
+                value={manualPaymentTypeId}
+                onChange={(e) => setManualPaymentTypeId(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              >
+                <option value="">Selecione</option>
+                {paymentTypes.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1151,7 +1301,7 @@ export default function Registers() {
               />
             </div>
 
-            <div>
+            <div className="md:col-span-2">
               <label className="mb-2 block text-sm font-semibold text-primary">
                 Referencia
               </label>
@@ -1167,23 +1317,17 @@ export default function Registers() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleCreateManualEntry}
+              onClick={() => void handleCreateManualEntry()}
               disabled={
                 sessionActionLoading ||
+                !manualPaymentTypeId ||
                 !manualFinancialCategoryId ||
                 !manualAmountInput ||
                 !manualDescription.trim()
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
-              {sessionActionLoading ? (
-                "Salvando..."
-              ) : (
-                <>
-                  <span className="sm:hidden">Confirmar</span>
-                  <span className="hidden sm:inline">Confirmar lancamento</span>
-                </>
-              )}
+              {sessionActionLoading ? "Salvando..." : "Confirmar"}
             </button>
             <button
               type="button"
@@ -1199,15 +1343,25 @@ export default function Registers() {
       <CustomerModal
         open={reverseModalOpen}
         onClose={resetReverseModal}
-        title="Extornar lancamento"
-        subtitle="Confirme a criacao do lancamento inverso no caixa."
+        title={
+          selectedRow?.origin === "bank"
+            ? "Extornar lancamento bancario"
+            : "Extornar lancamento"
+        }
+        subtitle={
+          selectedRow?.origin === "bank"
+            ? "Confirme a criacao do lancamento inverso no banco."
+            : "Confirme a criacao do lancamento inverso no caixa."
+        }
       >
         <div className="space-y-4">
           {selectedRow ? (
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4 text-sm text-neutral-700">
+              <p>Origem: {selectedRow.originLabel}</p>
               <p>Data: {formatDate(selectedRow.date)}</p>
               <p>Categoria: {selectedRow.category}</p>
               <p>Descricao: {selectedRow.description}</p>
+              <p>Conta: {selectedRow.accountLabel || selectedRow.bank || "-"}</p>
               <p>Forma de pagamento: {selectedRow.paymentTypeName || "-"}</p>
               <p>
                 Valor:{" "}
@@ -1232,7 +1386,7 @@ export default function Registers() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleReverseEntry}
+              onClick={() => void handleReverseEntry()}
               disabled={
                 sessionActionLoading ||
                 !selectedRow?.canReverse ||
@@ -1279,7 +1433,7 @@ export default function Registers() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleOpenSession}
+              onClick={() => void handleOpenSession()}
               disabled={sessionActionLoading}
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
@@ -1300,7 +1454,8 @@ export default function Registers() {
         open={rolloverCashModalOpen}
         onClose={() => {
           setRolloverCashModalOpen(false);
-          setPendingCashActionAfterRollover(null);
+          setPendingManualCashEntry(false);
+          setPendingManualLaunchDate(null);
         }}
         title="Encerrar e abrir caixa da loja"
         subtitle={
@@ -1328,7 +1483,7 @@ export default function Registers() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={handleRolloverCashSession}
+              onClick={() => void handleRolloverCashSession()}
               disabled={sessionActionLoading}
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
@@ -1338,7 +1493,8 @@ export default function Registers() {
               type="button"
               onClick={() => {
                 setRolloverCashModalOpen(false);
-                setPendingCashActionAfterRollover(null);
+                setPendingManualCashEntry(false);
+                setPendingManualLaunchDate(null);
               }}
               className="rounded border border-outline-variant/50 px-4 py-2 text-sm text-primary"
             >
