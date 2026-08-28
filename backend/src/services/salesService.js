@@ -1507,6 +1507,18 @@ async function enrichSaleFinancialSummary(saleDetails) {
 function mapSaleListItem(sale) {
   const customer = sale.Customer || sale.Customers;
   const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
+  const receipts = Array.isArray(sale.PaymentReceipts) ? sale.PaymentReceipts : [];
+  const receivable = sale.Receivable || sale.Receivables || null;
+  const immediateAmount = roundCurrency(
+    receipts.reduce((acc, receipt) => {
+      if (receipt.receiptType === "INSTALLMENT") {
+        return acc;
+      }
+
+      return acc + Number(receipt.amount || 0);
+    }, 0),
+  );
+  const futureAmount = roundCurrency(Number(receivable?.originalAmount || 0));
 
   return {
     id: sale.idSale,
@@ -1523,6 +1535,8 @@ function mapSaleListItem(sale) {
     paymentTypeName: buildSalePaymentSummary(sale),
     itemsCount: items.length,
     firstItemDescription: items[0]?.description || null,
+    immediateAmount,
+    futureAmount,
     finalAmount: Number(sale.finalAmount || 0),
     createdAt: sale.createdAt,
     updatedAt: sale.updatedAt,
@@ -2689,7 +2703,17 @@ async function getSaleById(id) {
   return enrichSaleFinancialSummary(mapSaleDetails(sale));
 }
 
-async function listSales({ page, pageSize, status, search, customerId } = {}) {
+async function listSales({
+  page,
+  pageSize,
+  status,
+  search,
+  customerId,
+  customerName,
+  paymentTypeId,
+  startDate,
+  endDate,
+} = {}) {
   const normalizedPage = Math.max(1, Number(page) || 1);
   const normalizedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 10));
   const normalizedSearch = search ? String(search).trim() : undefined;
@@ -2698,12 +2722,25 @@ async function listSales({ page, pageSize, status, search, customerId } = {}) {
     Number.isInteger(Number(customerId)) && Number(customerId) > 0
       ? Number(customerId)
       : undefined;
+  const normalizedCustomerName = customerName
+    ? String(customerName).trim()
+    : undefined;
+  const normalizedPaymentTypeId =
+    Number.isInteger(Number(paymentTypeId)) && Number(paymentTypeId) > 0
+      ? Number(paymentTypeId)
+      : undefined;
+  const normalizedStartDate = startDate ? String(startDate).trim() : undefined;
+  const normalizedEndDate = endDate ? String(endDate).trim() : undefined;
   const result = await repository.listSales({
     page: normalizedPage,
     pageSize: normalizedPageSize,
     status: normalizedStatus,
     search: normalizedSearch,
     customerId: normalizedCustomerId,
+    customerName: normalizedCustomerName,
+    paymentTypeId: normalizedPaymentTypeId,
+    startDate: normalizedStartDate,
+    endDate: normalizedEndDate,
   });
   const total = Number(result.count || 0);
 

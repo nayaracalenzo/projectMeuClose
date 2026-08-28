@@ -1,6 +1,8 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useRef } from "react";
 import { Button } from "../components/Button";
+import DatePickerInput from "../components/DatePickerInput";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
@@ -12,6 +14,8 @@ interface SaleRow {
   paymentTypeName: string | null;
   itemsCount: number;
   firstItemDescription: string | null;
+  immediateAmount: number;
+  futureAmount: number;
   finalAmount: number;
   createdAt: string;
   updatedAt: string;
@@ -87,6 +91,13 @@ export default function SalesPage() {
   const [statusFilter, setStatusFilter] = useState<SalesStatusFilter>(
     () => (searchParams.get("statusFilter") as SalesStatusFilter) || "DEFAULT",
   );
+  const [customerName, setCustomerName] = useState(
+    () => searchParams.get("customerName") || "",
+  );
+  const [startDate, setStartDate] = useState(
+    () => searchParams.get("startDate") || "",
+  );
+  const [endDate, setEndDate] = useState(() => searchParams.get("endDate") || "");
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [page, setPage] = useState(() => {
     const parsedPage = Number(searchParams.get("page") || "1");
@@ -96,6 +107,7 @@ export default function SalesPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const latestFetchIdRef = useRef(0);
 
   const highlightedSaleId = useMemo(() => {
     const value = Number(searchParams.get("highlight"));
@@ -129,6 +141,10 @@ export default function SalesPage() {
       params.set("statusFilter", statusFilter);
     }
 
+    if (customerName.trim()) params.set("customerName", customerName.trim());
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+
     if (highlightedSaleId) {
       params.set("highlight", String(highlightedSaleId));
     }
@@ -137,9 +153,12 @@ export default function SalesPage() {
   }, [
     highlightedSaleId,
     page,
+    customerName,
     setSearchParams,
+    startDate,
     statusFilter,
     viewMode,
+    endDate,
   ]);
 
   const effectiveStatus =
@@ -157,8 +176,12 @@ export default function SalesPage() {
       params.set("statusFilter", statusFilter);
     }
 
+    if (customerName.trim()) params.set("customerName", customerName.trim());
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+
     return `/vendas?${params.toString()}`;
-  }, [page, statusFilter, viewMode]);
+  }, [customerName, endDate, page, startDate, statusFilter, viewMode]);
   const statusOptions =
     viewMode === "budgets"
       ? []
@@ -208,6 +231,9 @@ export default function SalesPage() {
 
   useEffect(() => {
     const fetchSales = async () => {
+      const fetchId = latestFetchIdRef.current + 1;
+      latestFetchIdRef.current = fetchId;
+
       try {
         setLoading(true);
         setError("");
@@ -221,9 +247,18 @@ export default function SalesPage() {
           params.set("status", effectiveStatus);
         }
 
+        if (customerName.trim()) params.set("customerName", customerName.trim());
+        if (startDate) params.set("startDate", startDate);
+        if (endDate) params.set("endDate", endDate);
+
         const data = (await getRequest(
           `/sales?${params.toString()}`,
         )) as SalesResponse;
+
+        if (fetchId !== latestFetchIdRef.current) {
+          return;
+        }
+
         setSales(
           Array.isArray(data.items)
             ? [...data.items].sort(
@@ -234,17 +269,23 @@ export default function SalesPage() {
         setTotalItems(Number(data.total) || 0);
         setTotalPages(Number(data.totalPages) || 1);
       } catch (err: unknown) {
+        if (fetchId !== latestFetchIdRef.current) {
+          return;
+        }
+
         setError(getUserFacingApiErrorMessage(err));
         setSales([]);
         setTotalItems(0);
         setTotalPages(1);
       } finally {
-        setLoading(false);
+        if (fetchId === latestFetchIdRef.current) {
+          setLoading(false);
+        }
       }
     };
 
     void fetchSales();
-  }, [effectiveStatus, page, pageSize]);
+  }, [customerName, effectiveStatus, endDate, page, pageSize, startDate]);
 
   const headingText = loading
     ? viewMode === "budgets"
@@ -314,8 +355,20 @@ export default function SalesPage() {
       </div>
 
       {viewMode === "orders" ? (
-        <div className="mb-5 flex w-full justify-end">
-          <label className="flex w-full max-w-[260px] flex-col gap-2 text-sm text-neutral-700">
+        <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-4">
+          <label className="flex flex-col gap-2 text-sm text-neutral-700">
+            <span>Cliente</span>
+            <input
+              value={customerName}
+              onChange={(event) => {
+                setCustomerName(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Digite o nome da cliente"
+              className="h-11 w-full rounded border border-outline-variant bg-white px-3 text-sm text-primary outline-none transition-colors focus:border-primary"
+            />
+          </label>
+          <label className="flex flex-col gap-2 text-sm text-neutral-700">
             <span>Status</span>
             <select
               value={statusFilter}
@@ -331,6 +384,30 @@ export default function SalesPage() {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="flex flex-col gap-2 text-sm text-neutral-700">
+            <span>Data inicial</span>
+            <DatePickerInput
+              value={startDate}
+              onChange={(value) => {
+                setStartDate(value);
+                setPage(1);
+              }}
+              format="iso"
+              className="h-11 rounded border border-outline-variant bg-white px-3 text-sm text-primary outline-none transition-colors focus:border-primary"
+            />
+          </label>
+          <label className="flex flex-col gap-2 text-sm text-neutral-700">
+            <span>Data final</span>
+            <DatePickerInput
+              value={endDate}
+              onChange={(value) => {
+                setEndDate(value);
+                setPage(1);
+              }}
+              format="iso"
+              className="h-11 rounded border border-outline-variant bg-white px-3 text-sm text-primary outline-none transition-colors focus:border-primary"
+            />
           </label>
         </div>
       ) : null}
@@ -361,7 +438,13 @@ export default function SalesPage() {
                 Status
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary text-right">
-                Valor
+                À vista
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary text-right">
+                A prazo
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary text-right">
+                Total
               </th>
             </tr>
           </thead>
@@ -369,7 +452,7 @@ export default function SalesPage() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={8}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   Carregando vendas...
@@ -378,7 +461,7 @@ export default function SalesPage() {
             ) : sales.length === 0 ? (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={8}
                   className="bg-surface-lowest px-4 py-6 text-center text-sm text-neutral-700"
                 >
                   {viewMode === "budgets"
@@ -421,6 +504,12 @@ export default function SalesPage() {
                     >
                       {formatSaleStatusLabel(sale.status)}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-right text-[14px] text-neutral-700">
+                    {formatCurrency(sale.immediateAmount)}
+                  </td>
+                  <td className="px-4 py-3 text-right text-[14px] text-neutral-700">
+                    {formatCurrency(sale.futureAmount)}
                   </td>
                   <td className="px-4 py-3 text-right text-[14px] font-semibold text-primary">
                     {formatCurrency(sale.finalAmount)}
@@ -481,8 +570,14 @@ export default function SalesPage() {
                   {formatSaleStatusLabel(sale.status)}
                 </span>
               </p>
+              <p className="text-xs text-neutral-700">
+                À vista: {formatCurrency(sale.immediateAmount)}
+              </p>
+              <p className="text-xs text-neutral-700">
+                A prazo: {formatCurrency(sale.futureAmount)}
+              </p>
               <p className="mt-1 text-sm font-semibold text-primary">
-                {formatCurrency(sale.finalAmount)}
+                Total: {formatCurrency(sale.finalAmount)}
               </p>
             </button>
           ))
@@ -519,24 +614,24 @@ export default function SalesPage() {
             </select>
           </div>
           <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-            disabled={loading || page <= 1}
-          >
-            Anterior
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() =>
-              setPage((current) => Math.min(totalPages, current + 1))
-            }
-            disabled={loading || page >= totalPages}
-          >
-            Próxima
-          </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={loading || page <= 1}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() =>
+                setPage((current) => Math.min(totalPages, current + 1))
+              }
+              disabled={loading || page >= totalPages}
+            >
+              Próxima
+            </Button>
           </div>
         </div>
       </div>
