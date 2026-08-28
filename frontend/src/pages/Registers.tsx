@@ -280,6 +280,7 @@ export default function Registers() {
   const [page, setPage] = useState(1);
   const [overallCashBalance, setOverallCashBalance] = useState(0);
   const [overallBankBalance, setOverallBankBalance] = useState(0);
+  const [combinedPreviousBalance, setCombinedPreviousBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sessionStatus, setSessionStatus] =
@@ -370,7 +371,7 @@ export default function Registers() {
           movementType: row.movementType,
           amountIn: Number(row.amountIn || 0),
           amountOut: Number(row.amountOut || 0),
-          balance: Number(row.balance || 0),
+          balance: 0,
           canReverse: Boolean(row.canReverse),
         })),
         ...bankRows.map((row) => ({
@@ -393,19 +394,34 @@ export default function Registers() {
           financialCategoryId: row.financialCategoryId,
           amountIn: Number(row.amountIn || 0),
           amountOut: Number(row.amountOut || 0),
-          balance: Number(row.balance || 0),
+          balance: 0,
           canReverse: Boolean(row.canReverse),
         })),
-      ].sort((left, right) => {
-        const dateDifference =
-          new Date(right.date).getTime() - new Date(left.date).getTime();
+      ]
+        .sort((left, right) => {
+          const dateDifference =
+            new Date(left.date).getTime() - new Date(right.date).getTime();
 
-        if (dateDifference !== 0) {
-          return dateDifference;
-        }
+          if (dateDifference !== 0) {
+            return dateDifference;
+          }
 
-        return right.id - left.id;
-      }),
+          return left.id - right.id;
+        })
+        .reduce<UnifiedRow[]>((accumulator, row) => {
+          const previousBalance =
+            accumulator[accumulator.length - 1]?.balance || 0;
+          const currentBalance =
+            previousBalance + Number(row.amountIn || 0) - Number(row.amountOut || 0);
+
+          accumulator.push({
+            ...row,
+            balance: currentBalance,
+          });
+
+          return accumulator;
+        }, [])
+        .reverse(),
     [bankRows, cashRows],
   );
 
@@ -498,6 +514,33 @@ export default function Registers() {
     }
   };
 
+  const fetchCombinedPreviousBalance = async () => {
+    try {
+      const cashParams = buildFinancialQueryParams({
+        ...filters,
+        page: 1,
+        pageSize: 1,
+      });
+      const bankParams = buildFinancialQueryParams({
+        ...filters,
+        page: 1,
+        pageSize: 1,
+      });
+
+      const [cashData, bankData] = await Promise.all([
+        getRequest(`/cash?${cashParams.toString()}`) as Promise<CashListResponse>,
+        getRequest(`/bank?${bankParams.toString()}`) as Promise<BankListResponse>,
+      ]);
+
+      setCombinedPreviousBalance(
+        Number(cashData.summary?.previousBalance || 0) +
+          Number(bankData.summary?.previousBalance || 0),
+      );
+    } catch {
+      setCombinedPreviousBalance(0);
+    }
+  };
+
   const fetchFinancialCategories = async () => {
     try {
       const data = await getRequest("/financial-categories");
@@ -570,11 +613,13 @@ export default function Registers() {
         void fetchPaymentTypes();
         void fetchOverallCashBalance();
         void fetchOverallBankBalance();
+        void fetchCombinedPreviousBalance();
       } catch (err: unknown) {
         setCashRows([]);
         setBankRows([]);
         setOverallCashBalance(0);
         setOverallBankBalance(0);
+        setCombinedPreviousBalance(0);
         setError(
           getUserFacingApiErrorMessage(
             err,
@@ -642,6 +687,7 @@ export default function Registers() {
       fetchPaymentTypes(),
       fetchOverallCashBalance(),
       fetchOverallBankBalance(),
+      fetchCombinedPreviousBalance(),
     ]);
   }
 
@@ -1205,6 +1251,12 @@ export default function Registers() {
             Proxima
           </button>
         </div>
+      </div>
+
+      <div className="mt-2 flex justify-end">
+        <p className="text-sm font-semibold text-primary">
+          Saldo anterior: {formatCurrency(combinedPreviousBalance)}
+        </p>
       </div>
 
       <CustomerModal
