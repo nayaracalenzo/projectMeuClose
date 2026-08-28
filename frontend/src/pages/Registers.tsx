@@ -1046,13 +1046,17 @@ export default function Registers() {
 
       <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Entradas no periodo</p>
+          <p className="text-xs uppercase text-neutral-700">
+            Entradas no periodo
+          </p>
           <p className="text-lg font-semibold text-primary">
             {formatCurrency(periodSummary.totalIn)}
           </p>
         </div>
         <div className="bg-surface-lowest p-4">
-          <p className="text-xs uppercase text-neutral-700">Saidas no periodo</p>
+          <p className="text-xs uppercase text-neutral-700">
+            Saidas no periodo
+          </p>
           <p className="text-lg font-semibold text-primary">
             {formatCurrency(periodSummary.totalOut)}
           </p>
@@ -1226,13 +1230,19 @@ export default function Registers() {
         )}
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className=" flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-neutral-700">
           {loading
             ? "Carregando..."
             : `${totalRows} lancamento(s) | Pagina ${page} de ${totalPages}`}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
+        <div className="mt-2 flex justify-end">
+          <p className="text-sm font-semibold text-primary">
+            Saldo anterior: {formatCurrency(combinedPreviousBalance)}
+          </p>
+        </div>
+        <div className="flex gap-2 justify-end">
           <button
             type="button"
             onClick={() => setPage((current) => Math.max(1, current - 1))}
@@ -1252,12 +1262,7 @@ export default function Registers() {
             Proxima
           </button>
         </div>
-      </div>
-
-      <div className="mt-2 flex justify-end">
-        <p className="text-sm font-semibold text-primary">
-          Saldo anterior: {formatCurrency(combinedPreviousBalance)}
-        </p>
+        </div>
       </div>
 
       <CustomerModal
@@ -1441,7 +1446,9 @@ export default function Registers() {
               <p>Data: {formatDate(selectedRow.date)}</p>
               <p>Categoria: {selectedRow.category}</p>
               <p>Descricao: {selectedRow.description}</p>
-              <p>Conta: {selectedRow.accountLabel || selectedRow.bank || "-"}</p>
+              <p>
+                Conta: {selectedRow.accountLabel || selectedRow.bank || "-"}
+              </p>
               <p>Forma de pagamento: {selectedRow.paymentTypeName || "-"}</p>
               <p>
                 Valor:{" "}
