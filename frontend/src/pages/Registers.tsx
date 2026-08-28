@@ -184,6 +184,17 @@ const isCashPaymentType = (paymentType: PaymentTypeOption | null) =>
   (paymentType?.kind === "CASH" &&
     paymentType.financialFlow === "IMMEDIATE_CASH");
 
+const resolveUnifiedPaymentTypeName = (
+  origin: "cash" | "bank",
+  paymentTypeName?: string | null,
+) => {
+  if (String(paymentTypeName || "").trim()) {
+    return paymentTypeName;
+  }
+
+  return origin === "cash" ? "DINHEIRO" : null;
+};
+
 const buildFinancialQueryParams = ({
   search,
   categoryFilter,
@@ -342,7 +353,10 @@ export default function Registers() {
           accountLabel: row.accountLabel,
           parcela: row.parcela,
           description: row.description,
-          paymentTypeName: row.paymentTypeName,
+          paymentTypeName: resolveUnifiedPaymentTypeName(
+            "cash",
+            row.paymentTypeName,
+          ),
           category: row.category,
           financialCategoryId: row.financialCategoryId,
           movementType: row.movementType,
@@ -361,7 +375,10 @@ export default function Registers() {
           bank: row.bank,
           parcela: row.parcela,
           description: row.description,
-          paymentTypeName: row.paymentTypeName,
+          paymentTypeName: resolveUnifiedPaymentTypeName(
+            "bank",
+            row.paymentTypeName,
+          ),
           category: row.category,
           financialCategoryId: row.financialCategoryId,
           amountIn: Number(row.amountIn || 0),
