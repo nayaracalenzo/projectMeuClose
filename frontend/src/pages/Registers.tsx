@@ -125,6 +125,7 @@ type UnifiedRow = {
   id: number;
   origin: "cash" | "bank";
   originLabel: "Caixa" | "Banco";
+  sourceType: string;
   date: string;
   accountLabel?: string | null;
   bank?: string;
@@ -186,10 +187,15 @@ const isCashPaymentType = (paymentType: PaymentTypeOption | null) =>
 
 const resolveUnifiedPaymentTypeName = (
   origin: "cash" | "bank",
+  sourceType: string,
   paymentTypeName?: string | null,
 ) => {
   if (String(paymentTypeName || "").trim()) {
     return paymentTypeName;
+  }
+
+  if (String(sourceType || "").trim().toUpperCase() === "MANUAL") {
+    return "DINHEIRO";
   }
 
   return origin === "cash" ? "DINHEIRO" : null;
@@ -349,12 +355,14 @@ export default function Registers() {
           id: row.id,
           origin: "cash" as const,
           originLabel: "Caixa" as const,
+          sourceType: row.sourceType,
           date: row.date,
           accountLabel: row.accountLabel,
           parcela: row.parcela,
           description: row.description,
           paymentTypeName: resolveUnifiedPaymentTypeName(
             "cash",
+            row.sourceType,
             row.paymentTypeName,
           ),
           category: row.category,
@@ -370,6 +378,7 @@ export default function Registers() {
           id: row.id,
           origin: "bank" as const,
           originLabel: "Banco" as const,
+          sourceType: row.sourceType,
           date: row.date,
           accountLabel: row.accountLabel,
           bank: row.bank,
@@ -377,6 +386,7 @@ export default function Registers() {
           description: row.description,
           paymentTypeName: resolveUnifiedPaymentTypeName(
             "bank",
+            row.sourceType,
             row.paymentTypeName,
           ),
           category: row.category,
