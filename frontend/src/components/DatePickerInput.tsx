@@ -46,12 +46,38 @@ export default function DatePickerInput({
 }: DatePickerInputProps) {
   const nativeInputRef = useRef<HTMLInputElement | null>(null);
   const [displayValue, setDisplayValue] = useState(() => toDisplayValue(value));
+  const [prefersNativeTouchDateInput, setPrefersNativeTouchDateInput] =
+    useState(false);
 
   const nativeValue = useMemo(() => toIsoDateOnly(value), [value]);
 
   useEffect(() => {
     setDisplayValue(toDisplayValue(value));
   }, [value]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
+    const updatePreference = () =>
+      setPrefersNativeTouchDateInput(coarsePointerQuery.matches);
+
+    updatePreference();
+
+    if (typeof coarsePointerQuery.addEventListener === "function") {
+      coarsePointerQuery.addEventListener("change", updatePreference);
+      return () => {
+        coarsePointerQuery.removeEventListener("change", updatePreference);
+      };
+    }
+
+    coarsePointerQuery.addListener(updatePreference);
+    return () => {
+      coarsePointerQuery.removeListener(updatePreference);
+    };
+  }, []);
 
   const handleVisibleInputChange = (nextValue: string) => {
     const maskedValue = maskLegacyShortDateInput(nextValue);
@@ -113,6 +139,33 @@ export default function DatePickerInput({
     input.click();
   };
 
+  if (prefersNativeTouchDateInput) {
+    return (
+      <div className="relative w-full">
+        <input
+          ref={nativeInputRef}
+          id={id}
+          name={name}
+          type="date"
+          value={nativeValue}
+          onChange={(event) => handleNativeInputChange(event.target.value)}
+          min={toIsoDateOnly(min)}
+          max={toIsoDateOnly(max)}
+          disabled={disabled}
+          required={required}
+          readOnly={readOnly}
+          className={`w-full appearance-none ${className} pr-11`}
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 flex w-11 items-center justify-center text-neutral-700"
+        >
+          <CalendarDays size={16} />
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full">
       <input
@@ -140,22 +193,14 @@ export default function DatePickerInput({
         max={toIsoDateOnly(max)}
         disabled={disabled}
         readOnly={readOnly}
-        className="absolute inset-y-0 right-0 z-10 w-11 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+        className="absolute inset-0 z-10 w-full cursor-pointer opacity-0 disabled:cursor-not-allowed sm:inset-y-0 sm:right-0 sm:left-auto sm:w-11"
       />
       <button
         type="button"
         onClick={handleOpenPicker}
-        onMouseDown={(event) => {
-          event.preventDefault();
-          handleOpenPicker();
-        }}
-        onTouchStart={(event) => {
-          event.preventDefault();
-          handleOpenPicker();
-        }}
         disabled={disabled || readOnly}
         aria-label="Abrir calendario"
-        className="absolute inset-y-0 right-0 z-20 flex w-11 items-center justify-center text-neutral-700 transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        className="pointer-events-none absolute inset-y-0 right-0 z-20 flex w-11 items-center justify-center text-neutral-700 transition disabled:cursor-not-allowed disabled:opacity-50 sm:pointer-events-auto sm:hover:text-primary"
       >
         <CalendarDays size={16} />
       </button>
