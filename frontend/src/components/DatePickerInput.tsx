@@ -132,20 +132,30 @@ export default function DatePickerInput({
       <input
         ref={nativeInputRef}
         type="date"
-        tabIndex={-1}
-        aria-hidden="true"
+        tabIndex={disabled || readOnly ? -1 : 0}
+        aria-label="Selecionar data"
         value={nativeValue}
         onChange={(event) => handleNativeInputChange(event.target.value)}
         min={toIsoDateOnly(min)}
         max={toIsoDateOnly(max)}
-        className="pointer-events-none absolute bottom-0 right-0 h-0 w-0 opacity-0"
+        disabled={disabled}
+        readOnly={readOnly}
+        className="absolute inset-y-0 right-0 z-10 w-11 cursor-pointer opacity-0 disabled:cursor-not-allowed"
       />
       <button
         type="button"
         onClick={handleOpenPicker}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          handleOpenPicker();
+        }}
+        onTouchStart={(event) => {
+          event.preventDefault();
+          handleOpenPicker();
+        }}
         disabled={disabled || readOnly}
         aria-label="Abrir calendario"
-        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-neutral-700 transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+        className="absolute inset-y-0 right-0 z-20 flex w-11 items-center justify-center text-neutral-700 transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
       >
         <CalendarDays size={16} />
       </button>

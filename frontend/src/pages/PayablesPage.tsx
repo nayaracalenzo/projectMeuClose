@@ -245,6 +245,7 @@ export default function PayablesPage() {
 
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
+  const [categoryOptionsOpen, setCategoryOptionsOpen] = useState(false);
   const [beneficiary, setBeneficiary] = useState("");
   const [supplierId, setSupplierId] = useState("");
   const [amountMode, setAmountMode] = useState<PayableAmountMode>("INSTALLMENT");
@@ -276,6 +277,11 @@ export default function PayablesPage() {
   const [newCategoryDescription, setNewCategoryDescription] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
+  const filteredCategoryOptions = category.trim()
+    ? financialCategories.filter((item) =>
+        item.description.toLowerCase().includes(category.trim().toLowerCase()),
+      )
+    : financialCategories;
 
   useEffect(() => {
     setPage(1);
@@ -400,6 +406,7 @@ export default function PayablesPage() {
   const resetPayableForm = () => {
     setDescription("");
     setCategory("");
+    setCategoryOptionsOpen(false);
     setBeneficiary("");
     setSupplierId("");
     setAmountMode("INSTALLMENT");
@@ -842,18 +849,43 @@ export default function PayablesPage() {
                   Categoria
                 </label>
                 <div className="flex gap-2">
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-                  >
-                    <option value="">Selecione...</option>
-                    {financialCategories.map((item) => (
-                      <option key={item.id} value={item.description}>
-                        {item.description}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative flex-1">
+                    <input
+                      value={category}
+                      onChange={(e) => {
+                        setCategory(e.target.value);
+                        setCategoryOptionsOpen(true);
+                      }}
+                      onFocus={() => setCategoryOptionsOpen(true)}
+                      onBlur={() => {
+                        window.setTimeout(() => {
+                          setCategoryOptionsOpen(false);
+                        }, 120);
+                      }}
+                      placeholder="Digite ou selecione..."
+                      className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                    />
+                    {categoryOptionsOpen && filteredCategoryOptions.length > 0 ? (
+                      <div className="absolute top-full z-20 mt-1 w-full overflow-hidden border border-outline-variant/60 bg-white shadow-lg">
+                        <div className="max-h-56 overflow-y-auto">
+                          {filteredCategoryOptions.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                setCategory(item.description);
+                                setCategoryOptionsOpen(false);
+                              }}
+                              className="block w-full border-b border-outline-variant/30 px-3 py-3 text-left text-[15px] text-primary last:border-b-0 hover:bg-surface-low"
+                            >
+                              {item.description}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -1096,18 +1128,18 @@ export default function PayablesPage() {
           <label className="mb-1 block text-sm font-semibold text-primary">
             Categoria
           </label>
-          <select
+          <input
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
+            list="payables-category-filter-options"
+            placeholder="Digite para filtrar"
             className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-          >
-            <option value="">Todos</option>
+          />
+          <datalist id="payables-category-filter-options">
             {financialCategories.map((item) => (
-              <option key={item.id} value={item.description}>
-                {item.description}
-              </option>
+              <option key={item.id} value={item.description} />
             ))}
-          </select>
+          </datalist>
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row">
@@ -1224,6 +1256,100 @@ export default function PayablesPage() {
       </div>
 
       {message && <p className="mb-4 text-sm text-neutral-700">{message}</p>}
+
+      <div className="grid gap-3 md:hidden">
+        {loading ? (
+          <div className="rounded border border-outline-variant/45 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
+            Carregando...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="rounded border border-outline-variant/45 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
+            Nenhuma conta a pagar encontrada.
+          </div>
+        ) : (
+          rows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => handleSelectRow(row.id)}
+              className={`rounded border px-4 py-4 text-left transition-colors ${
+                selectedPayableId === row.id
+                  ? "border-primary/50 bg-surface"
+                  : "border-outline-variant/45 bg-surface-lowest"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-primary">
+                    {row.description}
+                  </p>
+                  <p className="mt-1 truncate text-sm text-neutral-700">
+                    {row.supplierName || row.beneficiary}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={selectedPayableId === row.id}
+                  onChange={() => handleToggleRowSelection(row.id)}
+                  onClick={(event) => event.stopPropagation()}
+                  aria-label={`Selecionar conta a pagar ${row.description}`}
+                  className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border border-outline-variant/60 accent-primary"
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span
+                  className={`inline-flex rounded-full px-2.5 py-1 text-xs uppercase tracking-[0.08em] ${getCategoryBadgeClassName(
+                    row.category,
+                  )}`}
+                >
+                  {row.category}
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Vencimento
+                  </p>
+                  <p className="mt-1 text-primary">{formatDate(row.dueDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Forma
+                  </p>
+                  <p className="mt-1 text-primary">
+                    {row.plannedPaymentTypeName || "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Valor
+                  </p>
+                  <p className="mt-1 text-primary">{formatCurrency(row.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Pago
+                  </p>
+                  <p className="mt-1 text-primary">
+                    {formatCurrency(row.paidAmount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded bg-white px-3 py-2">
+                <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                  Saldo
+                </p>
+                <p className="mt-1 text-base font-semibold text-primary">
+                  {formatCurrency(row.openAmount)}
+                </p>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
 
       <div className="hidden overflow-x-auto md:block">
         <table className="mt-2 w-full border-separate border-spacing-y-2">

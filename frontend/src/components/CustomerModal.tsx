@@ -28,9 +28,9 @@ function CustomerModalComponent({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-3 sm:flex sm:items-center sm:justify-center sm:p-4">
       <div
-        className={`max-h-[90vh] w-full overflow-hidden rounded bg-white shadow-(--ambient-shadow) ${modalWidthClassName[size]}`}
+        className={`my-3 w-full overflow-hidden rounded bg-white shadow-(--ambient-shadow) sm:my-0 sm:max-h-[90vh] ${modalWidthClassName[size]}`}
       >
         <div className="flex items-start justify-between  bg-outline-variant/20  px-5 py-4">
           <div>
@@ -48,7 +48,9 @@ function CustomerModalComponent({
             <X size={18} />
           </button>
         </div>
-        <div className="max-h-[calc(90vh-84px)] overflow-y-auto p-5">{children}</div>
+        <div className="max-h-[calc(100dvh-8.5rem)] overflow-y-auto p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:max-h-[calc(90vh-84px)]">
+          {children}
+        </div>
       </div>
     </div>
   );

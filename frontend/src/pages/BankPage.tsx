@@ -144,6 +144,10 @@ export default function BankPage() {
   );
   const [manualFinancialCategoryId, setManualFinancialCategoryId] =
     useState("");
+  const [manualFinancialCategoryInput, setManualFinancialCategoryInput] =
+    useState("");
+  const [manualFinancialCategoryOpen, setManualFinancialCategoryOpen] =
+    useState(false);
   const [manualAmountInput, setManualAmountInput] = useState("");
   const [manualDate, setManualDate] = useState(getCurrentDateInputValue());
   const [manualDescription, setManualDescription] = useState("");
@@ -163,11 +167,24 @@ export default function BankPage() {
   );
 
   const canOpenTransferModal = bankAccountOptions.length > 0;
+  const singleBankAccountOption =
+    bankAccountOptions.length === 1 ? bankAccountOptions[0] : null;
   const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
   const previousCashLaunchDateLabel = cashSessionStatus?.currentSession
     ? formatDate(cashSessionStatus.currentSession.openedAt)
     : "-";
   const availableBankBalance = Number(overallBankBalance || 0);
+  const filteredManualFinancialCategories = useMemo(() => {
+    const normalizedValue = manualFinancialCategoryInput.trim().toLowerCase();
+
+    if (!normalizedValue) {
+      return financialCategories;
+    }
+
+    return financialCategories.filter((category) =>
+      category.description.toLowerCase().includes(normalizedValue),
+    );
+  }, [financialCategories, manualFinancialCategoryInput]);
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
@@ -251,6 +268,15 @@ export default function BankPage() {
   }, [rows, selectedRowId]);
 
   useEffect(() => {
+    if (!singleBankAccountOption) {
+      return;
+    }
+
+    setManualAccountLabel((current) => current || singleBankAccountOption.value);
+    setAccountFilter((current) => current || singleBankAccountOption.value);
+  }, [singleBankAccountOption]);
+
+  useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -283,6 +309,8 @@ export default function BankPage() {
   const resetManualEntryModal = () => {
     setManualMovementType("IN");
     setManualFinancialCategoryId("");
+    setManualFinancialCategoryInput("");
+    setManualFinancialCategoryOpen(false);
     setManualAmountInput("");
     setManualDate(getCurrentDateInputValue());
     setManualDescription("");
@@ -323,7 +351,7 @@ export default function BankPage() {
         occurredAt: manualDate,
         description: manualDescription.trim(),
         referenceCode: manualReferenceCode.trim() || null,
-        accountLabel: manualAccountLabel,
+        accountLabel: manualAccountLabel || singleBankAccountOption?.value || "",
       });
       resetManualEntryModal();
       await refreshData();
@@ -347,6 +375,28 @@ export default function BankPage() {
       setActionLoading(false);
     }
   }
+
+  const handleManualFinancialCategoryChange = (nextValue: string) => {
+    setManualFinancialCategoryInput(nextValue);
+    setManualFinancialCategoryOpen(true);
+
+    const normalizedValue = String(nextValue || "").trim().toLowerCase();
+    const matchedCategory = financialCategories.find(
+      (category) => category.description.trim().toLowerCase() === normalizedValue,
+    );
+
+    setManualFinancialCategoryId(
+      matchedCategory ? String(matchedCategory.id) : "",
+    );
+  };
+
+  const handleSelectManualFinancialCategory = (
+    selectedCategory: FinancialCategoryOption,
+  ) => {
+    setManualFinancialCategoryInput(selectedCategory.description);
+    setManualFinancialCategoryId(String(selectedCategory.id));
+    setManualFinancialCategoryOpen(false);
+  };
 
   async function handleTransferToCash() {
     const transferAmount = parseCurrencyToNumber(transferAmountInput);
@@ -587,23 +637,25 @@ export default function BankPage() {
             className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
           />
         </div>
-        <div className="md:min-w-56">
-          <label className="mb-2 block text-sm font-semibold text-primary">
-            Conta
-          </label>
-          <select
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
-            className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
-          >
-            <option value="">Todos</option>
-            {bankAccountOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        {bankAccountOptions.length > 1 ? (
+          <div className="md:min-w-56">
+            <label className="mb-2 block text-sm font-semibold text-primary">
+              Conta
+            </label>
+            <select
+              value={accountFilter}
+              onChange={(e) => setAccountFilter(e.target.value)}
+              className="h-11 w-full rounded border border-gray-800 bg-white px-4 text-[15px] text-primary md:border-outline-variant/50"
+            >
+              <option value="">Todos</option>
+              {bankAccountOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         <div className="md:min-w-56">
           <label className="mb-2 block text-sm font-semibold text-primary">
             Categoria
@@ -899,40 +951,66 @@ export default function BankPage() {
             </select>
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-primary">
-              Conta
-            </label>
-            <select
-              value={manualAccountLabel}
-              onChange={(e) => setManualAccountLabel(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="">Selecione</option>
-              {bankAccountOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {bankAccountOptions.length > 1 ? (
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-primary">
+                Conta
+              </label>
+              <select
+                value={manualAccountLabel}
+                onChange={(e) => setManualAccountLabel(e.target.value)}
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              >
+                <option value="">Selecione</option>
+                {bankAccountOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-primary">
               Categoria
             </label>
-            <select
-              value={manualFinancialCategoryId}
-              onChange={(e) => setManualFinancialCategoryId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-            >
-              <option value="">Selecione</option>
-              {financialCategories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.description}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <input
+                value={manualFinancialCategoryInput}
+                onChange={(e) =>
+                  handleManualFinancialCategoryChange(e.target.value)
+                }
+                onFocus={() => setManualFinancialCategoryOpen(true)}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    setManualFinancialCategoryOpen(false);
+                  }, 120);
+                }}
+                placeholder="Digite ou selecione"
+                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+              />
+              {manualFinancialCategoryOpen &&
+              filteredManualFinancialCategories.length > 0 ? (
+                <div className="absolute top-full z-20 mt-1 w-full overflow-hidden border border-outline-variant/50 bg-white shadow-lg">
+                  <div className="max-h-56 overflow-y-auto">
+                    {filteredManualFinancialCategories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          handleSelectManualFinancialCategory(category);
+                        }}
+                        className="block w-full border-b border-outline-variant/30 px-4 py-3 text-left text-[15px] text-primary last:border-b-0 hover:bg-surface-low"
+                      >
+                        {category.description}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div>
@@ -997,7 +1075,14 @@ export default function BankPage() {
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
-              {actionLoading ? "Salvando..." : "Confirmar lancamento"}
+              {actionLoading ? (
+                "Salvando..."
+              ) : (
+                <>
+                  <span className="sm:hidden">Confirmar</span>
+                  <span className="hidden sm:inline">Confirmar lancamento</span>
+                </>
+              )}
             </button>
             <button
               type="button"
