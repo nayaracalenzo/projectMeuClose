@@ -410,7 +410,8 @@ export default function Registers() {
         })
         .reduce<UnifiedRow[]>((accumulator, row) => {
           const previousBalance =
-            accumulator[accumulator.length - 1]?.balance || 0;
+            accumulator[accumulator.length - 1]?.balance ||
+            combinedPreviousBalance;
           const currentBalance =
             previousBalance + Number(row.amountIn || 0) - Number(row.amountOut || 0);
 
@@ -422,7 +423,7 @@ export default function Registers() {
           return accumulator;
         }, [])
         .reverse(),
-    [bankRows, cashRows],
+    [bankRows, cashRows, combinedPreviousBalance],
   );
 
   const selectedRow = useMemo(
