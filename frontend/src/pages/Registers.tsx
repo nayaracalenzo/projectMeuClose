@@ -155,6 +155,10 @@ export default function Registers() {
   );
   const [manualFinancialCategoryId, setManualFinancialCategoryId] =
     useState("");
+  const [manualFinancialCategoryInput, setManualFinancialCategoryInput] =
+    useState("");
+  const [manualFinancialCategoryOpen, setManualFinancialCategoryOpen] =
+    useState(false);
   const [manualAmountInput, setManualAmountInput] = useState("");
   const [manualDate, setManualDate] = useState(getCurrentDateInputValue());
   const [manualDescription, setManualDescription] = useState("");
@@ -182,6 +186,17 @@ export default function Registers() {
     ? formatDate(currentSession.openedAt)
     : "-";
   const availableCashBalance = Number(currentSession?.expectedBalance || 0);
+  const filteredManualFinancialCategories = useMemo(() => {
+    const normalizedValue = manualFinancialCategoryInput.trim().toLowerCase();
+
+    if (!normalizedValue) {
+      return financialCategories;
+    }
+
+    return financialCategories.filter((category) =>
+      category.description.toLowerCase().includes(normalizedValue),
+    );
+  }, [financialCategories, manualFinancialCategoryInput]);
 
   const fetchRows = async () => {
     const params = new URLSearchParams({
@@ -311,11 +326,35 @@ export default function Registers() {
   const resetManualEntryModal = () => {
     setManualMovementType("IN");
     setManualFinancialCategoryId("");
+    setManualFinancialCategoryInput("");
+    setManualFinancialCategoryOpen(false);
     setManualAmountInput("");
     setManualDate(getCurrentDateInputValue());
     setManualDescription("");
     setManualReferenceCode("");
     setManualEntryModalOpen(false);
+  };
+
+  const handleManualFinancialCategoryChange = (nextValue: string) => {
+    setManualFinancialCategoryInput(nextValue);
+    setManualFinancialCategoryOpen(true);
+
+    const normalizedValue = String(nextValue || "").trim().toLowerCase();
+    const matchedCategory = financialCategories.find(
+      (category) => category.description.trim().toLowerCase() === normalizedValue,
+    );
+
+    setManualFinancialCategoryId(
+      matchedCategory ? String(matchedCategory.id) : "",
+    );
+  };
+
+  const handleSelectManualFinancialCategory = (
+    selectedCategory: FinancialCategoryOption,
+  ) => {
+    setManualFinancialCategoryInput(selectedCategory.description);
+    setManualFinancialCategoryId(String(selectedCategory.id));
+    setManualFinancialCategoryOpen(false);
   };
 
   const resetReverseModal = () => {
@@ -1037,18 +1076,42 @@ export default function Registers() {
               <label className="mb-2 block text-sm font-semibold text-primary">
                 Categoria
               </label>
-              <select
-                value={manualFinancialCategoryId}
-                onChange={(e) => setManualFinancialCategoryId(e.target.value)}
-                className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
-              >
-                <option value="">Selecione</option>
-                {financialCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.description}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  value={manualFinancialCategoryInput}
+                  onChange={(e) =>
+                    handleManualFinancialCategoryChange(e.target.value)
+                  }
+                  onFocus={() => setManualFinancialCategoryOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => {
+                      setManualFinancialCategoryOpen(false);
+                    }, 120);
+                  }}
+                  placeholder="Digite ou selecione"
+                  className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
+                />
+                {manualFinancialCategoryOpen &&
+                filteredManualFinancialCategories.length > 0 ? (
+                  <div className="absolute top-full z-20 mt-1 w-full overflow-hidden border border-outline-variant/50 bg-white shadow-lg">
+                    <div className="max-h-56 overflow-y-auto">
+                      {filteredManualFinancialCategories.map((category) => (
+                        <button
+                          key={category.id}
+                          type="button"
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            handleSelectManualFinancialCategory(category);
+                          }}
+                          className="block w-full border-b border-outline-variant/30 px-4 py-3 text-left text-[15px] text-primary last:border-b-0 hover:bg-surface-low"
+                        >
+                          {category.description}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div>
@@ -1113,7 +1176,14 @@ export default function Registers() {
               }
               className="rounded bg-primary px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
             >
-              {sessionActionLoading ? "Salvando..." : "Confirmar lancamento"}
+              {sessionActionLoading ? (
+                "Salvando..."
+              ) : (
+                <>
+                  <span className="sm:hidden">Confirmar</span>
+                  <span className="hidden sm:inline">Confirmar lancamento</span>
+                </>
+              )}
             </button>
             <button
               type="button"

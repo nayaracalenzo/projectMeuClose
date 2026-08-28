@@ -813,7 +813,7 @@ export default function ReceivablesPage() {
         A Receber
       </h1>
 
-      {receivableFormOpen ? (
+      {false ? (
         <div className="mb-5 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
@@ -896,6 +896,102 @@ export default function ReceivablesPage() {
           </div>
         </div>
       ) : null}
+
+      <CustomerModal
+        open={receivableFormOpen}
+        onClose={() => {
+          setReceivableFormOpen(false);
+          resetReceivableForm();
+        }}
+        title={
+          receivableFormMode === "create"
+            ? "Incluir conta a receber"
+            : "Alterar conta a receber"
+        }
+        subtitle="Preencha os dados da conta a receber."
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Cliente
+            </label>
+            <select
+              value={formCustomerId}
+              onChange={(e) => setFormCustomerId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
+              <option value="">Selecione...</option>
+              {customers.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Forma prevista
+            </label>
+            <select
+              value={formPaymentTypeId}
+              onChange={(e) => setFormPaymentTypeId(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            >
+              <option value="">Selecione...</option>
+              {paymentTypes.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Valor
+            </label>
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={formAmount}
+              onChange={(e) => setFormAmount(e.target.value)}
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-primary">
+              Vencimento
+            </label>
+            <DatePickerInput
+              value={formDueDate}
+              onChange={setFormDueDate}
+              format="iso"
+              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={handleSubmitReceivable}
+            className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+          >
+            {receivableFormMode === "create"
+              ? "Gravar conta a receber"
+              : "Salvar alteraÃ§Ã£o"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setReceivableFormOpen(false);
+              resetReceivableForm();
+            }}
+            className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
+          >
+            Cancelar
+          </button>
+        </div>
+      </CustomerModal>
 
       <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="flex flex-col gap-2">
@@ -1041,6 +1137,101 @@ export default function ReceivablesPage() {
       {message ? (
         <p className="mb-4 text-sm text-neutral-700">{message}</p>
       ) : null}
+
+      <div className="grid gap-3 md:hidden">
+        {loading ? (
+          <div className="rounded border border-outline-variant/45 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
+            Carregando...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="rounded border border-outline-variant/45 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
+            Nenhum recebimento encontrado.
+          </div>
+        ) : (
+          rows.map((row) => (
+            <button
+              key={row.id}
+              type="button"
+              onClick={() => handleSelectRow(row.id)}
+              className={`rounded border px-4 py-4 text-left transition-colors ${
+                selectedRowId === row.id
+                  ? "border-primary/50 bg-surface"
+                  : "border-outline-variant/45 bg-surface-lowest"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    {getReceivableHistoryColumnValue(row)}
+                  </p>
+                  <p className="mt-1 truncate text-sm font-semibold text-primary">
+                    {getReceivableOriginName(row)}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={selectedRowId === row.id}
+                  onChange={() => handleToggleRowSelection(row.id)}
+                  onClick={(event) => event.stopPropagation()}
+                  aria-label={`Selecionar recebimento ${getReceivableOriginName(row)}`}
+                  className="mt-1 h-4 w-4 shrink-0 cursor-pointer rounded border border-outline-variant/60 accent-primary"
+                />
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span
+                  className={`inline-flex min-w-20 justify-center rounded-full px-2 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] ${getStatusTagClassName(
+                    row,
+                  )}`}
+                >
+                  {renderStatus(row)}
+                </span>
+                <span className="rounded-full bg-white px-2 py-1 text-[12px] font-medium text-neutral-700">
+                  Parcela {row.parcela}
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Vencimento
+                  </p>
+                  <p className="mt-1 text-primary">{formatDate(row.dueDate)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Forma
+                  </p>
+                  <p className="mt-1 text-primary">{row.paymentTypeName || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Valor
+                  </p>
+                  <p className="mt-1 text-primary">{formatCurrency(row.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Recebido
+                  </p>
+                  <p className="mt-1 text-primary">
+                    {formatCurrency(row.paidAmount)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded bg-white px-3 py-2">
+                <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                  Saldo
+                </p>
+                <p className="mt-1 text-base font-semibold text-primary">
+                  {formatCurrency(row.openAmount)}
+                </p>
+              </div>
+            </button>
+          ))
+        )}
+      </div>
 
       <div className="hidden overflow-x-hidden md:block">
         <table className="mt-2 w-full table-fixed border-separate border-spacing-y-2">
