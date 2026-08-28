@@ -29,6 +29,10 @@ const receivablesRepository = require("./receivablesRepository");
 
 let hasSaleBudgetPaymentDraftsTableCache = null;
 
+function hasConditions(value) {
+  return Reflect.ownKeys(value || {}).length > 0;
+}
+
 async function hasSaleBudgetPaymentDraftsTable(transaction) {
   if (hasSaleBudgetPaymentDraftsTableCache !== null) {
     return hasSaleBudgetPaymentDraftsTableCache;
@@ -1238,12 +1242,73 @@ async function getCustomerById(customerId) {
   return Customers.findByPk(customerId);
 }
 
-async function listSales({ page = 1, pageSize = 10, status, search, customerId } = {}) {
+async function listSales({
+  page = 1,
+  pageSize = 10,
+  status,
+  search,
+  customerId,
+  customerName,
+  paymentTypeId,
+  startDate,
+  endDate,
+} = {}) {
   const where = buildStatusWhere(status);
   const legacyCompletedSignal = buildLegacyCompletedSignal();
+  const searchFilters = [];
+  const customerWhere = {};
+  const paymentTypeWhere = {};
+  const paymentReceiptWhere = {};
+  const saleItemsWhere = {};
 
   if (customerId && Number(customerId) > 0) {
     where.customerId = Number(customerId);
+  }
+
+  if (customerName) {
+    customerWhere[Op.or] = [
+      { fullName: { [Op.iLike]: `%${customerName}%` } },
+      { companyName: { [Op.iLike]: `%${customerName}%` } },
+    ];
+  }
+
+  if (startDate || endDate) {
+    where.createdAt = {};
+
+    if (startDate) {
+      where.createdAt[Op.gte] = new Date(`${startDate}T00:00:00`);
+    }
+
+    if (endDate) {
+      where.createdAt[Op.lte] = new Date(`${endDate}T23:59:59.999`);
+    }
+  }
+
+  if (search) {
+    const normalizedSearch = String(search).trim();
+    const numericSearch = Number(normalizedSearch);
+
+    customerWhere[Op.or] = [
+      ...(Array.isArray(customerWhere[Op.or]) ? customerWhere[Op.or] : []),
+      { fullName: { [Op.iLike]: `%${normalizedSearch}%` } },
+      { companyName: { [Op.iLike]: `%${normalizedSearch}%` } },
+    ];
+    paymentTypeWhere.desc = { [Op.iLike]: `%${normalizedSearch}%` };
+    paymentReceiptWhere.paymentTypeId = { [Op.not]: null };
+    saleItemsWhere.description = { [Op.iLike]: `%${normalizedSearch}%` };
+
+    if (Number.isInteger(numericSearch) && numericSearch > 0) {
+      searchFilters.push({ idSale: numericSearch });
+    }
+  }
+
+  if (paymentTypeId && Number(paymentTypeId) > 0) {
+    where.paymentTypeId = Number(paymentTypeId);
+    paymentReceiptWhere.paymentTypeId = Number(paymentTypeId);
+  }
+
+  if (searchFilters.length > 0) {
+    where[Op.and] = [...(Array.isArray(where[Op.and]) ? where[Op.and] : []), ...searchFilters];
   }
 
   return Sales.findAndCountAll({
@@ -1255,25 +1320,20 @@ async function listSales({ page = 1, pageSize = 10, status, search, customerId }
       {
         model: Customers,
         attributes: ["idCustomer", "fullName", "companyName"],
-        where: search
-          ? {
-              [Op.or]: [
-                { fullName: { [Op.iLike]: `%${search}%` } },
-                { companyName: { [Op.iLike]: `%${search}%` } },
-              ],
-            }
-          : undefined,
-        required: Boolean(search),
+        where: hasConditions(customerWhere) ? customerWhere : undefined,
+        required: hasConditions(customerWhere),
       },
       {
         model: PaymentTypes,
         attributes: ["idPaymentType", "desc"],
+        where: hasConditions(paymentTypeWhere) ? paymentTypeWhere : undefined,
         required: false,
       },
       {
         model: PaymentReceipts,
-        attributes: ["idPaymentReceipt", "paymentTypeId", "receiptType"],
+        attributes: ["idPaymentReceipt", "paymentTypeId", "receiptType", "amount"],
         required: false,
+        where: hasConditions(paymentReceiptWhere) ? paymentReceiptWhere : undefined,
         include: [
           {
             model: PaymentTypes,
@@ -1283,8 +1343,15 @@ async function listSales({ page = 1, pageSize = 10, status, search, customerId }
         ],
       },
       {
+        model: Receivables,
+        attributes: ["idReceivable", "originalAmount", "openAmount", "status"],
+        required: false,
+      },
+      {
         model: SaleItems,
         attributes: ["idSaleItem", "description", "itemType", "subtotal"],
+        where: hasConditions(saleItemsWhere) ? saleItemsWhere : undefined,
+        required: false,
       },
     ],
     order: [["idSale", "DESC"], ["createdAt", "DESC"]],
