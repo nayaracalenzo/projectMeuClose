@@ -38,6 +38,13 @@ function normalizeDate(value, fieldName, options = {}) {
   );
 }
 
+function isFutureDate(date) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return date.getTime() > today.getTime();
+}
+
 function normalizeAmount(value, fieldName) {
   const normalized = Number(String(value ?? "").replace(",", "."));
 
@@ -283,6 +290,10 @@ async function createManualEntry(body = {}) {
   const amount = normalizeAmount(body.amount, "Valor");
   const occurredAt = normalizeDate(body.occurredAt, "Data") || new Date();
   const referenceCode = normalizeReferenceCode(body.referenceCode);
+
+  if (isFutureDate(occurredAt)) {
+    throw createCashValidationError("A data do lancamento nao pode ser futura.");
+  }
 
   const created = await createCashEntry({
     scope,

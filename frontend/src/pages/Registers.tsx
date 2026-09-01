@@ -771,6 +771,16 @@ export default function Registers() {
   async function handleCreateManualEntry(options?: { skipCashValidation?: boolean }) {
     const shouldCreateInCash = isCashPaymentType(selectedPaymentType);
 
+    if (shouldCreateInCash && manualDate > getCurrentDateInputValue()) {
+      setToast({
+        open: true,
+        tone: "warning",
+        title: "Data inválida",
+        message: "Não é permitido criar lançamentos para datas futuras.",
+      });
+      return;
+    }
+
     if (shouldCreateInCash && !options?.skipCashValidation) {
       if (!(await ensureCashSessionBeforeManualEntry())) {
         return;
@@ -1371,6 +1381,7 @@ export default function Registers() {
                 value={manualDate}
                 onChange={setManualDate}
                 format="iso"
+                max={getCurrentDateInputValue()}
                 className="h-11 w-full rounded border border-outline-variant/50 bg-white px-4 text-[15px] text-primary"
               />
             </div>
