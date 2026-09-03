@@ -5,6 +5,7 @@ import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
+import SearchableSelect from "../components/SearchableSelect";
 import {
   deleteRequest,
   getRequest,
@@ -15,6 +16,7 @@ import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import {
   formatCurrency,
   formatCurrencyInput,
+  formatCurrencyValue,
   parseCurrencyToNumber,
 } from "../utils/currency";
 import {
@@ -64,6 +66,14 @@ interface FinancialTargetHint {
 interface CustomerOption {
   id: number;
   name: string;
+}
+
+interface CustomersResponse {
+  items?: Array<{
+    id: number;
+    fullName?: string | null;
+    companyName?: string | null;
+  }>;
 }
 
 interface ReceivablesResponse {
@@ -143,6 +153,33 @@ const normalizeCustomerDisplayName = (value: string | null | undefined) => {
   const normalized = String(value || "").trim();
   return normalized ? normalized.toUpperCase() : "SEM NOME";
 };
+
+const mapCustomerOptions = (data: CustomersResponse | unknown): CustomerOption[] => {
+  const items = Array.isArray((data as CustomersResponse)?.items)
+    ? ((data as CustomersResponse).items || [])
+    : [];
+
+  return items
+    .map((item) => {
+      const id = Number(item.id);
+      const name = normalizeCustomerDisplayName(
+        item.fullName || item.companyName || `Cliente ${item.id}`,
+      );
+
+      if (!Number.isInteger(id) || !name) {
+        return null;
+      }
+
+      return { id, name };
+    })
+    .filter(Boolean) as CustomerOption[];
+};
+
+const toCustomerSearchableOptions = (options: CustomerOption[] = []) =>
+  options.map((option) => ({
+    value: String(option.id),
+    label: option.name,
+  }));
 
 const normalizePaymentTypeLabel = (value: string) =>
   String(value || "")
@@ -265,10 +302,15 @@ export default function ReceivablesPage() {
     InstallmentReceiptOption[]
   >([]);
   const [reverseReceiptId, setReverseReceiptId] = useState("");
+  const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const currentCashLaunchDateLabel = formatDate(getCurrentDateInputValue());
   const previousCashLaunchDateLabel = cashSessionStatus?.currentSession
     ? formatDate(cashSessionStatus.currentSession.openedAt)
     : "-";
+  const customerSearchableOptions = useMemo(
+    () => toCustomerSearchableOptions(customers),
+    [customers],
+  );
 
   useEffect(() => {
     const nextSearch = String(searchParams.get("search") || "").trim();
@@ -339,25 +381,21 @@ export default function ReceivablesPage() {
   useEffect(() => {
     const fetchCustomers = async () => {
       try {
-        const data = (await getRequest(
-          "/clients?page=1&pageSize=100&status=ativo",
-        )) as {
-          items?: Array<{
-            id: number;
-            fullName?: string | null;
-            companyName?: string | null;
-          }>;
-        };
+        const params = new URLSearchParams({
+          page: "1",
+          pageSize: "20",
+          status: "ativo",
+        });
 
-        const items = Array.isArray(data?.items) ? data.items : [];
-        setCustomers(
-          items.map((item) => ({
-            id: Number(item.id),
-            name: normalizeCustomerDisplayName(
-              item.fullName || item.companyName || `Cliente ${item.id}`,
-            ),
-          })),
-        );
+        if (customerSearchTerm.trim()) {
+          params.set("search", customerSearchTerm.trim());
+        }
+
+        const data = (await getRequest(
+          `/clients?${params.toString()}`,
+        )) as CustomersResponse;
+
+        setCustomers(mapCustomerOptions(data));
       } catch (error) {
         console.error("Erro ao buscar clientes", error);
         setCustomers([]);
@@ -365,7 +403,7 @@ export default function ReceivablesPage() {
     };
 
     fetchCustomers();
-  }, []);
+  }, [customerSearchTerm]);
 
   useEffect(() => {
     if (selectedRowId && !rows.some((row) => row.id === selectedRowId)) {
@@ -440,6 +478,7 @@ export default function ReceivablesPage() {
     setFormPaymentTypeId("");
     setFormAmount("");
     setFormDueDate(toIsoDate(new Date()));
+    setCustomerSearchTerm("");
     setReceivableFormMode("create");
   };
 
@@ -458,13 +497,20 @@ export default function ReceivablesPage() {
     setFormPaymentTypeId(
       selectedRow.paymentTypeId ? String(selectedRow.paymentTypeId) : "",
     );
-    setFormAmount(String(selectedRow.amount.toFixed(2)));
+    setFormAmount(formatCurrencyValue(selectedRow.amount));
     setFormDueDate(selectedRow.dueDate.slice(0, 10));
     setReceivableFormOpen(true);
   };
 
   const handleSubmitReceivable = async () => {
-    if (!formCustomerId || !formPaymentTypeId || !formAmount || !formDueDate) {
+    const amount = parseCurrencyToNumber(formAmount);
+
+    if (
+      !formCustomerId ||
+      !formPaymentTypeId ||
+      amount <= 0 ||
+      !formDueDate
+    ) {
       setMessage("Informe cliente, forma, valor e vencimento.");
       return;
     }
@@ -474,7 +520,7 @@ export default function ReceivablesPage() {
         await postRequest("/receivables", {
           customerId: Number(formCustomerId),
           paymentTypeId: Number(formPaymentTypeId),
-          amount: Number(formAmount),
+          amount,
           dueDate: formDueDate,
         });
         setMessage("Conta a receber criada com sucesso.");
@@ -484,7 +530,7 @@ export default function ReceivablesPage() {
         await updateRequest(`/receivables/${selectedRow.id}`, {
           customerId: Number(formCustomerId),
           paymentTypeId: Number(formPaymentTypeId),
-          amount: Number(formAmount),
+          amount,
           dueDate: formDueDate,
         });
         setMessage("Conta a receber alterada com sucesso.");
@@ -819,18 +865,19 @@ export default function ReceivablesPage() {
             <label className="mb-1 block text-sm font-semibold text-primary">
               Cliente
             </label>
-            <select
+            <SearchableSelect
+              id="receivable-customer"
               value={formCustomerId}
-              onChange={(e) => setFormCustomerId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {customers.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              options={customerSearchableOptions}
+              onChange={setFormCustomerId}
+              onSearchChange={setCustomerSearchTerm}
+              className="relative"
+              inputClassName="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary outline-none transition focus:border-primary"
+              dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border border-outline-variant/60 bg-white shadow-lg"
+              optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+              placeholder="Digite para filtrar"
+              emptyMessage="Nenhum cliente encontrado."
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
@@ -854,11 +901,11 @@ export default function ReceivablesPage() {
               Valor
             </label>
             <input
-              type="number"
-              min="0.01"
-              step="0.01"
+              type="text"
+              inputMode="numeric"
               value={formAmount}
-              onChange={(e) => setFormAmount(e.target.value)}
+              onChange={(e) => setFormAmount(formatCurrencyInput(e.target.value))}
+              placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
@@ -915,18 +962,19 @@ export default function ReceivablesPage() {
             <label className="mb-1 block text-sm font-semibold text-primary">
               Cliente
             </label>
-            <select
+            <SearchableSelect
+              id="receivable-customer-modal"
               value={formCustomerId}
-              onChange={(e) => setFormCustomerId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {customers.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
+              options={customerSearchableOptions}
+              onChange={setFormCustomerId}
+              onSearchChange={setCustomerSearchTerm}
+              className="relative"
+              inputClassName="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary outline-none transition focus:border-primary"
+              dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border border-outline-variant/60 bg-white shadow-lg"
+              optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+              placeholder="Digite para filtrar"
+              emptyMessage="Nenhum cliente encontrado."
+            />
           </div>
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
@@ -950,11 +998,11 @@ export default function ReceivablesPage() {
               Valor
             </label>
             <input
-              type="number"
-              min="0.01"
-              step="0.01"
+              type="text"
+              inputMode="numeric"
               value={formAmount}
-              onChange={(e) => setFormAmount(e.target.value)}
+              onChange={(e) => setFormAmount(formatCurrencyInput(e.target.value))}
+              placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
