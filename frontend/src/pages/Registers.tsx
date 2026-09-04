@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Eye, EyeClosed } from "lucide-react";
 import CustomerModal from "../components/CustomerModal";
 import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
@@ -156,6 +157,7 @@ const EMPTY_TOAST: ToastState = {
 
 const PAGE_SIZE = 10;
 const FETCH_BATCH_SIZE = 200;
+const HIDDEN_VALUE = "R$ •••••";
 
 const formatDateInputValue = (date: Date) => {
   const year = date.getFullYear();
@@ -281,6 +283,7 @@ export default function Registers() {
   const [overallCashBalance, setOverallCashBalance] = useState(0);
   const [overallBankBalance, setOverallBankBalance] = useState(0);
   const [combinedPreviousBalance, setCombinedPreviousBalance] = useState(0);
+  const [showGeneralBalance, setShowGeneralBalance] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sessionStatus, setSessionStatus] =
@@ -941,13 +944,31 @@ export default function Registers() {
       </h1>
 
       <section className="mb-5">
-        <div className="w-[30%]">
+        <div className="w-full md:w-[30%] ">
           <div className="bg-surface-lowest p-4">
-            <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
-              Saldo geral
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                Saldo geral
+              </p>
+              <button
+                type="button"
+                aria-label={
+                  showGeneralBalance ? "Ocultar saldo geral" : "Mostrar saldo geral"
+                }
+                onClick={() => setShowGeneralBalance((current) => !current)}
+                className="text-neutral-600 transition hover:text-primary"
+              >
+                {showGeneralBalance ? (
+                  <Eye size={18} />
+                ) : (
+                  <EyeClosed size={18} />
+                )}
+              </button>
+            </div>
             <p className="mt-2 text-[1.3rem] leading-none text-primary md:text-[1.5rem]">
-              {formatCurrency(totalCombinedBalance)}
+              {showGeneralBalance
+                ? formatCurrency(totalCombinedBalance)
+                : HIDDEN_VALUE}
             </p>
           </div>
         </div>
