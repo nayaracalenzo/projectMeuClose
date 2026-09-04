@@ -29,6 +29,8 @@ type ReceivablesResponse = {
 
 type SaleDetailItem = {
   id: number;
+  itemType: string;
+  productMode?: string | null;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -113,6 +115,23 @@ const sumImmediateReceipts = (receipts: SaleReceipt[] = []) =>
 
 const sumItemDiscounts = (items: SaleDetailItem[] = []) =>
   items.reduce((acc, item) => acc + Number(item.discountAmount || 0), 0);
+
+const formatSaleItemType = (item: SaleDetailItem) => {
+  const productMode = String(item.productMode || "").trim().toLowerCase();
+
+  if (productMode === "sob medida") return "Sob medida";
+  if (productMode === "ajuste") return "Ajuste";
+  if (productMode === "reforma") return "Reforma";
+
+  const itemType = String(item.itemType || "").trim().toUpperCase();
+  if (itemType === "CUSTOM_MADE") return "Sob medida";
+  if (itemType === "READY_MADE") return "Pronta";
+  if (itemType === "ACCESSORY") return "Acessório";
+  if (itemType === "SERVICE") return "Serviço";
+  if (itemType === "MISC") return "Diversos";
+
+  return item.itemType || "-";
+};
 
 function CustomerSalesModalComponent({
   open,
@@ -364,35 +383,51 @@ function CustomerSalesModalComponent({
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="overflow-x-auto">
             {selectedSale.details.items.length === 0 ? (
               <p className="text-sm text-neutral-700">
                 Nenhum item cadastrado nesta venda.
               </p>
             ) : (
-              selectedSale.details.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-lg border border-outline-variant/35 bg-white px-4 py-3"
-                >
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <p className="text-sm font-semibold text-primary">
-                      {item.description || "Sem descrição"}
-                    </p>
-                    <p className="text-sm font-semibold text-primary">
-                      {formatCurrency(Number(item.subtotal || 0))}
-                    </p>
-                  </div>
-                  <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-4">
-                    <p>Qtd.: {Number(item.quantity || 0)}</p>
-                    <p>Unitário: {formatCurrency(Number(item.unitPrice || 0))}</p>
-                    <p>Desc.: {formatCurrency(Number(item.discountAmount || 0))}</p>
-                    <p>Subtotal: {formatCurrency(Number(item.subtotal || 0))}</p>
-                  </div>
-                </div>
-              ))
+              <table className="w-full min-w-[760px] border-separate border-spacing-y-2 text-sm">
+                <thead className="rounded-t-md bg-[#dbd1d1]">
+                  <tr className="text-left">
+                    <th className="px-4 py-2 font-semibold text-primary">Descrição</th>
+                    <th className="px-4 py-2 font-semibold text-primary">Tipo</th>
+                    <th className="px-4 py-2 font-semibold text-primary">Qtd.</th>
+                    <th className="px-4 py-2 text-right font-semibold text-primary">Unitário</th>
+                    <th className="px-4 py-2 text-right font-semibold text-primary">Desconto</th>
+                    <th className="px-4 py-2 text-right font-semibold text-primary">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedSale.details.items.map((item) => (
+                    <tr key={item.id} className="bg-white">
+                      <td className="px-4 py-3 font-semibold text-primary">
+                        {item.description || "Sem descrição"}
+                      </td>
+                      <td className="px-4 py-3 text-neutral-700">
+                        {formatSaleItemType(item)}
+                      </td>
+                      <td className="px-4 py-3 text-neutral-700">
+                        {Number(item.quantity || 0)}
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-700">
+                        {formatCurrency(Number(item.unitPrice || 0))}
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-700">
+                        {formatCurrency(Number(item.discountAmount || 0))}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-primary">
+                        {formatCurrency(Number(item.subtotal || 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
+
         </div>
       ) : null}
     </CustomerModal>
