@@ -123,7 +123,7 @@ async function listPayables({ scope, status, startDate, endDate, search, categor
       ...buildInclude(),
     ],
     subQuery: false,
-    order: [["dueDate", "DESC"], ["createdAt", "DESC"]],
+    order: [["dueDate", "ASC"], ["createdAt", "DESC"]],
     limit: pageSize,
     offset: (page - 1) * pageSize,
     distinct: true,
