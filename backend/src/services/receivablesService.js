@@ -1,5 +1,4 @@
 const { notFoundError, validationError } = require("../errors/AppError");
-const { sequelize } = require("../models");
 const financialAccountsRepository = require("../repositories/financialAccountsRepository");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const repository = require("../repositories/receivablesRepository");
@@ -12,6 +11,7 @@ const {
   isImmediateCashPaymentType,
 } = require("../utils/paymentTypeRules");
 const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
+const balance = require("../utils/receivableBalance");
 
 function createReceivablesValidationError(message, statusCode = 400) {
   const error = validationError(message, {
@@ -489,6 +489,7 @@ async function reverseReceiptFinancialEntries(paymentReceiptId, reason, userId, 
 }
 
 function ensureReceivableCanBeManaged(installment) {
+  balance.ensureActive(installment);
   if (!installment || !installment.Receivable) {
     throw notFoundError("Parcela nao encontrada.");
   }
@@ -591,6 +592,8 @@ async function listInstallments({
         interestBaseDate: item.interestBaseDate || item.dueDate,
         dueDate: item.dueDate,
         status: item.status,
+        deletionAuditId: item.deletionAuditId || null,
+        waivedAmount: Number(item.waivedAmount || 0),
         filter,
         paymentTypeId: paymentType?.idPaymentType || item.paymentTypeId || null,
         paymentTypeName: paymentType?.desc || null,
@@ -702,57 +705,59 @@ async function registerReceipt(installmentId, body = {}) {
   const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
   const discardInterest = normalizeBoolean(body.discardInterest);
-  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+  return repository.withLockedInstallment(normalizedInstallmentId, async (installment, items, transaction) => {
+    balance.ensureActive(installment);
 
-  if (!installment || !installment.Receivable) {
-    throw notFoundError("Parcela nao encontrada.");
-  }
+    if (!installment || !installment.Receivable) {
+      throw notFoundError("Parcela nao encontrada.");
+    }
 
-  const customerName =
-    normalizeUppercaseLabel(
-      installment.Receivable?.Customer?.fullName ||
-        installment.Receivable?.Customer?.companyName,
-      null,
-    );
-  const saleId = installment.Receivable?.saleId || null;
-  const financialAccount = await getFinancialAccountOrDefault({
-    fieldName: "Recebido em",
-    defaultTargetType: resolveDefaultFinancialTargetType(normalizedPaymentType),
-  });
+    const customerName =
+      normalizeUppercaseLabel(
+        installment.Receivable?.Customer?.fullName ||
+          installment.Receivable?.Customer?.companyName,
+        null,
+      );
+    const saleId = installment.Receivable?.saleId || null;
+    const financialAccount = await getFinancialAccountOrDefault({
+      fieldName: "Recebido em",
+      defaultTargetType: resolveDefaultFinancialTargetType(normalizedPaymentType),
+    });
 
-  const created = await repository.registerReceipt(normalizedInstallmentId, {
-    paymentTypeId,
-    amount,
-    paidAt,
-    referenceCode,
-    discardInterest,
-    financialMovement: {
-      target: financialAccount.targetType,
-      scope: financialAccount.scope,
-      movementType: "IN",
-      category: "RECEBIMENTO",
-      description: buildReceivableFinancialMovementDescription({
-        saleId,
-        customerName,
-        paymentTypeName: normalizedPaymentType.name,
-      }),
-      accountLabel: financialAccount.targetType === "BANK" ? financialAccount.desc : null,
-      amount,
-      occurredAt: paidAt,
+    const created = await repository.registerReceipt(normalizedInstallmentId, {
       paymentTypeId,
+      amount,
+      paidAt,
       referenceCode,
-      sourceType: "RECEIVABLE_RECEIPT",
-    },
+      discardInterest,
+      financialMovement: {
+        target: financialAccount.targetType,
+        scope: financialAccount.scope,
+        movementType: "IN",
+        category: "RECEBIMENTO",
+        description: buildReceivableFinancialMovementDescription({
+          saleId,
+          customerName,
+          paymentTypeName: normalizedPaymentType.name,
+        }),
+        accountLabel: financialAccount.targetType === "BANK" ? financialAccount.desc : null,
+        amount,
+        occurredAt: paidAt,
+        paymentTypeId,
+        referenceCode,
+        sourceType: "RECEIVABLE_RECEIPT",
+      },
+    }, transaction);
+
+    if (created === undefined) {
+      throw notFoundError("Parcela nao encontrada.");
+    }
+
+    return {
+      message: "Recebimento registrado com sucesso.",
+      receiptId: created.receipt.idPaymentReceipt,
+    };
   });
-
-  if (created === undefined) {
-    throw notFoundError("Parcela nao encontrada.");
-  }
-
-  return {
-    message: "Recebimento registrado com sucesso.",
-    receiptId: created.receipt.idPaymentReceipt,
-  };
 }
 
 async function createReceivable(body = {}) {
@@ -789,112 +794,150 @@ async function createReceivable(body = {}) {
 
 async function updateReceivable(installmentId, body = {}) {
   const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
-  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+  return repository.withLockedInstallment(normalizedInstallmentId, async (installment, items, transaction) => {
+    balance.ensureActive(installment);
 
-  ensureReceivableCanBeManaged(installment);
+    ensureReceivableCanBeManaged(installment);
 
-  const customerId = normalizePositiveInteger(body.customerId, "Cliente");
-  const paymentTypeId = normalizePositiveInteger(body.paymentTypeId, "Forma de pagamento");
-  const amount = normalizeAmount(body.amount, "Valor");
-  const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
+    const customerId = normalizePositiveInteger(body.customerId, "Cliente");
+    const paymentTypeId = normalizePositiveInteger(body.paymentTypeId, "Forma de pagamento");
+    const amount = normalizeAmount(body.amount, "Valor");
+    const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
 
-  const [customer, paymentType] = await Promise.all([
-    repository.getCustomerById(customerId),
-    paymentTypesRepository.getPaymentTypeById(paymentTypeId),
-  ]);
+    const [customer, paymentType] = await Promise.all([
+      repository.getCustomerById(customerId),
+      paymentTypesRepository.getPaymentTypeById(paymentTypeId),
+    ]);
 
-  if (!customer) {
-    throw createReceivablesValidationError("Cliente invalido.");
-  }
+    if (!customer) {
+      throw createReceivablesValidationError("Cliente invalido.");
+    }
 
-  if (!paymentType) {
-    throw createReceivablesValidationError("Forma de pagamento invalida.");
-  }
+    if (!paymentType) {
+      throw createReceivablesValidationError("Forma de pagamento invalida.");
+    }
 
-  await repository.updateManualReceivable(normalizedInstallmentId, {
-    customerId,
-    paymentTypeId,
-    amount,
-    dueDate,
+    const updatedItems = items.map((item) => Number(item.idReceivableInstallment) === normalizedInstallmentId
+      ? { ...item.get({ plain: true }), amount, paidAmount: 0, status: "OPEN" } : item);
+    const summary = balance.summarize(updatedItems);
+    await repository.updateManualReceivable(normalizedInstallmentId, {
+      customerId,
+      paymentTypeId,
+      amount,
+      dueDate,
+      originalAmount: balance.money(updatedItems.reduce((sum, item) => sum + Number(item.amount), 0)),
+      openAmount: summary.openAmount,
+      status: summary.status,
+    }, transaction);
+
+    return {
+      message: "Conta a receber alterada com sucesso.",
+    };
   });
-
-  return {
-    message: "Conta a receber alterada com sucesso.",
-  };
 }
 
-async function deleteReceivable(installmentId, user) {
+async function previewReceivableDeletion(installmentId) {
+  const id = normalizePositiveInteger(installmentId, "Parcela");
+  return repository.withLockedInstallment(id, (item, items) => balance.deletionPreview(item, items));
+}
+
+async function deleteReceivable(installmentId, user, body = {}) {
   const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
-  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+  const reason = normalizeRequiredText(
+    typeof body?.reason === "string" ? body.reason : "",
+    "Motivo da exclusão",
+  );
+  return repository.withLockedInstallment(normalizedInstallmentId, async (installment, items, transaction) => {
+    const preview = balance.deletionPreview(installment, items);
+    if (typeof body?.previewToken !== "string" || body.previewToken !== preview.previewToken) {
+      throw createReceivablesValidationError("Os valores foram atualizados. Confira a simulação e confirme novamente.");
+    }
+    const customerName =
+      normalizeUppercaseLabel(
+        installment.Receivable?.Customer?.fullName ||
+          installment.Receivable?.Customer?.companyName,
+        "CLIENTE",
+      );
+    const amount = Number(installment.amount || 0).toFixed(2);
+    const dueDate = installment.dueDate
+      ? new Date(installment.dueDate).toISOString().slice(0, 10).split("-").reverse().join("/")
+      : "-";
+    const occurredAt = new Date();
+    const formattedOccurredAt = new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(occurredAt);
 
-  ensureReceivableCanBeManaged(installment);
+    const audit = await auditsRepository.createAudit({
+      auditTypeId: 1,
+      userId: getReceivableUserId(user),
+      occurredAt,
+      history: `Exclusão da conta a receber ${normalizedInstallmentId} em ${formattedOccurredAt}. Cliente ${customerName}, venda ${preview.saleId || "-"}, parcela ${installment.installmentNumber}/${installment.totalInstallments}, valor de ${amount} com vencimento em ${dueDate}. Recebido preservado: ${preview.paidAmount.toFixed(2)}. Abatimento: ${preview.waivedAmount.toFixed(2)}. Saldo devido: ${preview.openAmountBefore.toFixed(2)} → ${preview.openAmountAfter.toFixed(2)}.`,
+      reason,
+    }, transaction);
+    const values = { status: "CANCELLED", deletionAuditId: audit.idAudit, waivedAmount: preview.waivedAmount };
+    await repository.updateInstallment(normalizedInstallmentId, values, transaction);
+    const summary = balance.summarize(items.map((item) =>
+      Number(item.idReceivableInstallment) === normalizedInstallmentId
+        ? { ...item.get({ plain: true }), ...values } : item,
+    ));
+    await repository.updateReceivable(installment.receivableId, {
+      openAmount: summary.openAmount, status: summary.status,
+    }, transaction);
+    await repository.updateSaleFinancialSummary(preview.saleId, {
+      installmentCount: summary.installmentCount,
+    }, transaction);
 
-  const customerName =
-    normalizeUppercaseLabel(
-      installment.Receivable?.Customer?.fullName ||
-        installment.Receivable?.Customer?.companyName,
-      "CLIENTE",
-    );
-  const amount = Number(installment.amount || 0).toFixed(2);
-  const dueDate = installment.dueDate
-    ? new Date(installment.dueDate).toISOString().slice(0, 10)
-    : "-";
-
-  await repository.deleteManualReceivable(normalizedInstallmentId, {
-    auditTypeId: 1,
-    userId: getReceivableUserId(user),
-    occurredAt: new Date(),
-    history: `Exclusão de conta a receber ${normalizedInstallmentId} do cliente ${customerName} no valor de ${amount} com vencimento em ${dueDate}.`,
-    reason: null,
+    return {
+      message: "Conta a receber excluida com sucesso.",
+      ...preview,
+    };
   });
-
-  return {
-    message: "Conta a receber excluida com sucesso.",
-  };
 }
 
 async function reverseLatestReceipt(installmentId, user, body = {}) {
   const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
   const reason = normalizeRequiredText(body.reason, "Motivo");
-  const installment = await repository.getInstallmentById(normalizedInstallmentId);
+  return repository.withLockedInstallment(normalizedInstallmentId, async (installment, items, transaction) => {
+    balance.ensureActive(installment);
 
-  if (!installment || !installment.Receivable) {
-    throw notFoundError("Parcela nao encontrada.");
-  }
-
-  const receipts = Array.isArray(installment.PaymentReceipts) ? installment.PaymentReceipts : [];
-
-  if (!receipts.length) {
-    throw createReceivablesValidationError("Esta parcela nao possui recebimentos para ajustar.");
-  }
-
-  const selectedReceiptId =
-    body.paymentReceiptId === null || body.paymentReceiptId === undefined || body.paymentReceiptId === ""
-      ? null
-      : normalizePositiveInteger(body.paymentReceiptId, "Recebimento");
-
-  const latestReceipt = [...receipts].sort((left, right) => {
-    const rightTime = new Date(right.paidAt).getTime();
-    const leftTime = new Date(left.paidAt).getTime();
-
-    if (rightTime !== leftTime) {
-      return rightTime - leftTime;
+    if (!installment || !installment.Receivable) {
+      throw notFoundError("Parcela nao encontrada.");
     }
 
-    return Number(right.idPaymentReceipt) - Number(left.idPaymentReceipt);
-  })[0];
+    const receipts = Array.isArray(installment.PaymentReceipts) ? installment.PaymentReceipts : [];
 
-  const targetReceipt = selectedReceiptId
-    ? receipts.find((item) => Number(item.idPaymentReceipt) === selectedReceiptId)
-    : latestReceipt;
+    if (!receipts.length) {
+      throw createReceivablesValidationError("Esta parcela nao possui recebimentos para ajustar.");
+    }
 
-  if (!targetReceipt) {
-    throw createReceivablesValidationError("Recebimento nao encontrado para esta parcela.");
-  }
+    const selectedReceiptId =
+      body.paymentReceiptId === null || body.paymentReceiptId === undefined || body.paymentReceiptId === ""
+        ? null
+        : normalizePositiveInteger(body.paymentReceiptId, "Recebimento");
 
-  const userId = getReceivableUserId(user);
+    const latestReceipt = [...receipts].sort((left, right) => {
+      const rightTime = new Date(right.paidAt).getTime();
+      const leftTime = new Date(left.paidAt).getTime();
 
-  return sequelize.transaction(async (transaction) => {
+      if (rightTime !== leftTime) {
+        return rightTime - leftTime;
+      }
+
+      return Number(right.idPaymentReceipt) - Number(left.idPaymentReceipt);
+    })[0];
+
+    const targetReceipt = selectedReceiptId
+      ? receipts.find((item) => Number(item.idPaymentReceipt) === selectedReceiptId)
+      : latestReceipt;
+
+    if (!targetReceipt) {
+      throw createReceivablesValidationError("Recebimento nao encontrado para esta parcela.");
+    }
+
+    const userId = getReceivableUserId(user);
+
+
     const financialResult = await reverseReceiptFinancialEntries(
       targetReceipt.idPaymentReceipt,
       reason,
@@ -967,6 +1010,7 @@ async function listInstallmentReceipts(installmentId) {
 }
 
 module.exports = {
+  previewReceivableDeletion,
   createReceivablesValidationError,
   listInstallments,
   createReceivable,

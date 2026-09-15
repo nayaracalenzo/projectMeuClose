@@ -102,7 +102,7 @@ async function summarizeMonthlyReceivables() {
   const [rows] = await sequelize.query(
     `
       SELECT
-        COALESCE(SUM(ri."amount"), 0) AS "totalAmount",
+        COALESCE(SUM(ri."amount" - ri."waivedAmount"), 0) AS "totalAmount",
         COALESCE(SUM(ri."paidAmount"), 0) AS "totalReceived",
         COALESCE(
           SUM(
@@ -137,10 +137,12 @@ async function summarizeMonthlyReceivables() {
       FROM "receivable_installments" ri
       INNER JOIN "receivables" r
         ON r."idReceivable" = ri."receivableId"
+      LEFT JOIN "sales" s ON s."idSale" = r."saleId"
       WHERE
         ri."dueDate" <= :endDate
-        AND ri."status" != 'CANCELLED'
-        AND r."status" != 'CANCELLED';
+        AND (ri."status" != 'CANCELLED' OR ri."deletionAuditId" IS NOT NULL)
+        AND (r."status" != 'CANCELLED' OR ri."deletionAuditId" IS NOT NULL)
+        AND (s."idSale" IS NULL OR s."status" != 'CANCELLED');
     `,
     {
       replacements: { startDate, endDate, today },
