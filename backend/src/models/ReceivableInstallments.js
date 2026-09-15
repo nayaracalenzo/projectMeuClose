@@ -12,6 +12,8 @@ const ReceivableInstallmentsSchema = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false,
       },
+      deletionAuditId: { type: DataTypes.INTEGER, allowNull: true },
+      waivedAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
       paymentTypeId: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -54,6 +56,9 @@ const ReceivableInstallmentsSchema = (sequelize, DataTypes) => {
   );
 
   ReceivableInstallments.associate = (models) => {
+    ReceivableInstallments.belongsTo(models.Audits, {
+      as: "DeletionAudit", foreignKey: "deletionAuditId", onDelete: "RESTRICT",
+    });
     ReceivableInstallments.belongsTo(models.Receivables, {
       foreignKey: "receivableId",
     });

@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
+import GlobalMutationLoadingOverlay from "../components/GlobalMutationLoadingOverlay";
+import { useMutationLoading } from "../contexts/MutationLoadingContext";
 import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import SearchableSelect from "../components/SearchableSelect";
@@ -31,6 +33,8 @@ type ReceivableFilter =
   | "TODAS";
 
 interface ReceivableRow {
+  deletionAuditId?: number | null;
+  waivedAmount?: number;
   id: number;
   receivableCreatedAt: string | null;
   customerId: number | null;
@@ -52,6 +56,17 @@ interface ReceivableRow {
   amount: number;
   paidAmount: number;
   openAmount: number;
+}
+
+interface DeletionPreview {
+  installmentId: number;
+  saleId: number | null;
+  amount: number;
+  paidAmount: number;
+  waivedAmount: number;
+  openAmountBefore: number;
+  openAmountAfter: number;
+  previewToken: string;
 }
 
 interface PaymentTypeOption {
@@ -209,6 +224,7 @@ const getReceivableHistoryColumnValue = (row: ReceivableRow) =>
   row.saleId ? `VENDA ${row.saleId}` : "-";
 
 const renderStatus = (row: ReceivableRow) => {
+  if (row.deletionAuditId) return "Excluída";
   if (row.status === "CANCELLED") return "Cancelada";
   if (row.filter === "RECEBIDAS") return "Recebida";
   if (row.filter === "VENCE_HOJE") return "Vence hoje";
@@ -274,6 +290,11 @@ export default function ReceivablesPage() {
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const [receivableFormOpen, setReceivableFormOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
+  const [deletionPreview, setDeletionPreview] = useState<DeletionPreview | null>(null);
+  const [deletionPreviewLoading, setDeletionPreviewLoading] = useState(false);
+  const { mutationLoading } = useMutationLoading();
+  const deletionBusy = mutationLoading || deletionPreviewLoading;
   const [receivableFormMode, setReceivableFormMode] = useState<
     "create" | "edit"
   >("create");
@@ -415,6 +436,7 @@ export default function ReceivablesPage() {
   const selectedRow = rows.find((row) => row.id === selectedRowId) || null;
   const canManageSelectedRow = Boolean(
     selectedRow &&
+    selectedRow.status !== "CANCELLED" && !selectedRow.deletionAuditId &&
     selectedRow.id > 0 &&
     !selectedRow.saleId &&
     selectedRow.paidAmount <= 0 &&
@@ -422,10 +444,13 @@ export default function ReceivablesPage() {
   );
   const canReverseSelectedReceipt = Boolean(
     selectedRow &&
+    selectedRow.status !== "CANCELLED" && !selectedRow.deletionAuditId &&
     selectedRow.id > 0 &&
     selectedRow.saleId &&
     selectedRow.paidAmount > 0,
   );
+  const canDeleteSelectedRow = Boolean(selectedRow && selectedRow.id > 0 &&
+    selectedRow.status !== "CANCELLED" && !selectedRow.deletionAuditId && selectedRow.openAmount > 0);
 
   const overdueDays = useMemo(() => {
     if (!selectedRow) return 0;
@@ -552,36 +577,43 @@ export default function ReceivablesPage() {
     }
   };
 
-  const handleDeleteReceivable = async () => {
-    if (!selectedRow || !canManageSelectedRow) return;
+  const handleDeleteReceivable = () => {
+    if (!selectedRow || !canDeleteSelectedRow || deletionBusy) return;
 
+    setDeleteReason("");
+    setDeletionPreview(null);
     setDeleteConfirmOpen(true);
-    return;
+  };
 
+  const handlePreviewDeletion = async () => {
+    if (!selectedRow || !canDeleteSelectedRow || !deleteReason.trim() || deletionBusy) return;
+    setDeletionPreviewLoading(true);
     try {
-      await deleteRequest(`/receivables/${selectedRow!.id}`, {});
-      setMessage("Conta a receber excluída com sucesso.");
-      setReceivableFormOpen(false);
-      setSelectedRowId(null);
-      resetReceivableForm();
-      await fetchRows();
+      const preview: DeletionPreview = await getRequest(`/receivables/${selectedRow.id}/deletion-preview`);
+      setDeletionPreview(preview);
     } catch (error: unknown) {
-      setMessage(
-        getUserFacingApiErrorMessage(
-          error,
-          "Não foi possível excluir a conta a receber.",
-        ),
-      );
+      setMessage(getUserFacingApiErrorMessage(error, "Não foi possível consultar o saldo atualizado."));
+    } finally {
+      setDeletionPreviewLoading(false);
     }
   };
 
   const handleConfirmDeleteReceivable = async () => {
-    if (!selectedRow || !canManageSelectedRow) return;
+    if (!selectedRow || !canDeleteSelectedRow || !deletionPreview || deletionBusy) return;
+    const reason = deleteReason.trim();
+    if (!reason) {
+      setMessage("Informe o motivo da exclusão.");
+      return;
+    }
 
     try {
-      await deleteRequest(`/receivables/${selectedRow.id}`, {});
+      await deleteRequest(`/receivables/${deletionPreview.installmentId}`, {
+        reason, previewToken: deletionPreview.previewToken,
+      });
       setMessage("Conta a receber excluída com sucesso.");
       setDeleteConfirmOpen(false);
+      setDeletionPreview(null);
+      setDeleteReason("");
       setReceivableFormOpen(false);
       setSelectedRowId(null);
       resetReceivableForm();
@@ -593,11 +625,22 @@ export default function ReceivablesPage() {
           "Não foi possível excluir a conta a receber.",
         ),
       );
+      // Refresh the snapshot after a failure; never resend automatically.
+      setDeletionPreviewLoading(true);
+      try {
+        setDeletionPreview(await getRequest(`/receivables/${deletionPreview.installmentId}/deletion-preview`));
+      } catch (refreshError: unknown) {
+        setDeletionPreview(null);
+        setDeleteConfirmOpen(false);
+        setMessage(getUserFacingApiErrorMessage(refreshError, "Não foi possível atualizar a simulação."));
+      } finally {
+        setDeletionPreviewLoading(false);
+      }
     }
   };
 
   const handleOpenQuitModal = () => {
-    if (!selectedRow) return;
+    if (!selectedRow || selectedRow.status === "CANCELLED" || selectedRow.deletionAuditId) return;
 
     const today = toIsoDate(new Date());
     setReceiptPaymentTypeId(
@@ -1159,7 +1202,7 @@ export default function ReceivablesPage() {
             variant="secondary"
             size="sm"
             onClick={handleDeleteReceivable}
-            disabled={!canManageSelectedRow}
+            disabled={!canDeleteSelectedRow || deletionBusy}
           >
             Excluir
           </Button>
@@ -1333,7 +1376,7 @@ export default function ReceivablesPage() {
                 <tr
                   key={row.id}
                   onClick={() => handleSelectRow(row.id)}
-                  className={`cursor-pointer transition-colors ${
+                  className={`cursor-pointer transition-colors ${row.deletionAuditId ? "opacity-45 " : ""}${
                     selectedRowId === row.id
                       ? "bg-surface"
                       : "bg-surface-lowest hover:bg-surface"
@@ -1775,10 +1818,11 @@ export default function ReceivablesPage() {
         ) : null}
       </CustomerModal>
 
+      <GlobalMutationLoadingOverlay open={deletionPreviewLoading} />
       <CustomerModal
-        open={deleteConfirmOpen && Boolean(selectedRow)}
-        onClose={() => setDeleteConfirmOpen(false)}
-        title="Confirmar exclusão"
+        open={deleteConfirmOpen && !deletionPreview && Boolean(selectedRow)}
+        onClose={() => { if (!deletionBusy) setDeleteConfirmOpen(false); }}
+        title="Motivo da exclusão"
         size="sm"
         subtitle="Confirme a exclusão da conta a receber selecionada."
       >
@@ -1791,20 +1835,57 @@ export default function ReceivablesPage() {
                 {selectedRow.parcela}?
               </p>
             </div>
+            <div>
+              <label htmlFor="delete-receivable-reason" className="mb-1 block text-sm font-medium text-primary">
+                Motivo da exclusão (obrigatório)
+              </label>
+              <textarea
+                id="delete-receivable-reason"
+                required
+                disabled={deletionBusy}
+                value={deleteReason}
+                onChange={(event) => setDeleteReason(event.target.value)}
+                placeholder="Informe por que esta conta será excluída."
+                className="min-h-24 w-full rounded-lg border border-outline-variant/60 bg-white px-3 py-2 text-[15px] text-primary"
+              />
+            </div>
             <div className="flex gap-2">
               <Button
                 variant="primary"
                 size="sm"
-                onClick={handleConfirmDeleteReceivable}
+                onClick={handlePreviewDeletion}
+                disabled={!deleteReason.trim() || deletionBusy}
               >
-                Confirmar
+                Continuar
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => setDeleteConfirmOpen(false)}
+                disabled={deletionBusy}
               >
                 Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </CustomerModal>
+
+      <CustomerModal
+        open={deleteConfirmOpen && Boolean(deletionPreview) && Boolean(selectedRow)}
+        onClose={() => { if (!deletionBusy) setDeletionPreview(null); }}
+        title="Confirmar exclusão"
+        size="sm"
+      >
+        {deletionPreview && selectedRow ? (
+          <div className="space-y-5">
+            <p className="text-sm text-primary">Tem certeza? Os recebimentos serão preservados. Apenas o saldo desta parcela será abatido, e o registro ficará no histórico como excluído.</p>
+            <div className="flex gap-2">
+              <Button variant="danger" size="sm" onClick={handleConfirmDeleteReceivable} disabled={deletionBusy}>
+                Confirmar exclusão
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setDeletionPreview(null)} disabled={deletionBusy}>
+                Voltar
               </Button>
             </div>
           </div>

@@ -53,6 +53,8 @@ type SaleReceipt = {
 };
 
 type SaleInstallment = {
+  deletionAuditId?: number | null;
+  waivedAmount?: number;
   id: number;
   installmentNumber: number;
   totalInstallments: number;
@@ -143,6 +145,7 @@ type SaleDetailsResponse = {
     originLabel: string;
     originName: string;
     originalAmount: number;
+    waivedAmount: number;
     openAmount: number;
     status: string;
     installments: SaleInstallment[];
@@ -508,14 +511,7 @@ export default function SaleDetailsPage() {
     [sale],
   );
   const receivableInstallmentsCount = useMemo(
-    () => sale?.receivable?.installments.length || 0,
-    [sale],
-  );
-  const openReceivableInstallments = useMemo(
-    () =>
-      sale?.receivable?.installments.filter(
-        (installment) => installment.openAmount > 0,
-      ) || [],
+    () => sale?.receivable?.installments.filter((item) => item.status !== "CANCELLED" && !item.deletionAuditId).length || 0,
     [sale],
   );
   const activeItemsCount = useMemo(
@@ -977,6 +973,7 @@ export default function SaleDetailsPage() {
               value={formatCurrency(sale.finalAmount)}
             />
             <InfoCard label="Recebido" value={formatCurrency(totalReceived)} />
+            <InfoCard label="Abatimento por exclusão" value={formatCurrency(sale.receivable?.waivedAmount || 0)} />
             <InfoCard
               label="Subtotal bruto"
               value={formatCurrency(sale.totalAmount)}
@@ -986,7 +983,7 @@ export default function SaleDetailsPage() {
               value={formatCurrency(totalItemDiscount)}
             />
             <InfoCard
-              label="Saldo em aberto"
+              label="Saldo atual devido"
               value={formatCurrency(
                 sale.doesNotGenerateDebt ? 0 : sale.receivable?.openAmount || 0,
               )}
@@ -994,7 +991,7 @@ export default function SaleDetailsPage() {
             <InfoCard
               label="Parcelas previstas"
               value={String(
-                sale.doesNotGenerateDebt ? 0 : sale.installmentCount || 1,
+                sale.doesNotGenerateDebt ? 0 : sale.installmentCount,
               )}
             />
             <InfoCard
@@ -1272,21 +1269,21 @@ export default function SaleDetailsPage() {
                     value={formatCurrency(sale.receivable.originalAmount)}
                   />
                   <InfoCard
-                    label="Saldo aberto"
+                    label="Saldo atual devido"
                     value={formatCurrency(sale.receivable.openAmount)}
                   />
                 </div>
 
                 <div className="mt-5 space-y-3">
-                  {openReceivableInstallments.length === 0 ? (
+                  {sale.receivable.installments.length === 0 ? (
                     <div className="rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
                       Nenhuma parcela em aberto.
                     </div>
                   ) : (
-                    openReceivableInstallments.map((installment) => (
+                    sale.receivable.installments.map((installment) => (
                       <div
                         key={installment.id}
-                        className="rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4"
+                        className={`rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 ${installment.deletionAuditId ? "opacity-45" : ""}`}
                       >
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                           <div>
@@ -1305,7 +1302,8 @@ export default function SaleDetailsPage() {
                         </div>
                         <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
                           <p>Vencimento: {formatDate(installment.dueDate)}</p>
-                          <p>Status: {formatReceivableStatus(installment.status)}</p>
+                          <p>Status: {installment.deletionAuditId ? "Excluída" : formatReceivableStatus(installment.status)}</p>
+                          {installment.deletionAuditId ? <p>Abatimento: {formatCurrency(installment.waivedAmount || 0)}</p> : null}
                           <p>Pago: {formatCurrency(installment.paidAmount)}</p>
                           <p>
                             Em aberto: {formatCurrency(installment.openAmount)}

@@ -10,6 +10,7 @@ router.get("/", controller.listReceivablesController);
 router.post("/", controller.createReceivableController);
 router.put("/:installmentId", controller.updateReceivableController);
 router.delete("/:installmentId", controller.deleteReceivableController);
+router.get("/:installmentId/deletion-preview", controller.previewReceivableDeletionController);
 router.post("/:installmentId/receipts", controller.registerReceiptController);
 router.get("/:installmentId/receipts", controller.listInstallmentReceiptsController);
 router.post("/:installmentId/reverse-latest-receipt", controller.reverseLatestReceiptController);

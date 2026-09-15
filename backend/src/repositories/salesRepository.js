@@ -1133,7 +1133,7 @@ async function updateCardTransactionByReceivableId(receivableId, values, transac
   });
 }
 
-async function getSaleById(idSale) {
+async function getSaleById(idSale, transaction) {
   const legacyCompletedSignal = buildLegacyCompletedSignal();
   const include = [
     {
@@ -1222,6 +1222,7 @@ async function getSaleById(idSale) {
   }
 
   return Sales.findOne({
+    transaction,
     where: {
       idSale,
     },
@@ -1372,6 +1373,7 @@ async function listMeasurementDefinitions() {
 }
 
 module.exports = {
+  lockSaleFinancials: receivablesRepository.lockSaleFinancials,
   createSale,
   cancelSale,
   deleteQuote,

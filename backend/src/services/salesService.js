@@ -1,3 +1,4 @@
+const receivableBalance = require("../utils/receivableBalance");
 const { notFoundError, validationError } = require("../errors/AppError");
 const { sequelize } = require("../models");
 const repository = require("../repositories/salesRepository");
@@ -1276,7 +1277,9 @@ function mapReceivableInstallment(installment) {
     dueDate: installment.dueDate,
     amount: Number(installment.amount || 0),
     paidAmount: Number(installment.paidAmount || 0),
-    openAmount: Number((Number(installment.amount || 0) - Number(installment.paidAmount || 0)).toFixed(2)),
+    openAmount: receivableBalance.openBalance(installment),
+    deletionAuditId: installment.deletionAuditId || null,
+    waivedAmount: Number(installment.waivedAmount || 0),
     status: installment.status,
     paymentType: paymentType
       ? {
@@ -1415,7 +1418,7 @@ function mapSaleDetails(sale) {
     totalAmount: Number(sale.totalAmount || 0),
     finalAmount: Number(sale.finalAmount || 0),
     dueDate: sale.dueDate,
-    installmentCount: Number(sale.installmentCount || 1),
+    installmentCount: Number(sale.installmentCount ?? 1),
     createdAt: sale.createdAt,
     updatedAt: sale.updatedAt,
     items,
@@ -1440,6 +1443,7 @@ function mapSaleDetails(sale) {
             customer?.fullName || customer?.companyName,
             "CLIENTE",
           ),
+        waivedAmount: receivableBalance.summarize(receivable.ReceivableInstallments || []).waivedAmount,
         originalAmount: Number(receivable.originalAmount || 0),
         openAmount: Number(receivable.openAmount || 0),
         status: receivable.status,
@@ -2196,6 +2200,12 @@ async function cancelSale(id, user, body = {}) {
   }
 
   const cancelled = await sequelize.transaction(async (transaction) => {
+    await repository.lockSaleFinancials(normalizedId, transaction);
+    const currentSale = await repository.getSaleById(normalizedId, transaction);
+    if (!currentSale) throw notFoundError("Venda nao encontrada.");
+    if (resolveSaleStatus(currentSale) === "CANCELLED") {
+      throw createSalesValidationError("A venda ja esta cancelada.");
+    }
     const [reversedCashEntries, reversedBankEntries, restoredCustomerCredits] = await Promise.all([
       reverseSaleCashEntries(normalizedId, occurredAt, reason, userId, transaction),
       reverseSaleBankEntries(normalizedId, occurredAt, reason, userId, transaction),
@@ -2255,6 +2265,7 @@ async function cancelSaleItem(saleId, itemId, user, body = {}) {
   const occurredAt = new Date();
 
   return sequelize.transaction(async (transaction) => {
+    await repository.lockSaleFinancials(normalizedSaleId, transaction);
     const sale = await repository.getSaleForItemCancellation(
       normalizedSaleId,
       normalizedItemId,
@@ -2382,7 +2393,8 @@ async function cancelSaleItem(saleId, itemId, user, body = {}) {
 
     const receivable = sale.Receivable || sale.Receivables || null;
     const nextReceivableOriginalAmount = roundCurrency(
-      Math.max(0, nextFinalAmount - effectiveStandaloneReceived),
+      Math.max(0, nextFinalAmount - effectiveStandaloneReceived -
+        receivableBalance.summarize(receivable?.ReceivableInstallments || []).waivedAmount),
     );
     const cancellationMetadata = {
       ...(targetItem.metadata || {}),
@@ -2432,7 +2444,7 @@ async function cancelSaleItem(saleId, itemId, user, body = {}) {
           transaction,
         );
 
-        for (const installment of receivable.ReceivableInstallments || []) {
+        for (const installment of (receivable.ReceivableInstallments || []).filter((item) => !receivableBalance.isInactive(item))) {
           await repository.updateReceivableInstallment(
             installment.idReceivableInstallment,
             {
@@ -2445,7 +2457,7 @@ async function cancelSaleItem(saleId, itemId, user, body = {}) {
         }
       } else {
         const redistributedInstallments = buildReceivableInstallmentRedistribution(
-          receivable.ReceivableInstallments || [],
+          (receivable.ReceivableInstallments || []).filter((item) => !receivableBalance.isInactive(item)),
           nextReceivableOriginalAmount,
         );
 
@@ -2505,87 +2517,87 @@ async function renegotiateSalePayment(id, user, body = {}) {
   }
 
   const reason = normalizeRequiredText(body.reason, "Motivo");
-  const sale = await repository.getSaleById(normalizedId);
+  return sequelize.transaction(async (transaction) => {
+    await repository.lockSaleFinancials(normalizedId, transaction);
+    const sale = await repository.getSaleById(normalizedId, transaction);
 
-  if (!sale) {
-    throw notFoundError("Venda nao encontrada.");
-  }
+    if (!sale) {
+      throw notFoundError("Venda nao encontrada.");
+    }
 
-  if (resolveSaleStatus(sale) === "CANCELLED") {
-    throw createSalesValidationError("Nao e possivel renegociar uma venda cancelada.");
-  }
+    if (resolveSaleStatus(sale) === "CANCELLED") {
+      throw createSalesValidationError("Nao e possivel renegociar uma venda cancelada.");
+    }
 
-  const receivable = sale.Receivable || sale.Receivables || null;
+    const receivable = sale.Receivable || sale.Receivables || null;
 
-  if (!receivable || Number(receivable.openAmount || 0) <= 0) {
-    throw createSalesValidationError("Esta venda nao possui saldo em aberto para renegociar.");
-  }
+    if (!receivable || Number(receivable.openAmount || 0) <= 0) {
+      throw createSalesValidationError("Esta venda nao possui saldo em aberto para renegociar.");
+    }
 
-  if (receivable.debtorType !== "CUSTOMER") {
-    throw createSalesValidationError(
-      "A renegociacao desta etapa esta disponivel apenas para contas a receber de cliente.",
+    if (receivable.debtorType !== "CUSTOMER") {
+      throw createSalesValidationError(
+        "A renegociacao desta etapa esta disponivel apenas para contas a receber de cliente.",
+      );
+    }
+
+    const installments = (receivable.ReceivableInstallments || []).filter((item) => !receivableBalance.isInactive(item));
+    const partiallyPaidInstallment = installments.find(
+      (installment) => Number(installment.paidAmount || 0) > 0 && installment.status !== "PAID",
     );
-  }
 
-  const installments = Array.isArray(receivable.ReceivableInstallments)
-    ? receivable.ReceivableInstallments
-    : [];
-  const partiallyPaidInstallment = installments.find(
-    (installment) => Number(installment.paidAmount || 0) > 0 && installment.status !== "PAID",
-  );
+    if (partiallyPaidInstallment) {
+      throw createSalesValidationError(
+        "Nao e possivel renegociar parcelas parcialmente pagas por este fluxo. Utilize o ajuste financeiro.",
+      );
+    }
 
-  if (partiallyPaidInstallment) {
-    throw createSalesValidationError(
-      "Nao e possivel renegociar parcelas parcialmente pagas por este fluxo. Utilize o ajuste financeiro.",
+    const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
+
+    if (mainPaymentType.financialFlow !== "FUTURE_CUSTOMER") {
+      throw createSalesValidationError(
+        "A renegociacao desta etapa exige uma forma de pagamento com recebimento futuro do cliente.",
+      );
+    }
+
+    const installmentCount =
+      body.installmentCount === null || body.installmentCount === undefined || body.installmentCount === ""
+        ? Number(mainPaymentType.defaultInstallments || 1)
+        : normalizeInteger(body.installmentCount, "Quantidade de parcelas");
+    validateInstallmentCount(mainPaymentType, installmentCount);
+
+    const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
+    if (mainPaymentType.requiresDueDate && !dueDate) {
+      throw createSalesValidationError("Data de vencimento e obrigatoria.");
+    }
+
+    const installmentIntervalDays =
+      body.installmentIntervalDays === null ||
+      body.installmentIntervalDays === undefined ||
+      body.installmentIntervalDays === ""
+        ? 30
+        : normalizeInteger(body.installmentIntervalDays, "Intervalo entre parcelas");
+
+    const paidInstallments = installments.filter((installment) => installment.status === "PAID");
+    const unpaidInstallments = installments.filter((installment) => installment.status !== "PAID");
+
+    if (!unpaidInstallments.length) {
+      throw createSalesValidationError("Nao existem parcelas abertas para renegociar.");
+    }
+
+    const openAmount = roundCurrency(receivable.openAmount || 0);
+    const newInstallments = buildInstallments(
+      openAmount,
+      installmentCount,
+      mainPaymentType.id,
+      dueDate || new Date(),
+      undefined,
     );
-  }
+    const newTotalInstallments = paidInstallments.length + newInstallments.length;
+    const userId = normalizeUserId(user);
+    const occurredAt = new Date();
 
-  const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
 
-  if (mainPaymentType.financialFlow !== "FUTURE_CUSTOMER") {
-    throw createSalesValidationError(
-      "A renegociacao desta etapa exige uma forma de pagamento com recebimento futuro do cliente.",
-    );
-  }
-
-  const installmentCount =
-    body.installmentCount === null || body.installmentCount === undefined || body.installmentCount === ""
-      ? Number(mainPaymentType.defaultInstallments || 1)
-      : normalizeInteger(body.installmentCount, "Quantidade de parcelas");
-  validateInstallmentCount(mainPaymentType, installmentCount);
-
-  const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
-  if (mainPaymentType.requiresDueDate && !dueDate) {
-    throw createSalesValidationError("Data de vencimento e obrigatoria.");
-  }
-
-  const installmentIntervalDays =
-    body.installmentIntervalDays === null ||
-    body.installmentIntervalDays === undefined ||
-    body.installmentIntervalDays === ""
-      ? 30
-      : normalizeInteger(body.installmentIntervalDays, "Intervalo entre parcelas");
-
-  const paidInstallments = installments.filter((installment) => installment.status === "PAID");
-  const unpaidInstallments = installments.filter((installment) => installment.status !== "PAID");
-
-  if (!unpaidInstallments.length) {
-    throw createSalesValidationError("Nao existem parcelas abertas para renegociar.");
-  }
-
-  const openAmount = roundCurrency(receivable.openAmount || 0);
-  const newInstallments = buildInstallments(
-    openAmount,
-    installmentCount,
-    mainPaymentType.id,
-    dueDate || new Date(),
-    undefined,
-  );
-  const newTotalInstallments = paidInstallments.length + newInstallments.length;
-  const userId = normalizeUserId(user);
-  const occurredAt = new Date();
-
-  await sequelize.transaction(async (transaction) => {
     if (paidInstallments.length) {
       for (const installment of paidInstallments) {
         await repository.updateReceivableInstallment(
@@ -2622,11 +2634,13 @@ async function renegotiateSalePayment(id, user, body = {}) {
       receivable.idReceivable,
       {
         originalAmount: roundCurrency(
+          (receivable.ReceivableInstallments || []).filter((item) => receivableBalance.isInactive(item))
+            .reduce((sum, item) => sum + Number(item.amount || 0), 0) +
           paidInstallments.reduce((acc, installment) => acc + Number(installment.amount || 0), 0) +
             openAmount,
         ),
         openAmount,
-        status: paidInstallments.length ? "PARTIAL" : "OPEN",
+        status: (receivable.ReceivableInstallments || []).some((item) => Number(item.paidAmount || 0) > 0) ? "PARTIAL" : "OPEN",
       },
       transaction,
     );
@@ -2654,14 +2668,14 @@ async function renegotiateSalePayment(id, user, body = {}) {
       },
       transaction,
     );
-  });
 
-  return {
-    id: normalizedId,
-    installmentCount: newTotalInstallments,
-    openAmount,
-    message: "Pagamento renegociado com sucesso.",
-  };
+    return {
+      id: normalizedId,
+      installmentCount: newTotalInstallments,
+      openAmount,
+      message: "Pagamento renegociado com sucesso.",
+    };
+  });
 }
 
 async function deleteQuote(id) {

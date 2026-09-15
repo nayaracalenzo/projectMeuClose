@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "migrate:prod": "sequelize-cli db:migrate --config src/config/config.js --migrations-path src/migrations --env production",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test tests/*.test.js",
     "start": "node src/index.js",
     "dev": " nodemon src/index.js",
     "db:migrate": "npx sequelize-cli db:migrate --config src/config/config.js --migrations-path src/migrations"

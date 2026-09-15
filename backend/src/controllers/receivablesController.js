@@ -29,8 +29,16 @@ async function updateReceivableController(req, res, next) {
 
 async function deleteReceivableController(req, res, next) {
   try {
-    const data = await service.deleteReceivable(req.params.installmentId, req.user);
+    const data = await service.deleteReceivable(req.params.installmentId, req.user, req.body);
     return res.status(200).json(data);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function previewReceivableDeletionController(req, res, next) {
+  try {
+    return res.status(200).json(await service.previewReceivableDeletion(req.params.installmentId));
   } catch (error) {
     return next(error);
   }
@@ -64,6 +72,7 @@ async function reverseLatestReceiptController(req, res, next) {
 }
 
 module.exports = {
+  previewReceivableDeletionController,
   listReceivablesController,
   createReceivableController,
   updateReceivableController,
