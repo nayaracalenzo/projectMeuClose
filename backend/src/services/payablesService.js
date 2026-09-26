@@ -236,6 +236,9 @@ async function listPayables({
   const items = result.rows.map((item) => {
     const supplier = item.Supplier || item.Suppliers || null;
     const paymentType = item.PaymentType || item.PaymentTypes || null;
+    const latestPayment = Array.isArray(item.PayablePayments)
+      ? item.PayablePayments[0]
+      : null;
     const supplierName = supplier?.tradeName || supplier?.fullName || null;
 
     return {
@@ -249,6 +252,7 @@ async function listPayables({
       amount: Number(item.amount),
       openAmount: Number(item.openAmount),
       paidAmount: Math.max(0, Number(item.amount) - Number(item.openAmount)),
+      lastPaidAt: latestPayment?.paidAt || null,
       dueDate: item.dueDate,
       status: item.status,
       settlementTarget: item.settlementTarget,

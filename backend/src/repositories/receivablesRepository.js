@@ -179,7 +179,7 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
   const saleReceiptAttributes = summary ? [] : ["idPaymentReceipt", "receiptType"];
   const paymentTypeAttributes = summary ? [] : ["idPaymentType", "desc"];
 
-  return [
+  const include = [
     {
       model: Receivables,
       attributes: summary ? [] : undefined,
@@ -214,6 +214,19 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
       required: false,
     },
   ];
+
+  if (!summary) {
+    include.push({
+      model: PaymentReceipts,
+      attributes: ["paidAt"],
+      required: false,
+      separate: true,
+      limit: 1,
+      order: [["paidAt", "DESC"], ["idPaymentReceipt", "DESC"]],
+    });
+  }
+
+  return include;
 }
 
 function buildStandaloneReceiptsWhere({ startDate, endDate, search } = {}) {
