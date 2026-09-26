@@ -846,14 +846,15 @@ export default function CustomerDetails() {
 
   return (
     <div className="w-full min-h-full min-w-0 bg-white p-3 sm:p-5 md:bg-surface-low">
-      <div className="mb-5 flex items-center justify-between gap-3">
-        <h1 className="pt-8 pb-4 text-4xl font-semibold text-primary md:text-[2rem]">
+      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h1 className="pb-1 pt-8 text-4xl font-semibold text-primary md:pb-4 md:text-[2rem]">
           Detalhe do Cliente
         </h1>
-        <div className="hidden gap-2 md:flex">
+        <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
           <Button
             variant="secondary"
             size="md"
+            className="w-full md:w-auto"
             onClick={() => void handleLeavePage("/clientes")}
           >
             Voltar
@@ -861,6 +862,7 @@ export default function CustomerDetails() {
           <Button
             variant="secondary"
             size="md"
+            className="w-full md:w-auto"
             onClick={() => setIsSalesModalOpen(true)}
           >
             Vendas do Cliente
@@ -868,6 +870,7 @@ export default function CustomerDetails() {
           <Button
             variant="secondary"
             size="md"
+            className="w-full md:w-auto"
             onClick={() =>
               navigate(
                 `/a-receber?search=${encodeURIComponent(
@@ -881,6 +884,7 @@ export default function CustomerDetails() {
           <Button
             variant="primary"
             size="md"
+            className="w-full md:w-auto"
             onClick={() => void handleSave()}
             disabled={saving || !hasUnsavedChanges}
           >
@@ -889,6 +893,7 @@ export default function CustomerDetails() {
           <Button
             variant="danger"
             size="md"
+            className="col-span-2 w-full md:w-auto"
             onClick={handleDeleteRequest}
             disabled={saving}
           >

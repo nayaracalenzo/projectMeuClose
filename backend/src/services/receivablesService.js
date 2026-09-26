@@ -503,8 +503,9 @@ async function listInstallments({
   const endDate = normalizeOptionalDate(rawEndDate, "Data final", { endOfDay: true });
   const search = rawSearch ? String(rawSearch).trim() : undefined;
   const includeStandaloneReceipts = status === "RECEBIDAS" || status === "TODAS";
-  const installmentsPageSize = includeStandaloneReceipts ? undefined : pageSize;
-  const installmentsPage = includeStandaloneReceipts ? undefined : page;
+  const combinedPageLimit = page * pageSize;
+  const installmentsPageSize = includeStandaloneReceipts ? combinedPageLimit : pageSize;
+  const installmentsPage = includeStandaloneReceipts ? 1 : page;
   const result = await repository.listInstallments({
     page: installmentsPage,
     pageSize: installmentsPageSize,
@@ -513,6 +514,7 @@ async function listInstallments({
     search,
     status,
     customerId,
+    sortByDueDate: includeStandaloneReceipts,
   });
   const summary = await repository.summarizeInstallments({
     startDate,
@@ -547,9 +549,10 @@ async function listInstallments({
           ? 0
           : Math.max(0, Number(item.amount) - Number(item.paidAmount));
       const normalizedPaymentType = paymentType ? buildPaymentTypeResponse(paymentType) : null;
-      const latestReceipt = Array.isArray(item.PaymentReceipts)
-        ? item.PaymentReceipts[0]
-        : null;
+      const latestReceiptPaidAt =
+        typeof item.get === "function"
+          ? item.get("latestReceiptPaidAt")
+          : item.latestReceiptPaidAt;
 
       return {
         id: item.idReceivableInstallment,
@@ -578,7 +581,7 @@ async function listInstallments({
         paymentFlow: normalizedPaymentType?.financialFlow || null,
         amount: Number(item.amount),
         paidAmount: Number(item.paidAmount),
-        lastPaidAt: latestReceipt?.paidAt || null,
+        lastPaidAt: latestReceiptPaidAt || null,
         openAmount: openBalance,
       };
     });
@@ -589,6 +592,7 @@ async function listInstallments({
       endDate,
       search,
       customerId,
+      limit: combinedPageLimit,
     })
     : [];
   const standaloneSummary = includeStandaloneReceipts
@@ -646,7 +650,7 @@ async function listInstallments({
     : installmentItems;
 
   const total = includeStandaloneReceipts
-    ? installmentItems.length + standaloneItems.length
+    ? Number(result.count || 0) + Number(standaloneSummary.total || 0)
     : Number(result.count || 0);
 
   return {
