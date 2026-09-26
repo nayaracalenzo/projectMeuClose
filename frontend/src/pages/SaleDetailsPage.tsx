@@ -484,8 +484,18 @@ export default function SaleDetailsPage() {
   const totalItemDiscount = useMemo(() => {
     if (!sale) return 0;
     return Number(
-      sale.items.reduce((acc, item) => acc + item.discountAmount, 0).toFixed(2),
+      sale.items
+        .filter((item) => !item.isCancelled)
+        .reduce((acc, item) => acc + item.discountAmount, 0)
+        .toFixed(2),
     );
+  }, [sale]);
+  const saleDiscountAmount = useMemo(() => {
+    if (!sale) return 0;
+    const activeItemsSubtotal = sale.items
+      .filter((item) => !item.isCancelled)
+      .reduce((sum, item) => sum + item.subtotal, 0);
+    return Number(Math.max(0, activeItemsSubtotal - sale.finalAmount).toFixed(2));
   }, [sale]);
 
   const totalReceived = useMemo(() => {
@@ -981,6 +991,10 @@ export default function SaleDetailsPage() {
             <InfoCard
               label="Desconto dos itens"
               value={formatCurrency(totalItemDiscount)}
+            />
+            <InfoCard
+              label="Desconto sobre a venda"
+              value={formatCurrency(saleDiscountAmount)}
             />
             <InfoCard
               label="Saldo atual devido"

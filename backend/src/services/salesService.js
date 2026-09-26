@@ -1577,6 +1577,29 @@ async function normalizeQuoteBase(body = {}) {
     throw createSalesValidationError("Valores totais sao obrigatórios.");
   }
 
+  const itemsSubtotal = roundCurrency(
+    items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
+  );
+  if (finalAmount < 0 || finalAmount > itemsSubtotal || totalAmount < finalAmount) {
+    throw createSalesValidationError(
+      "O desconto da venda nao pode ser maior que o subtotal dos itens.",
+    );
+  }
+
+  const discountType =
+    body.discountType === "PERCENTAGE" || body.discountType === "FIXED"
+      ? body.discountType
+      : null;
+  const discountValue = normalizeDecimal(body.discountValue, "Desconto da venda");
+  if (
+    discountType === "FIXED" &&
+    (discountValue === null ||
+      discountValue < 0 ||
+      discountValue !== roundCurrency(totalAmount - finalAmount))
+  ) {
+    throw createSalesValidationError("O desconto da venda nao corresponde ao valor final.");
+  }
+
   const customerMeasurements = await resolveMeasurementValues(body.customerMeasurements);
 
   return {
@@ -1586,11 +1609,8 @@ async function normalizeQuoteBase(body = {}) {
     finalAmount,
     customerMeasurements,
     userId: body.userId ? normalizeInteger(body.userId, "Usuario") : null,
-    discountType:
-      body.discountType === "PERCENTAGE" || body.discountType === "FIXED"
-        ? body.discountType
-        : null,
-    discountValue: normalizeDecimal(body.discountValue, "Desconto da venda"),
+    discountType,
+    discountValue,
   };
 }
 
@@ -1684,7 +1704,11 @@ async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount
     throw createSalesValidationError("Informe um valor de entrada valido para registrar a entrada.");
   }
 
-  if (!entryReceipt && mainPaymentType.financialFlow === "IMMEDIATE_CASH") {
+  if (
+    !entryReceipt &&
+    mainPaymentType.financialFlow === "IMMEDIATE_CASH" &&
+    finalAmount > customerCreditApplication.amount
+  ) {
     const paymentReferenceCode = body.paymentReferenceCode
       ? String(body.paymentReferenceCode).trim()
       : null;
@@ -2318,8 +2342,17 @@ async function cancelSaleItem(saleId, itemId, user, body = {}) {
         0,
       ),
     );
-    const nextFinalAmount = roundCurrency(
+    const activeItemsSubtotal = roundCurrency(
+      activeItems.reduce((acc, item) => acc + Number(item.subtotal || 0), 0),
+    );
+    const saleDiscountAmount = roundCurrency(
+      Math.max(0, activeItemsSubtotal - Number(sale.finalAmount || 0)),
+    );
+    const remainingItemsSubtotal = roundCurrency(
       remainingActiveItems.reduce((acc, item) => acc + Number(item.subtotal || 0), 0),
+    );
+    const nextFinalAmount = roundCurrency(
+      Math.max(0, remainingItemsSubtotal - saleDiscountAmount),
     );
     const nextDiscountAmount = roundCurrency(Math.max(0, nextTotalAmount - nextFinalAmount));
 
