@@ -1,5 +1,6 @@
 ﻿const { notFoundError, validationError } = require("../errors/AppError");
 const financialAccountsRepository = require("../repositories/financialAccountsRepository");
+const financialCategoriesRepository = require("../repositories/financialCategoriesRepository");
 const paymentTypesRepository = require("../repositories/paymentTypesRepository");
 const repository = require("../repositories/payablesRepository");
 const { normalizeShortOrIsoDateToIso } = require("../utils/normalizeDate");
@@ -252,6 +253,7 @@ async function listPayables({
       amount: Number(item.amount),
       openAmount: Number(item.openAmount),
       paidAmount: Math.max(0, Number(item.amount) - Number(item.openAmount)),
+      issuedAt: item.createdAt || null,
       lastPaidAt: latestPayment?.paidAt || null,
       dueDate: item.dueDate,
       status: item.status,
@@ -360,44 +362,42 @@ async function updatePayable(payableId, body = {}) {
   }
 
   const payable = await repository.getPayableForManagement(normalizedPayableId);
-  ensurePayableCanBeManaged(payable);
-
-  const scope = String(body.scope || "").trim();
-  if (scope !== "LOJA" && scope !== "PESSOAL") {
-    throw createPayablesValidationError("Escopo invalido.");
-  }
+  if (!payable) throw notFoundError("Conta a pagar nao encontrada.");
 
   const description = String(body.description || "").trim();
   const category = String(body.category || "").trim();
-  const rawBeneficiary = String(body.beneficiary || "").trim();
-  const supplierId = body.supplierId ? Number(body.supplierId) : null;
-  const supplier =
-    Number.isInteger(supplierId) && supplierId > 0
-      ? await repository.getSupplierById(supplierId)
-      : null;
-  const beneficiary = supplier?.tradeName || supplier?.fullName || rawBeneficiary;
-
   if (!description || !category) {
     throw createPayablesValidationError("Descricao e categoria sao obrigatorias.");
   }
 
-  const amount = normalizeAmount(body.amount, "Valor");
   const plannedPaymentType = await resolvePlannedPaymentType(body.plannedPaymentTypeId);
   const financialRouting = resolvePayableSettlementByPaymentType(plannedPaymentType);
+  const hasPayments = Array.isArray(payable.PayablePayments) && payable.PayablePayments.length > 0;
+  const financialCategory = hasPayments
+    ? await financialCategoriesRepository.getCategoryByDescription(category)
+    : null;
+  const paymentValues = hasPayments
+    ? {
+        paymentTypeId: plannedPaymentType.id,
+        paidAt: normalizeDate(body.paidAt, "Data do pagamento"),
+      }
+    : null;
 
-  await repository.updatePayable(normalizedPayableId, {
-    scope,
-    description,
-    category,
-    beneficiary,
-    supplierId: supplier?.idSupplier || null,
-    amount,
-    openAmount: amount,
-    dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
-    settlementTarget: financialRouting.settlementTarget,
-    accountLabel: financialRouting.accountLabel,
-    plannedPaymentTypeId: plannedPaymentType.id,
-  });
+  await repository.updatePayableForEdit(
+    normalizedPayableId,
+    {
+      description,
+      category,
+      dueDate: normalizeDate(body.dueDate, "Data de vencimento"),
+      settlementTarget: financialRouting.settlementTarget,
+      accountLabel: financialRouting.accountLabel,
+      plannedPaymentTypeId: plannedPaymentType.id,
+    },
+    paymentValues,
+    hasPayments
+      ? { financialCategoryId: financialCategory?.idFinancialCategory || null }
+      : undefined,
+  );
 
   return {
     message: "Conta a pagar alterada com sucesso.",

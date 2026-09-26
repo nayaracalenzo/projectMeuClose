@@ -1,5 +1,13 @@
 const { Op, Sequelize } = require("sequelize");
-const { PayablePayments, Payables, PaymentTypes, Suppliers, sequelize } = require("../models");
+const {
+  BankEntries,
+  CashEntries,
+  PayablePayments,
+  Payables,
+  PaymentTypes,
+  Suppliers,
+  sequelize,
+} = require("../models");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 const auditsRepository = require("./auditsRepository");
 
@@ -210,15 +218,55 @@ async function getPayableForManagement(payableId, transaction) {
   });
 }
 
-async function updatePayable(payableId, payload) {
-  const payable = await Payables.findByPk(payableId);
+async function updatePayableForEdit(
+  payableId,
+  payableValues,
+  paymentValues,
+  financialEntryValues = {},
+) {
+  return sequelize.transaction(async (transaction) => {
+    const payable = await Payables.findByPk(payableId, {
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
 
-  if (!payable) {
-    return undefined;
-  }
+    if (!payable) return undefined;
 
-  await payable.update(payload);
-  return payable;
+    await payable.update(payableValues, { transaction });
+
+    if (paymentValues) {
+      const payment = await PayablePayments.findOne({
+        where: { payableId },
+        order: [["paidAt", "DESC"], ["idPayablePayment", "DESC"]],
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+
+      if (payment) {
+        await payment.update(paymentValues, { transaction });
+        const financialValues = {
+          occurredAt: paymentValues.paidAt,
+          paymentTypeId: paymentValues.paymentTypeId,
+          description: payableValues.description,
+          category: payableValues.category,
+          ...financialEntryValues,
+        };
+
+        await Promise.all([
+          CashEntries.update(financialValues, {
+            where: { payablePaymentId: payment.idPayablePayment },
+            transaction,
+          }),
+          BankEntries.update(financialValues, {
+            where: { payablePaymentId: payment.idPayablePayment },
+            transaction,
+          }),
+        ]);
+      }
+    }
+
+    return payable;
+  });
 }
 
 async function registerPayment(payableId, payload) {
@@ -300,7 +348,7 @@ module.exports = {
   getSupplierById,
   getPayableById,
   getPayableForManagement,
-  updatePayable,
+  updatePayableForEdit,
   registerPayment,
   deleteManualPayable,
 };

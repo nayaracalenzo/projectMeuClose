@@ -20,7 +20,7 @@ function harness({ paid = 300, saleId = 12, second = true, fail = false } = {}) 
     items: [{ idReceivableInstallment: 42, receivableId: 5, amount: 1000, paidAmount: paid,
       dueDate: "2026-10-19", installmentNumber: 1, totalInstallments: 2, status: "OPEN", waivedAmount: 0 }],
     audits: [], sale: { finalAmount: 1500, installmentCount: 2 },
-    receipts: paid ? [{ amount: paid, idPaymentReceipt: 1 }] : [],
+    receipts: paid ? [{ amount: paid, idPaymentReceipt: 1, paymentTypeId: 1, paidAt: "2026-09-10" }] : [],
     cashEntries: paid ? [{ amount: paid }] : [],
   };
   if (second) state.items.push({ idReceivableInstallment: 43, receivableId: 5, amount: 500,
@@ -42,6 +42,10 @@ function harness({ paid = 300, saleId = 12, second = true, fail = false } = {}) 
       return run;
     },
     updateInstallment: async (id, values) => Object.assign(state.items.find((row) => row.idReceivableInstallment === id), values),
+    updatePaymentReceiptDetails: async (id, values) => Object.assign(
+      state.receipts.find((row) => row.idPaymentReceipt === id),
+      values,
+    ),
     updateReceivable: async (id, values) => { if (fail) throw Error("database failure"); Object.assign(state.title, values); },
     updateSaleFinancialSummary: async (id, values) => { if (id) Object.assign(state.sale, values); },
   };
@@ -122,6 +126,81 @@ test("receipt or sibling change invalidates the preview", async () => {
     await assert.rejects(service.deleteReceivable(42, { id: 7 }, { reason: "teste", previewToken: preview.previewToken }), { statusCode: 400 });
     assert.equal(state.audits.length, 0);
   }
+});
+
+test("editing a received installment preserves customer, status and values", async () => {
+  const { service, state } = harness();
+  const originalTitle = structuredClone(state.title);
+  const originalAmount = state.items[0].amount;
+  const originalPaidAmount = state.items[0].paidAmount;
+
+  await service.updateReceivable(42, {
+    customerId: 999,
+    paymentTypeId: 2,
+    amount: 1,
+    status: "PAID",
+    dueDate: "2026-10-25",
+    paidAt: "2026-09-15",
+  });
+
+  assert.deepEqual(state.title, originalTitle);
+  assert.equal(state.items[0].amount, originalAmount);
+  assert.equal(state.items[0].paidAmount, originalPaidAmount);
+  assert.equal(state.items[0].status, "OPEN");
+  assert.equal(state.items[0].paymentTypeId, 2);
+  assert.equal(new Date(state.items[0].dueDate).toISOString().slice(0, 10), "2026-10-25");
+  assert.equal(state.receipts[0].paymentTypeId, 2);
+  assert.equal(new Date(state.receipts[0].paidAt).toISOString().slice(0, 10), "2026-09-15");
+});
+
+test("editing a paid payable sends only editable fields to the repository", async () => {
+  let receivedPayableValues = null;
+  let receivedPaymentValues = null;
+  let receivedFinancialValues = null;
+  const service = load("../src/services/payablesService.js", {
+    "../repositories/financialAccountsRepository": {},
+    "../repositories/financialCategoriesRepository": {
+      getCategoryByDescription: async () => ({ idFinancialCategory: 4 }),
+    },
+    "../repositories/paymentTypesRepository": {
+      getPaymentTypeById: async () => ({ idPaymentType: 8, desc: "PIX" }),
+    },
+    "../repositories/payablesRepository": {
+      getPayableForManagement: async () => ({
+        idPayable: 7,
+        amount: 900,
+        openAmount: 0,
+        status: "PAID",
+        supplierId: 3,
+        PayablePayments: [{ idPayablePayment: 11 }],
+      }),
+      updatePayableForEdit: async (_id, payableValues, paymentValues, financialValues) => {
+        receivedPayableValues = payableValues;
+        receivedPaymentValues = paymentValues;
+        receivedFinancialValues = financialValues;
+      },
+    },
+  });
+
+  await service.updatePayable(7, {
+    supplierId: 999,
+    amount: 1,
+    status: "OPEN",
+    description: "ALUGUEL AJUSTADO",
+    category: "ALUGUEL",
+    dueDate: "2026-10-25",
+    paidAt: "2026-09-15",
+    plannedPaymentTypeId: 8,
+  });
+
+  assert.equal(receivedPayableValues.description, "ALUGUEL AJUSTADO");
+  assert.equal(receivedPayableValues.category, "ALUGUEL");
+  assert.equal("supplierId" in receivedPayableValues, false);
+  assert.equal("amount" in receivedPayableValues, false);
+  assert.equal("status" in receivedPayableValues, false);
+  assert.equal(receivedPaymentValues.paymentTypeId, 8);
+  assert.equal(new Date(receivedPaymentValues.paidAt).toISOString().slice(0, 10), "2026-09-15");
+  assert.equal(receivedFinancialValues.financialCategoryId, 4);
 });
 
 test("serialized concurrent confirmations create one audit and one write-off", async () => {

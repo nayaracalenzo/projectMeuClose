@@ -1,10 +1,12 @@
-import {
+﻿import {
   ArrowDownCircle,
   ArrowUpCircle,
   Home,
   LogOut,
   Menu,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   UserLock,
   Users,
   Wallet,
@@ -25,6 +27,7 @@ export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navigation: NavItem[] = useMemo(
     () => [
@@ -57,19 +60,47 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="hidden h-screen max-h-screen w-60 shrink-0 border-r border-outline-variant/35 bg-surface-lowest/95 backdrop-blur-sm md:block">
-        <div className="flex h-full flex-col overflow-hidden px-4 pb-6 pt-8">
-          <div className="flex items-center gap-2">
-            <img className="h-16 opacity-75" src="/manequim.png" alt="logo" />
-            <h1 className="font-editorial text-[31px] uppercase tracking-[0.06em] text-primary">
+      <aside
+        className={`hidden h-screen max-h-screen shrink-0 border-r border-outline-variant/35 bg-surface-lowest/95 backdrop-blur-sm transition-[width] duration-200 md:block ${
+          isCollapsed ? "w-20" : "w-60"
+        }`}
+      >
+        <div
+          className={`flex h-full flex-col overflow-hidden pb-6 pt-6 transition-[padding] duration-200 ${
+            isCollapsed ? "px-3" : "px-4"
+          }`}
+        >
+          <div className={`flex items-center ${isCollapsed ? "justify-center" : "gap-2"}`}>
+            <img
+              className={`${isCollapsed ? "h-11" : "h-16"} opacity-75`}
+              src="/manequim.png"
+              alt="logo"
+            />
+            <h1 className={`${isCollapsed ? "hidden" : "block"} whitespace-nowrap font-editorial text-[25px] uppercase tracking-[0.06em] text-primary`}>
               Meu Close
             </h1>
           </div>
-          <p className="mt-2 text-[11px] uppercase tracking-[0.18em] text-neutral-700">
+          <button
+            type="button"
+            onClick={() => setIsCollapsed((current) => !current)}
+            className={`mt-2 flex h-9 w-9 items-center justify-center rounded text-neutral-700 transition hover:bg-surface hover:text-primary focus:outline-none ${
+              isCollapsed ? "self-center" : "self-end"
+            }`}
+            aria-label={isCollapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
+            aria-expanded={!isCollapsed}
+            title={isCollapsed ? "Expandir menu" : "Recolher menu"}
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen size={19} strokeWidth={2} />
+            ) : (
+              <PanelLeftClose size={19} strokeWidth={2} />
+            )}
+          </button>
+          <p className={`${isCollapsed ? "hidden" : "block"} mt-2 text-[11px] uppercase tracking-[0.18em] text-neutral-700`}>
             Ateliê
           </p>
 
-          <ul className="mt-3 flex-1 space-y-1">
+          <ul className={`${isCollapsed ? "mt-4" : "mt-3"} flex-1 space-y-1`}>
             {navigation.map((item) => {
               const Icon = item.icon;
 
@@ -82,8 +113,12 @@ export default function Sidebar() {
                         event.preventDefault();
                       }
                     }}
+                    aria-label={item.title}
+                    title={isCollapsed ? item.title : undefined}
                     className={({ isActive }) =>
-                      ` flex items-center gap-3 px-4 py-3.5 transition-colors ${
+                      `flex items-center py-3.5 transition-colors ${
+                        isCollapsed ? "justify-center px-2" : "gap-3 px-4"
+                      } ${
                         isActive
                           ? "bg-surface text-primary"
                           : "text-neutral-700 hover:bg-surface hover:text-primary"
@@ -92,9 +127,9 @@ export default function Sidebar() {
                   >
                     {({ isActive }) => (
                       <>
-                        <Icon size={16} strokeWidth={2} />
+                        <Icon size={isCollapsed ? 19 : 16} strokeWidth={2} />
                         <span
-                          className={`text-[13px] uppercase tracking-[0.12em] ${
+                          className={`${isCollapsed ? "hidden" : "block"} whitespace-nowrap text-[13px] uppercase tracking-[0.12em] ${
                             isActive ? "font-semibold" : "font-medium"
                           }`}
                         >
@@ -108,14 +143,18 @@ export default function Sidebar() {
             })}
           </ul>
 
-          <div className="mt-auto px-4 pt-4">
+          <div className={`mt-auto pt-4 ${isCollapsed ? "px-0" : "px-4"}`}>
             <button
               type="button"
               onClick={() => logoutAndRedirect("logged_out")}
-              className="flex w-full items-center gap-3 rounded px-4 py-3 text-[13px] font-medium uppercase tracking-[0.12em] text-neutral-700 transition hover:bg-surface hover:text-primary"
+              className={`flex w-full items-center rounded py-3 text-[13px] font-medium uppercase tracking-[0.12em] text-neutral-700 transition hover:bg-surface hover:text-primary ${
+                isCollapsed ? "justify-center px-2" : "gap-3 px-4"
+              }`}
+              aria-label="Sair"
+              title={isCollapsed ? "Sair" : undefined}
             >
-              <LogOut size={16} strokeWidth={2} />
-              <span>Sair</span>
+              <LogOut size={isCollapsed ? 19 : 16} strokeWidth={2} />
+              <span className={isCollapsed ? "hidden" : "block"}>Sair</span>
             </button>
           </div>
         </div>

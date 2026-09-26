@@ -58,6 +58,7 @@ interface PayableRow {
   supplierName: string | null;
   amount: number;
   paidAmount: number;
+  issuedAt: string | null;
   lastPaidAt: string | null;
   openAmount: number;
   dueDate: string;
@@ -397,11 +398,12 @@ export default function PayablesPage() {
   }, []);
 
   const selectedRow = rows.find((row) => row.id === selectedPayableId) || null;
-  const canManageSelectedPayable = Boolean(
+  const canEditSelectedPayable = Boolean(selectedRow && selectedRow.id > 0);
+  const canDeleteSelectedPayable = Boolean(
     selectedRow &&
-    selectedRow.id > 0 &&
-    selectedRow.paidAmount <= 0 &&
-    selectedRow.openAmount === selectedRow.amount,
+      selectedRow.id > 0 &&
+      selectedRow.paidAmount <= 0 &&
+      selectedRow.openAmount === selectedRow.amount,
   );
 
   const resetPayableForm = () => {
@@ -415,6 +417,7 @@ export default function PayablesPage() {
     setInstallmentCount("1");
     setDueDate(new Date().toISOString().slice(0, 10));
     setPlannedPaymentTypeId("");
+    setPaidAt(new Date().toISOString().slice(0, 10));
     setPayableFormMode("create");
   };
 
@@ -424,7 +427,7 @@ export default function PayablesPage() {
   };
 
   const handleOpenEditPayable = () => {
-    if (!selectedRow || !canManageSelectedPayable) return;
+    if (!selectedRow || !canEditSelectedPayable) return;
 
     setPayableFormMode("edit");
     setDescription(selectedRow.description);
@@ -435,6 +438,10 @@ export default function PayablesPage() {
     setAmount(formatCurrencyInput(String(selectedRow.amount.toFixed(2))));
     setInstallmentCount("1");
     setDueDate(selectedRow.dueDate.slice(0, 10));
+    setPaidAt(
+      selectedRow.lastPaidAt?.slice(0, 10) ||
+        new Date().toISOString().slice(0, 10),
+    );
     setPlannedPaymentTypeId(
       selectedRow.plannedPaymentTypeId
         ? String(selectedRow.plannedPaymentTypeId)
@@ -451,7 +458,7 @@ export default function PayablesPage() {
         payableFormMode === "create" && amountMode === "INSTALLMENT"
           ? roundCurrency(rawAmount * parsedInstallmentCount)
           : rawAmount;
-      const payload = {
+      const createPayload = {
         scope: "LOJA" as Scope,
         description: normalizeUppercasePayloadText(description),
         category: normalizeUppercasePayloadText(category),
@@ -466,7 +473,7 @@ export default function PayablesPage() {
       };
 
       if (payableFormMode === "create") {
-        const data = (await postRequest("/payables", payload)) as CreatePayableResponse;
+        const data = (await postRequest("/payables", createPayload)) as CreatePayableResponse;
         setToast({
           open: true,
           tone: "success",
@@ -475,7 +482,15 @@ export default function PayablesPage() {
         });
       } else {
         if (!selectedRow) return;
-        await updateRequest(`/payables/${selectedRow.id}`, payload);
+        await updateRequest(`/payables/${selectedRow.id}`, {
+          description: normalizeUppercasePayloadText(description),
+          category: normalizeUppercasePayloadText(category),
+          dueDate,
+          plannedPaymentTypeId: plannedPaymentTypeId
+            ? Number(plannedPaymentTypeId)
+            : null,
+          paidAt: selectedRow.lastPaidAt ? paidAt : null,
+        });
         setToast({
           open: true,
           tone: "success",
@@ -505,12 +520,12 @@ export default function PayablesPage() {
   };
 
   const handleDeletePayable = () => {
-    if (!selectedRow || !canManageSelectedPayable) return;
+    if (!selectedRow || !canDeleteSelectedPayable) return;
     setDeleteConfirmOpen(true);
   };
 
   const handleConfirmDeletePayable = async () => {
-    if (!selectedRow || !canManageSelectedPayable) return;
+    if (!selectedRow || !canDeleteSelectedPayable) return;
 
     try {
       await deleteRequest(`/payables/${selectedRow.id}`, {});
@@ -904,18 +919,26 @@ export default function PayablesPage() {
                 <label className="mb-1 block text-sm font-semibold text-primary">
                   Fornecedor
                 </label>
-                <select
-                  value={supplierId}
-                  onChange={(e) => setSupplierId(e.target.value)}
-                  className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-                >
-                  <option value="">Selecione...</option>
-                  {suppliers.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
+                {payableFormMode === "edit" && selectedRow ? (
+                  <input
+                    value={selectedRow.supplierName || selectedRow.beneficiary}
+                    disabled
+                    className="h-11 w-full rounded border border-outline-variant/60 bg-surface-low px-3 text-[15px] text-neutral-700"
+                  />
+                ) : (
+                  <select
+                    value={supplierId}
+                    onChange={(e) => setSupplierId(e.target.value)}
+                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                  >
+                    <option value="">Selecione...</option>
+                    {suppliers.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
           </section>
@@ -987,6 +1010,7 @@ export default function PayablesPage() {
                     setAmount(formatCurrencyInput(e.target.value))
                   }
                   placeholder="R$ 0,00"
+                  disabled={payableFormMode === "edit"}
                   className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                 />
                 {payableFormMode === "create" ? (
@@ -1010,6 +1034,19 @@ export default function PayablesPage() {
                   className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                 />
               </div>
+              {payableFormMode === "edit" && selectedRow?.lastPaidAt ? (
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-primary">
+                    Data do pagamento
+                  </label>
+                  <DatePickerInput
+                    value={paidAt}
+                    onChange={setPaidAt}
+                    format="iso"
+                    className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+                  />
+                </div>
+              ) : null}
               <div>
                 <label className="mb-1 block text-sm font-semibold text-primary">
                   Forma de pagamento
@@ -1225,7 +1262,7 @@ export default function PayablesPage() {
             variant="secondary"
             size="sm"
             onClick={handleOpenEditPayable}
-            disabled={!canManageSelectedPayable}
+            disabled={!canEditSelectedPayable}
           >
             Alterar
           </Button>
@@ -1233,7 +1270,7 @@ export default function PayablesPage() {
             variant="secondary"
             size="sm"
             onClick={handleDeletePayable}
-            disabled={!canManageSelectedPayable}
+            disabled={!canDeleteSelectedPayable}
           >
             Excluir
           </Button>
@@ -1311,6 +1348,14 @@ export default function PayablesPage() {
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Data Emissão
+                  </p>
+                  <p className="mt-1 text-primary">
+                    {row.issuedAt ? formatDate(row.issuedAt) : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
                     Vencimento
                   </p>
                   <p className="mt-1 text-primary">{formatDate(row.dueDate)}</p>
@@ -1361,7 +1406,7 @@ export default function PayablesPage() {
       </div>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 min-w-[1200px] w-full border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-[1320px] w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
@@ -1373,6 +1418,9 @@ export default function PayablesPage() {
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Categoria
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Data Emissão
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Vencimento
@@ -1397,13 +1445,13 @@ export default function PayablesPage() {
           <tbody>
             {loading ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={10} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={11} className="px-4 py-4 text-sm text-neutral-700">
                   Carregando...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={10} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={11} className="px-4 py-4 text-sm text-neutral-700">
                   Nenhuma conta a pagar encontrada.
                 </td>
               </tr>
@@ -1442,6 +1490,9 @@ export default function PayablesPage() {
                     >
                       {row.category}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.issuedAt ? formatDate(row.issuedAt) : "-"}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(row.dueDate)}

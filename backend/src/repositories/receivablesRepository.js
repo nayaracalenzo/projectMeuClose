@@ -1,5 +1,7 @@
 const {
   CardTransactions,
+  BankEntries,
+  CashEntries,
   Customers,
   PaymentReceipts,
   PaymentTypes,
@@ -586,6 +588,50 @@ async function deletePaymentReceipt(idPaymentReceipt, transaction) {
   });
 }
 
+async function updatePaymentReceiptDetails(idPaymentReceipt, values, transaction) {
+  const receipt = await PaymentReceipts.findByPk(idPaymentReceipt, {
+    transaction,
+    lock: transaction ? transaction.LOCK.UPDATE : undefined,
+  });
+
+  if (!receipt) return undefined;
+
+  await receipt.update(values, { transaction });
+  const financialValues = {
+    occurredAt: values.paidAt,
+    paymentTypeId: values.paymentTypeId,
+  };
+
+  await Promise.all([
+    CashEntries.update(financialValues, {
+      where: { paymentReceiptId: idPaymentReceipt },
+      transaction,
+    }),
+    BankEntries.update(financialValues, {
+      where: { paymentReceiptId: idPaymentReceipt },
+      transaction,
+    }),
+  ]);
+
+  return receipt;
+}
+
+async function updateStandaloneReceiptDetails(idPaymentReceipt, values) {
+  return sequelize.transaction(async (transaction) => {
+    const receipt = await PaymentReceipts.findOne({
+      where: {
+        idPaymentReceipt,
+        receivableInstallmentId: null,
+      },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+
+    if (!receipt) return undefined;
+    return updatePaymentReceiptDetails(idPaymentReceipt, values, transaction);
+  });
+}
+
 async function updateInstallment(installmentId, values, transaction) {
   return ReceivableInstallments.update(values, {
     where: {
@@ -642,58 +688,6 @@ async function createManualReceivable(payload) {
   });
 }
 
-async function updateManualReceivable(installmentId, payload, activeTransaction) {
-  const execute = async (transaction) => {
-    const installment = await ReceivableInstallments.findByPk(installmentId, {
-      include: [
-        {
-          model: Receivables,
-        },
-      ],
-      transaction,
-      lock: { level: transaction.LOCK.UPDATE, of: ReceivableInstallments },
-    });
-
-    if (!installment || !installment.Receivable) {
-      return undefined;
-    }
-
-    await installment.update(
-      {
-        paymentTypeId: payload.paymentTypeId,
-        dueDate: payload.dueDate,
-        interestBaseDate: payload.dueDate,
-        amount: payload.amount,
-        status: "OPEN",
-      },
-      { transaction },
-    );
-
-    await installment.update(
-      {
-        paidAmount: 0,
-      },
-      { transaction },
-    );
-
-    await installment.Receivable.update(
-      {
-        customerId: payload.customerId,
-        originalAmount: payload.originalAmount,
-        openAmount: payload.openAmount,
-        status: payload.status,
-      },
-      { transaction },
-    );
-
-    return {
-      receivable: installment.Receivable,
-      installment,
-    };
-  };
-  return activeTransaction ? execute(activeTransaction) : sequelize.transaction(execute);
-}
-
 // Shared lock order: sale, title, installments. No locks on optional joins.
 async function lockSaleFinancials(saleId, transaction) {
   await Sales.findByPk(saleId, { transaction, lock: transaction.LOCK.UPDATE });
@@ -737,12 +731,13 @@ module.exports = {
   getInstallmentById,
   listInstallmentReceipts,
   deletePaymentReceipt,
+  updatePaymentReceiptDetails,
+  updateStandaloneReceiptDetails,
   listInstallments,
   summarizeInstallments,
   listStandaloneReceipts,
   summarizeStandaloneReceipts,
   createManualReceivable,
-  updateManualReceivable,
   updateInstallment,
   updateReceivable,
   withLockedInstallment,
