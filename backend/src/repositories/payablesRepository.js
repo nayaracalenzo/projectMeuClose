@@ -102,7 +102,7 @@ function buildWhere({ scope, status, startDate, endDate, search, category } = {}
 }
 
 function buildInclude({ summary = false } = {}) {
-  return [
+  const include = [
     {
       model: Suppliers,
       attributes: summary ? [] : ["idSupplier", "fullName", "tradeName"],
@@ -114,6 +114,19 @@ function buildInclude({ summary = false } = {}) {
       required: false,
     },
   ];
+
+  if (!summary) {
+    include.push({
+      model: PayablePayments,
+      attributes: ["paidAt"],
+      required: false,
+      separate: true,
+      limit: 1,
+      order: [["paidAt", "DESC"], ["idPayablePayment", "DESC"]],
+    });
+  }
+
+  return include;
 }
 
 async function listPayables({ scope, status, startDate, endDate, search, category, page, pageSize } = {}) {

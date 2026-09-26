@@ -572,6 +572,9 @@ async function listInstallments({
           ? 0
           : Math.max(0, Number(item.amount) - Number(item.paidAmount));
       const normalizedPaymentType = paymentType ? buildPaymentTypeResponse(paymentType) : null;
+      const latestReceipt = Array.isArray(item.PaymentReceipts)
+        ? item.PaymentReceipts[0]
+        : null;
 
       return {
         id: item.idReceivableInstallment,
@@ -600,6 +603,7 @@ async function listInstallments({
         paymentFlow: normalizedPaymentType?.financialFlow || null,
         amount: Number(item.amount),
         paidAmount: Number(item.paidAmount),
+        lastPaidAt: latestReceipt?.paidAt || null,
         openAmount: openBalance,
       };
     });
@@ -654,6 +658,7 @@ async function listInstallments({
       paymentTypeName: paymentType?.desc || null,
       amount: Number(receipt.amount || 0),
       paidAmount: Number(receipt.amount || 0),
+      lastPaidAt: receipt.paidAt,
       openAmount: 0,
     };
   });

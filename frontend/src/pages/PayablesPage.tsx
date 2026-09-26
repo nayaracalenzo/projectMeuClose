@@ -58,6 +58,7 @@ interface PayableRow {
   supplierName: string | null;
   amount: number;
   paidAmount: number;
+  lastPaidAt: string | null;
   openAmount: number;
   dueDate: string;
   status: string;
@@ -1316,6 +1317,14 @@ export default function PayablesPage() {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Pagamento
+                  </p>
+                  <p className="mt-1 text-primary">
+                    {row.lastPaidAt ? formatDate(row.lastPaidAt) : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
                     Forma
                   </p>
                   <p className="mt-1 text-primary">
@@ -1352,7 +1361,7 @@ export default function PayablesPage() {
       </div>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 w-full border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-[1200px] w-full border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
@@ -1367,6 +1376,9 @@ export default function PayablesPage() {
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Vencimento
+              </th>
+              <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+                Pagamento
               </th>
               <th className="px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma
@@ -1385,13 +1397,13 @@ export default function PayablesPage() {
           <tbody>
             {loading ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={10} className="px-4 py-4 text-sm text-neutral-700">
                   Carregando...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={9} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={10} className="px-4 py-4 text-sm text-neutral-700">
                   Nenhuma conta a pagar encontrada.
                 </td>
               </tr>
@@ -1433,6 +1445,9 @@ export default function PayablesPage() {
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {formatDate(row.dueDate)}
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {row.lastPaidAt ? formatDate(row.lastPaidAt) : "-"}
                   </td>
                   <td className="px-4 py-3 text-[14px] text-neutral-700">
                     {row.plannedPaymentTypeName || "-"}
