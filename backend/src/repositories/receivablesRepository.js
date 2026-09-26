@@ -178,7 +178,6 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
   const customerAttributes = summary ? [] : ["idCustomer", "fullName", "companyName"];
   const supplierAttributes = summary ? [] : ["idSupplier", "fullName", "tradeName"];
   const cardTransactionAttributes = summary ? [] : ["operatorLabel"];
-  const saleReceiptAttributes = summary ? [] : ["idPaymentReceipt", "receiptType"];
   const paymentTypeAttributes = summary ? [] : ["idPaymentType", "desc"];
 
   const include = [
@@ -197,15 +196,6 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
         {
           model: Sales,
           attributes: baseAttributes,
-          include: summary
-            ? []
-            : [
-                {
-                  model: PaymentReceipts,
-                  attributes: saleReceiptAttributes,
-                  required: false,
-                },
-              ],
         },
         { model: CardTransactions, attributes: cardTransactionAttributes, required: false },
       ],
@@ -216,17 +206,6 @@ function buildReceivablesInclude({ customerId, summary = false } = {}) {
       required: false,
     },
   ];
-
-  if (!summary) {
-    include.push({
-      model: PaymentReceipts,
-      attributes: ["paidAt"],
-      required: false,
-      separate: true,
-      limit: 1,
-      order: [["paidAt", "DESC"], ["idPaymentReceipt", "DESC"]],
-    });
-  }
 
   return include;
 }
@@ -289,12 +268,28 @@ async function listInstallments({
   search,
   status,
   customerId,
+  sortByDueDate = false,
 } = {}) {
   const where = buildStatusWhere(status, buildInstallmentsWhere({ startDate, endDate, search }));
   const query = {
     where,
     include: buildReceivablesInclude({ customerId }),
-    order: [["idReceivableInstallment", "DESC"]],
+    attributes: {
+      include: [
+        [
+          Sequelize.literal(`(
+            SELECT MAX(receipt."paidAt")
+            FROM "payment_receipts" AS receipt
+            WHERE receipt."receivableInstallmentId" =
+              "ReceivableInstallments"."idReceivableInstallment"
+          )`),
+          "latestReceiptPaidAt",
+        ],
+      ],
+    },
+    order: sortByDueDate
+      ? [["dueDate", "DESC"], ["idReceivableInstallment", "DESC"]]
+      : [["idReceivableInstallment", "DESC"]],
     distinct: true,
     subQuery: false,
   };
@@ -350,7 +345,7 @@ async function summarizeInstallments({ startDate, endDate, search, status, custo
   };
 }
 
-async function listStandaloneReceipts({ startDate, endDate, search, customerId } = {}) {
+async function listStandaloneReceipts({ startDate, endDate, search, customerId, limit } = {}) {
   const saleWhere = {
     ...(customerId && Number(customerId) > 0
       ? {
@@ -362,7 +357,7 @@ async function listStandaloneReceipts({ startDate, endDate, search, customerId }
     },
   };
 
-  return PaymentReceipts.findAll({
+  const query = {
     where: buildStandaloneReceiptsWhere({ startDate, endDate, search }),
     include: [
       {
@@ -383,7 +378,13 @@ async function listStandaloneReceipts({ startDate, endDate, search, customerId }
       },
     ],
     order: [["paidAt", "DESC"], ["idPaymentReceipt", "DESC"]],
-  });
+  };
+
+  if (Number.isInteger(limit) && limit > 0) {
+    query.limit = limit;
+  }
+
+  return PaymentReceipts.findAll(query);
 }
 
 async function summarizeStandaloneReceipts({ startDate, endDate, search, customerId } = {}) {
@@ -421,12 +422,14 @@ async function summarizeStandaloneReceipts({ startDate, endDate, search, custome
     ],
     attributes: [
       [sequelize.fn("COALESCE", sequelize.fn("SUM", sequelize.col("PaymentReceipts.amount")), 0), "totalReceived"],
+      [sequelize.fn("COUNT", sequelize.col("PaymentReceipts.idPaymentReceipt")), "total"],
     ],
     raw: true,
   });
 
   return {
     totalReceived: Number(totals?.totalReceived || 0),
+    total: Number(totals?.total || 0),
   };
 }
 

@@ -37,19 +37,6 @@ export default function CustomersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCustomers, setTotalCustomers] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth < 768 : false,
-  );
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   useEffect(() => {
     setCurrentPage(1);
   }, [deferredSearch, statusFilter]);
@@ -106,15 +93,15 @@ export default function CustomersPage() {
       ) : (
         <>
           <div>
-            <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <h1 className="pb-1 pt-8 font-editorial text-[2rem] font-extralight leading-[0.98] tracking-tight text-primary md:text-[2.35rem] md:leading-tight">
                 Clientes
               </h1>
-              <div className="hidden gap-2 md:flex">
+              <div className="flex w-full sm:w-auto">
                 <Button
                   variant="primary"
                   size="md"
-                  className="px-5"
+                  className="w-full px-5 sm:w-auto"
                   onClick={() => navigate("/novo-cliente")}
                 >
                   + Novo Cliente
@@ -129,29 +116,27 @@ export default function CustomersPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-11 w-full min-w-0 flex-1 rounded-4xl border border-gray-800 bg-white px-4 py-5 text-[18px] text-primary placeholder:text-xl focus:outline-none focus:ring-2 focus:ring-secondary/70 md:rounded md:border-outline-variant/50"
               />
-              {!isMobile && (
-                <FormControl size="medium" className="w-full md:w-auto">
-                  <Select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    sx={{
-                      padding: 2,
-                      height: 44,
-                      borderRadius: 1,
-                      backgroundColor: "white",
-                      width: { xs: "100%", md: "auto" },
-                      minWidth: { md: 190 },
-                      "& .MuiOutlinedInput-notchedOutline": {
-                        borderColor: "rgba(112, 105, 106, 0.45)",
-                      },
-                    }}
-                  >
-                    <MenuItem value="ativo">Clientes Ativos</MenuItem>
-                    <MenuItem value="inativo">Clientes Inativos</MenuItem>
-                    <MenuItem value="todos">Todos</MenuItem>
-                  </Select>
-                </FormControl>
-              )}
+              <FormControl size="medium" className="w-full md:w-auto">
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  sx={{
+                    padding: 2,
+                    height: 44,
+                    borderRadius: 1,
+                    backgroundColor: "white",
+                    width: { xs: "100%", md: "auto" },
+                    minWidth: { md: 190 },
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "rgba(112, 105, 106, 0.45)",
+                    },
+                  }}
+                >
+                  <MenuItem value="ativo">Clientes Ativos</MenuItem>
+                  <MenuItem value="inativo">Clientes Inativos</MenuItem>
+                  <MenuItem value="todos">Todos</MenuItem>
+                </Select>
+              </FormControl>
             </div>
           </div>
 
@@ -257,11 +242,11 @@ export default function CustomersPage() {
             ))}
           </div>
 
-          <div className="mt-4 hidden items-center justify-between md:flex">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-[13px] tracking-[0.04em] text-neutral-700">
               Página {currentPage} de {totalPages}
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
               <Button
                 variant="secondary"
                 size="sm"

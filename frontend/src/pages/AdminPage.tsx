@@ -1394,14 +1394,17 @@ export default function AdminPage() {
                             ? renderAuditsTable()
                             : renderSimpleTable()}
                     {renderMobileCards()}
-                    <div className="mt-4 hidden items-center justify-between md:flex">
+                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <p className="text-[13px] tracking-[0.04em] text-neutral-700">
                         Exibindo {visibleRows.length === 0 ? 0 : startIndex + 1}
                         -{Math.min(startIndex + pageSize, visibleRows.length)}{" "}
                         de {visibleRows.length}
                       </p>
-                      <div className="flex items-center gap-2">
-                        <FormControl size="medium" className="min-w-30">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <FormControl
+                          size="medium"
+                          className="w-full sm:min-w-30 sm:w-auto"
+                        >
                           <Select
                             value={String(pageSize)}
                             onChange={(e) => {
