@@ -488,31 +488,6 @@ async function reverseReceiptFinancialEntries(paymentReceiptId, reason, userId, 
   };
 }
 
-function ensureReceivableCanBeManaged(installment) {
-  balance.ensureActive(installment);
-  if (!installment || !installment.Receivable) {
-    throw notFoundError("Parcela nao encontrada.");
-  }
-
-  if (installment.idReceivableInstallment <= 0) {
-    throw createReceivablesValidationError("Somente contas manuais podem ser alteradas ou excluidas.");
-  }
-
-  if (installment.Receivable.saleId) {
-    throw createReceivablesValidationError("Contas vinculadas a venda nao podem ser alteradas ou excluidas.");
-  }
-
-  const receiptsCount = Array.isArray(installment.PaymentReceipts)
-    ? installment.PaymentReceipts.length
-    : 0;
-
-  if (receiptsCount > 0 || Number(installment.paidAmount || 0) > 0) {
-    throw createReceivablesValidationError(
-      "A conta a receber so pode ser alterada ou excluida antes da quitacao.",
-    );
-  }
-}
-
 async function listInstallments({
   status,
   customerId,
@@ -634,6 +609,7 @@ async function listInstallments({
       id: -Number(receipt.idPaymentReceipt),
       receivableId: null,
       saleId: sale?.idSale || receipt.saleId || null,
+      receivableCreatedAt: sale?.createdAt || receipt.createdAt || null,
       customerId: customer?.idCustomer || sale?.customerId || null,
       supplierId: null,
       debtorType: "CUSTOMER",
@@ -798,42 +774,58 @@ async function createReceivable(body = {}) {
 }
 
 async function updateReceivable(installmentId, body = {}) {
-  const normalizedInstallmentId = normalizePositiveInteger(installmentId, "Parcela");
+  const normalizedInstallmentId = Number(installmentId);
+  if (!Number.isInteger(normalizedInstallmentId) || normalizedInstallmentId === 0) {
+    throw createReceivablesValidationError("Recebimento invalido.");
+  }
+
+  const paymentTypeId = normalizePositiveInteger(body.paymentTypeId, "Forma de pagamento");
+  const paymentType = await paymentTypesRepository.getPaymentTypeById(paymentTypeId);
+  if (!paymentType) {
+    throw createReceivablesValidationError("Forma de pagamento invalida.");
+  }
+
+  if (normalizedInstallmentId < 0) {
+    const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
+    const updated = await repository.updateStandaloneReceiptDetails(
+      Math.abs(normalizedInstallmentId),
+      { paymentTypeId, paidAt },
+    );
+
+    if (!updated) throw notFoundError("Recebimento nao encontrado.");
+    return { message: "Recebimento alterado com sucesso." };
+  }
+
   return repository.withLockedInstallment(normalizedInstallmentId, async (installment, items, transaction) => {
     balance.ensureActive(installment);
-
-    ensureReceivableCanBeManaged(installment);
-
-    const customerId = normalizePositiveInteger(body.customerId, "Cliente");
-    const paymentTypeId = normalizePositiveInteger(body.paymentTypeId, "Forma de pagamento");
-    const amount = normalizeAmount(body.amount, "Valor");
     const dueDate = normalizeDate(body.dueDate, "Data de vencimento");
 
-    const [customer, paymentType] = await Promise.all([
-      repository.getCustomerById(customerId),
-      paymentTypesRepository.getPaymentTypeById(paymentTypeId),
-    ]);
-
-    if (!customer) {
-      throw createReceivablesValidationError("Cliente invalido.");
+    if (!installment || !installment.Receivable) {
+      throw notFoundError("Parcela nao encontrada.");
     }
 
-    if (!paymentType) {
-      throw createReceivablesValidationError("Forma de pagamento invalida.");
-    }
+    const receipts = Array.isArray(installment.PaymentReceipts)
+      ? [...installment.PaymentReceipts]
+      : [];
+    receipts.sort((left, right) => {
+      const dateDifference = new Date(right.paidAt).getTime() - new Date(left.paidAt).getTime();
+      return dateDifference || Number(right.idPaymentReceipt) - Number(left.idPaymentReceipt);
+    });
 
-    const updatedItems = items.map((item) => Number(item.idReceivableInstallment) === normalizedInstallmentId
-      ? { ...item.get({ plain: true }), amount, paidAmount: 0, status: "OPEN" } : item);
-    const summary = balance.summarize(updatedItems);
-    await repository.updateManualReceivable(normalizedInstallmentId, {
-      customerId,
+    await repository.updateInstallment(normalizedInstallmentId, {
       paymentTypeId,
-      amount,
       dueDate,
-      originalAmount: balance.money(updatedItems.reduce((sum, item) => sum + Number(item.amount), 0)),
-      openAmount: summary.openAmount,
-      status: summary.status,
+      ...(receipts.length === 0 ? { interestBaseDate: dueDate } : {}),
     }, transaction);
+
+    if (receipts.length > 0) {
+      const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
+      await repository.updatePaymentReceiptDetails(
+        receipts[0].idPaymentReceipt,
+        { paymentTypeId, paidAt },
+        transaction,
+      );
+    }
 
     return {
       message: "Conta a receber alterada com sucesso.",

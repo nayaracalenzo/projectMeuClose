@@ -184,7 +184,7 @@ test("PostgreSQL: migrations, write-off, concurrency, rollback and preserved rec
       assert.equal(after.totalOpen, before.totalOpen - 1200);
       assert.equal(after.totalAmount, before.totalAmount - 1200);
     });
-    await t.test("editing a remaining manual installment preserves the historical write-off", async () => {
+    await t.test("editing a remaining manual installment preserves values and the historical write-off", async () => {
       const { id, title, items } = await fixture();
       await title.update({ saleId: null });
       const preview = await service.previewReceivableDeletion(id);
@@ -192,9 +192,11 @@ test("PostgreSQL: migrations, write-off, concurrency, rollback and preserved rec
       await service.updateReceivable(items[1].idReceivableInstallment, {
         customerId: 1, paymentTypeId: 1, amount: 450, dueDate: "2026-11-19",
       });
-      await title.reload(); await items[0].reload();
-      assert.equal(Number(title.openAmount), 450);
-      assert.equal(Number(title.originalAmount), 1450);
+      await title.reload(); await items[0].reload(); await items[1].reload();
+      assert.equal(Number(title.openAmount), 500);
+      assert.equal(Number(title.originalAmount), 1500);
+      assert.equal(Number(items[1].amount), 500);
+      assert.equal(items[1].dueDate.toISOString().slice(0, 10), "2026-11-19");
       assert.equal(Number(items[0].waivedAmount), 700);
       assert.equal(items[0].status, "CANCELLED");
       await assert.rejects(service.registerReceipt(id, { paymentTypeId: 1, amount: 100, paidAt: "2026-09-14" }), { statusCode: 400 });

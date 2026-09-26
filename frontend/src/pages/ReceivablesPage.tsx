@@ -304,6 +304,7 @@ export default function ReceivablesPage() {
   const [formPaymentTypeId, setFormPaymentTypeId] = useState("");
   const [formAmount, setFormAmount] = useState("");
   const [formDueDate, setFormDueDate] = useState(() => toIsoDate(new Date()));
+  const [formPaidAt, setFormPaidAt] = useState(() => toIsoDate(new Date()));
   const [receiptPaymentTypeId, setReceiptPaymentTypeId] = useState("");
   const [receiptAmount, setReceiptAmount] = useState("");
   const [receiptPaidAt, setReceiptPaidAt] = useState(() =>
@@ -435,13 +436,11 @@ export default function ReceivablesPage() {
   }, [rows, selectedRowId]);
 
   const selectedRow = rows.find((row) => row.id === selectedRowId) || null;
-  const canManageSelectedRow = Boolean(
+  const canEditSelectedRow = Boolean(
     selectedRow &&
-    selectedRow.status !== "CANCELLED" && !selectedRow.deletionAuditId &&
-    selectedRow.id > 0 &&
-    !selectedRow.saleId &&
-    selectedRow.paidAmount <= 0 &&
-    selectedRow.openAmount === selectedRow.amount,
+    selectedRow.status !== "CANCELLED" &&
+    !selectedRow.deletionAuditId &&
+    selectedRow.id !== 0,
   );
   const canReverseSelectedReceipt = Boolean(
     selectedRow &&
@@ -504,6 +503,7 @@ export default function ReceivablesPage() {
     setFormPaymentTypeId("");
     setFormAmount("");
     setFormDueDate(toIsoDate(new Date()));
+    setFormPaidAt(toIsoDate(new Date()));
     setCustomerSearchTerm("");
     setReceivableFormMode("create");
   };
@@ -514,7 +514,7 @@ export default function ReceivablesPage() {
   };
 
   const handleOpenEditReceivable = () => {
-    if (!selectedRow || !canManageSelectedRow) return;
+    if (!selectedRow || !canEditSelectedRow) return;
 
     setReceivableFormMode("edit");
     setFormCustomerId(
@@ -525,6 +525,9 @@ export default function ReceivablesPage() {
     );
     setFormAmount(formatCurrencyValue(selectedRow.amount));
     setFormDueDate(selectedRow.dueDate.slice(0, 10));
+    setFormPaidAt(
+      selectedRow.lastPaidAt?.slice(0, 10) || toIsoDate(new Date()),
+    );
     setReceivableFormOpen(true);
   };
 
@@ -532,12 +535,18 @@ export default function ReceivablesPage() {
     const amount = parseCurrencyToNumber(formAmount);
 
     if (
-      !formCustomerId ||
       !formPaymentTypeId ||
-      amount <= 0 ||
-      !formDueDate
+      (receivableFormMode === "create" && (!formCustomerId || amount <= 0)) ||
+      (receivableFormMode === "edit" && selectedRow?.id !== undefined && selectedRow.id < 0
+        ? !formPaidAt
+        : !formDueDate) ||
+      (receivableFormMode === "edit" && Boolean(selectedRow?.lastPaidAt) && !formPaidAt)
     ) {
-      setMessage("Informe cliente, forma, valor e vencimento.");
+      setMessage(
+        receivableFormMode === "create"
+          ? "Informe cliente, forma, valor e vencimento."
+          : "Informe a forma e as datas obrigatórias.",
+      );
       return;
     }
 
@@ -554,10 +563,9 @@ export default function ReceivablesPage() {
         if (!selectedRow) return;
 
         await updateRequest(`/receivables/${selectedRow.id}`, {
-          customerId: Number(formCustomerId),
           paymentTypeId: Number(formPaymentTypeId),
-          amount,
           dueDate: formDueDate,
+          paidAt: selectedRow.lastPaidAt ? formPaidAt : null,
         });
         setMessage("Conta a receber alterada com sucesso.");
       }
@@ -1004,25 +1012,35 @@ export default function ReceivablesPage() {
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
-              Cliente
+              {receivableFormMode === "edit" ? "Origem" : "Cliente"}
             </label>
-            <SearchableSelect
-              id="receivable-customer-modal"
-              value={formCustomerId}
-              options={customerSearchableOptions}
-              onChange={setFormCustomerId}
-              onSearchChange={setCustomerSearchTerm}
-              className="relative"
-              inputClassName="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary outline-none transition focus:border-primary"
-              dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border border-outline-variant/60 bg-white shadow-lg"
-              optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
-              placeholder="Digite para filtrar"
-              emptyMessage="Nenhum cliente encontrado."
-            />
+            {receivableFormMode === "edit" && selectedRow ? (
+              <input
+                value={getReceivableOriginName(selectedRow)}
+                disabled
+                className="h-11 w-full rounded border border-outline-variant/60 bg-surface-low px-3 text-[15px] text-neutral-700"
+              />
+            ) : (
+              <SearchableSelect
+                id="receivable-customer-modal"
+                value={formCustomerId}
+                options={customerSearchableOptions}
+                onChange={setFormCustomerId}
+                onSearchChange={setCustomerSearchTerm}
+                className="relative"
+                inputClassName="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary outline-none transition focus:border-primary"
+                dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border border-outline-variant/60 bg-white shadow-lg"
+                optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
+                placeholder="Digite para filtrar"
+                emptyMessage="Nenhum cliente encontrado."
+              />
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
-              Forma prevista
+              {receivableFormMode === "edit" && selectedRow?.lastPaidAt
+                ? "Forma de recebimento"
+                : "Forma prevista"}
             </label>
             <select
               value={formPaymentTypeId}
@@ -1046,11 +1064,12 @@ export default function ReceivablesPage() {
               inputMode="numeric"
               value={formAmount}
               onChange={(e) => setFormAmount(formatCurrencyInput(e.target.value))}
+              disabled={receivableFormMode === "edit"}
               placeholder="R$ 0,00"
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
           </div>
-          <div>
+          {receivableFormMode === "create" || (selectedRow?.id || 0) > 0 ? <div>
             <label className="mb-1 block text-sm font-semibold text-primary">
               Vencimento
             </label>
@@ -1060,7 +1079,20 @@ export default function ReceivablesPage() {
               format="iso"
               className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
             />
-          </div>
+          </div> : null}
+          {receivableFormMode === "edit" && selectedRow?.lastPaidAt ? (
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-primary">
+                Data do recebimento
+              </label>
+              <DatePickerInput
+                value={formPaidAt}
+                onChange={setFormPaidAt}
+                format="iso"
+                className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
+              />
+            </div>
+          ) : null}
         </div>
         <div className="mt-4 flex gap-2">
           <button
@@ -1070,7 +1102,7 @@ export default function ReceivablesPage() {
           >
             {receivableFormMode === "create"
               ? "Gravar conta a receber"
-              : "Salvar alteraÃ§Ã£o"}
+              : "Salvar alteração"}
           </button>
           <button
             type="button"
@@ -1195,7 +1227,7 @@ export default function ReceivablesPage() {
             variant="secondary"
             size="sm"
             onClick={handleOpenEditReceivable}
-            disabled={!canManageSelectedRow}
+            disabled={!canEditSelectedRow}
           >
             Alterar
           </Button>
@@ -1286,6 +1318,14 @@ export default function ReceivablesPage() {
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
+                    Data Emissão
+                  </p>
+                  <p className="mt-1 text-primary">
+                    {formatDate(row.receivableCreatedAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.08em] text-neutral-700">
                     Vencimento
                   </p>
                   <p className="mt-1 text-primary">{formatDate(row.dueDate)}</p>
@@ -1332,10 +1372,13 @@ export default function ReceivablesPage() {
       </div>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 min-w-[1250px] w-full table-fixed border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-[1380px] w-full table-fixed border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
+              <th className="w-[130px] px-4 pt-2 font-editorial text-[1.2rem] text-primary text-nowrap">
+                Data Emissão
+              </th>
               <th className="w-[140px] whitespace-nowrap px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Histórico
               </th>
@@ -1371,13 +1414,13 @@ export default function ReceivablesPage() {
           <tbody>
             {loading ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={11} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={12} className="px-4 py-4 text-sm text-neutral-700">
                   Carregando...
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr className="bg-surface-lowest">
-                <td colSpan={11} className="px-4 py-4 text-sm text-neutral-700">
+                <td colSpan={12} className="px-4 py-4 text-sm text-neutral-700">
                   Nenhum recebimento encontrado.
                 </td>
               </tr>
@@ -1401,6 +1444,9 @@ export default function ReceivablesPage() {
                       aria-label={`Selecionar recebimento ${getReceivableOriginName(row)}`}
                       className="h-4 w-4 cursor-pointer rounded border border-outline-variant/60 accent-primary"
                     />
+                  </td>
+                  <td className="px-4 py-3 text-[14px] text-neutral-700">
+                    {formatDate(row.receivableCreatedAt)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-[14px] text-neutral-700">
                     {getReceivableHistoryColumnValue(row)}
