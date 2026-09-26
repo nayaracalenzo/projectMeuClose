@@ -243,6 +243,7 @@ type SaleDraftPayload = {
   accessoryProducts: GeneralCatalogProductDraft[];
   serviceProducts: GeneralCatalogProductDraft[];
   miscProducts: GeneralCatalogProductDraft[];
+  saleDiscountInput: string;
   paymentTypeId: string;
   installmentCount: string;
   installmentIntervalDays: string;
@@ -584,6 +585,7 @@ function hasSaleDraftPayloadContent(payload: SaleDraftPayload | null | undefined
       payload.accessoryProducts.length ||
       payload.serviceProducts.length ||
       payload.miscProducts.length ||
+      Boolean(payload.saleDiscountInput?.trim()) ||
       payload.paymentTypeId ||
       payload.entryAmount.trim() ||
       payload.entryPaymentTypeId ||
@@ -659,6 +661,7 @@ export default function NewSalePage() {
   const [miscProducts, setMiscProducts] = useState<
     GeneralCatalogProductDraft[]
   >([]);
+  const [saleDiscountInput, setSaleDiscountInput] = useState("");
   const [modalReadyMadeProducts, setModalReadyMadeProducts] = useState<
     ReadyMadeProductDraft[]
   >([]);
@@ -942,6 +945,15 @@ export default function NewSalePage() {
         );
         setSearch(normalizeCustomerDisplayName(data.customer?.name));
         applyDraftCollections(hydrateDraftCollectionsFromQuote(data));
+        const quoteItemsSubtotal = Number(
+          data.items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0).toFixed(2),
+        );
+        const quoteSaleDiscount = Number(
+          Math.max(0, quoteItemsSubtotal - Number(data.finalAmount || 0)).toFixed(2),
+        );
+        setSaleDiscountInput(
+          quoteSaleDiscount > 0 ? formatCurrency(quoteSaleDiscount) : "",
+        );
         paymentDraftHydrationRef.current = true;
         setPaymentTypeId(
           data.paymentDraft?.paymentTypeId
@@ -1018,7 +1030,7 @@ export default function NewSalePage() {
       Number(tableItems.reduce((acc, item) => acc + item.value, 0).toFixed(2)),
     [tableItems],
   );
-  const discountAmount = useMemo(
+  const itemDiscountAmount = useMemo(
     () =>
       Number(
         tableItems
@@ -1027,19 +1039,30 @@ export default function NewSalePage() {
       ),
     [tableItems],
   );
+  const itemsSubtotal = useMemo(
+    () =>
+      Number(tableItems.reduce((sum, item) => sum + item.finalValue, 0).toFixed(2)),
+    [tableItems],
+  );
+  const saleDiscountAmount = useMemo(
+    () => parseCurrencyToNumber(saleDiscountInput),
+    [saleDiscountInput],
+  );
+  const hasSaleDiscountError = saleDiscountAmount > itemsSubtotal;
   const saleDiscountPayload = useMemo(
     () => ({
-      discountType: discountAmount > 0 ? ("FIXED" as const) : null,
-      discountValue: discountAmount > 0 ? discountAmount : null,
+      discountType:
+        itemDiscountAmount + saleDiscountAmount > 0 ? ("FIXED" as const) : null,
+      discountValue:
+        itemDiscountAmount + saleDiscountAmount > 0
+          ? Number((itemDiscountAmount + saleDiscountAmount).toFixed(2))
+          : null,
     }),
-    [discountAmount],
+    [itemDiscountAmount, saleDiscountAmount],
   );
   const discountedTotalValue = useMemo(
-    () =>
-      Number(
-        tableItems.reduce((acc, item) => acc + item.finalValue, 0).toFixed(2),
-      ),
-    [tableItems],
+    () => Number(Math.max(0, itemsSubtotal - saleDiscountAmount).toFixed(2)),
+    [itemsSubtotal, saleDiscountAmount],
   );
   const selectedPaymentType = useMemo(
     () =>
@@ -1148,6 +1171,7 @@ export default function NewSalePage() {
     () =>
       !doesNotGenerateDebt &&
       shouldAllowEntryAmount &&
+      parsedEntryAmount > 0 &&
       parsedEntryAmount >= maxEntryAmount,
     [
       doesNotGenerateDebt,
@@ -1256,6 +1280,7 @@ export default function NewSalePage() {
   ]);
   const canSaveSale =
     !isSaving &&
+    !hasSaleDiscountError &&
     !!selectedCustomer &&
     tableItems.length > 0 &&
     (isDebtExemptionActive || !!paymentTypeId) &&
@@ -1278,15 +1303,22 @@ export default function NewSalePage() {
       (customerCreditToApply > 0 &&
         customerCreditToApply < discountedTotalValue)) &&
     (isDebtExemptionActive ||
+      (discountedTotalValue === 0 &&
+        parsedEntryAmount === 0 &&
+        customerCreditToApply === 0) ||
       parsedEntryAmount + customerCreditToApply < discountedTotalValue);
   const canAttemptCompleteSale =
     canSaveSale ||
     (!isSaving &&
+      !hasSaleDiscountError &&
       !!selectedCustomer &&
       tableItems.length > 0 &&
       hasEntryAmountError);
   const canCreateQuote =
-    !isSaving && !!selectedCustomer && tableItems.length > 0;
+    !isSaving &&
+    !hasSaleDiscountError &&
+    !!selectedCustomer &&
+    tableItems.length > 0;
   const hasGeneratedQuote = draftSaleId !== null;
   const isEditingCompletedSale =
     quoteModeParam === "edit" && editingSaleStatus === "COMPLETED";
@@ -1324,6 +1356,7 @@ export default function NewSalePage() {
       accessoryProducts,
       serviceProducts,
       miscProducts,
+      saleDiscountInput,
       paymentTypeId,
       installmentCount,
       installmentIntervalDays,
@@ -1362,6 +1395,7 @@ export default function NewSalePage() {
       quoteModeParam,
       readyMadeProducts,
       returnToParam,
+      saleDiscountInput,
       saleDraftContextKey,
       search,
       selectedCategoryCode,
@@ -1451,6 +1485,7 @@ export default function NewSalePage() {
           : [],
         misc: Array.isArray(payload.miscProducts) ? payload.miscProducts : [],
       });
+      setSaleDiscountInput(payload.saleDiscountInput || "");
       setPaymentTypeId(payload.paymentTypeId || "");
       setInstallmentCount(payload.installmentCount || "1");
       setInstallmentIntervalDays(payload.installmentIntervalDays || "30");
@@ -2283,7 +2318,7 @@ export default function NewSalePage() {
     });
 
   const handleSaveSale = async () => {
-    if (!selectedCustomer || tableItems.length === 0) {
+    if (!selectedCustomer || tableItems.length === 0 || hasSaleDiscountError) {
       return;
     }
 
@@ -2406,6 +2441,7 @@ export default function NewSalePage() {
       setAccessoryProducts([]);
       setServiceProducts([]);
       setMiscProducts([]);
+      setSaleDiscountInput("");
       setModalItems([]);
       setSelectedCategoryCode("");
       setSelectedClothingSubtype("");
@@ -2695,6 +2731,7 @@ export default function NewSalePage() {
     setAccessoryProducts([]);
     setServiceProducts([]);
     setMiscProducts([]);
+    setSaleDiscountInput("");
     setModalItems([]);
     setSelectedCategoryCode("");
     setSelectedClothingSubtype("");
@@ -2743,7 +2780,7 @@ export default function NewSalePage() {
   };
 
   const saveOrUpdateDraftSale = async () => {
-    if (!selectedCustomer || tableItems.length === 0) {
+    if (!selectedCustomer || tableItems.length === 0 || hasSaleDiscountError) {
       return null;
     }
 
@@ -2834,7 +2871,7 @@ export default function NewSalePage() {
   };
 
   const handleCompleteSale = async () => {
-    if (!selectedCustomer || tableItems.length === 0) {
+    if (!selectedCustomer || tableItems.length === 0 || hasSaleDiscountError) {
       return;
     }
 
@@ -2900,7 +2937,9 @@ export default function NewSalePage() {
     <div className="w-full min-w-0 min-h-full bg-white p-3 sm:p-5 md:bg-surface-low">
       <div className="mb-5">
         <h1 className="pb-4 pt-8 text-4xl font-semibold text-primary md:text-[2rem]">
-          {isEditingCompletedSale ? "Editar Venda Finalizada" : "Nova Venda/Orçamento"}
+          {isEditingCompletedSale
+            ? "Editar Venda Finalizada"
+            : "Nova Venda/Orçamento"}
         </h1>
         <SaleStepper step={step} />
 
@@ -3223,7 +3262,9 @@ export default function NewSalePage() {
                                       type="button"
                                       className="w-full sm:w-auto"
                                       variant="tertiary"
-                                      onClick={() => handleRemoveTableItem(item)}
+                                      onClick={() =>
+                                        handleRemoveTableItem(item)
+                                      }
                                     >
                                       Remover
                                     </Button>
@@ -3234,6 +3275,68 @@ export default function NewSalePage() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    <div className="rounded-lg border border-outline-variant/45 bg-white p-4">
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="sm:border-r sm:border-outline-variant/45">
+                          <p className="text-sm text-neutral-700">Total venda</p>
+                          <p className="font-medium text-primary">
+                            {formatCurrency(totalValue)}
+                          </p>
+                        </div>
+                        <div className="sm:border-r sm:border-outline-variant/45">
+                          <p className="text-sm text-neutral-700">
+                            Desconto dos itens
+                          </p>
+                          <p className="font-medium text-primary">
+                            {formatCurrency(itemDiscountAmount)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-neutral-700">
+                            Subtotal dos itens
+                          </p>
+                          <p className="font-medium text-primary">
+                            {formatCurrency(itemsSubtotal)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 border-t border-outline-variant/45 pt-4 sm:grid-cols-2">
+                        <div className="sm:border-r sm:border-outline-variant/45 sm:pr-4">
+                          <label
+                            htmlFor="sale-discount"
+                            className="mb-1 block text-sm font-medium text-primary"
+                          >
+                            Desconto venda (R$)
+                          </label>
+                          <input
+                            id="sale-discount"
+                            value={saleDiscountInput}
+                            onChange={(event) =>
+                              setSaleDiscountInput(
+                                formatCurrencyInput(event.target.value),
+                              )
+                            }
+                            inputMode="numeric"
+                            disabled={isEditingCompletedSale}
+                            aria-invalid={hasSaleDiscountError}
+                            className={paymentFieldClassName}
+                          />
+                          {hasSaleDiscountError ? (
+                            <p className="mt-1 text-sm text-red-700">
+                              O desconto não pode ser maior que o subtotal dos
+                              itens.
+                            </p>
+                          ) : null}
+                        </div>
+                        <div>
+                          <p className="text-sm text-neutral-700">Valor final</p>
+                          <p className="font-semibold text-primary">
+                            {formatCurrency(discountedTotalValue)}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
@@ -3494,70 +3597,67 @@ export default function NewSalePage() {
                   </div>
                 )}
 
-                {!doesNotGenerateDebt &&
-                  shouldAllowEntryAmount && (
-                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Valor de entrada
-                        </label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={entryAmount}
-                          onChange={(e) =>
-                            setEntryAmount(formatCurrencyInput(e.target.value))
-                          }
-                          placeholder="R$ 0,00"
-                          className={`${paymentFieldClassName} ${
-                            hasEntryAmountError
-                              ? "border-[#b42318] text-[#b42318] focus:ring-[#b42318]/30"
-                              : ""
-                          }`}
-                        />
-                        {hasEntryAmountError ? (
-                          <p className="mt-1 text-xs text-[#b42318]">
-                            A entrada não pode ser maior que o valor total.
-                          </p>
-                        ) : null}
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Forma da entrada
-                        </label>
-                        <select
-                          value={entryPaymentTypeId}
-                          onChange={(e) =>
-                            void handleEntryPaymentTypeChange(e.target.value)
-                          }
-                          className={paymentFieldClassName}
-                        >
-                          <option value="">Selecione...</option>
-                          {entryPaymentTypeOptions.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-primary">
-                          Referência
-                        </label>
-                        <input
-                          value={entryReferenceCode}
-                          onChange={(e) =>
-                            setEntryReferenceCode(e.target.value)
-                          }
-                          className={paymentFieldClassName}
-                        />
-                      </div>
+                {!doesNotGenerateDebt && shouldAllowEntryAmount && (
+                  <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Valor de entrada
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={entryAmount}
+                        onChange={(e) =>
+                          setEntryAmount(formatCurrencyInput(e.target.value))
+                        }
+                        placeholder="R$ 0,00"
+                        className={`${paymentFieldClassName} ${
+                          hasEntryAmountError
+                            ? "border-[#b42318] text-[#b42318] focus:ring-[#b42318]/30"
+                            : ""
+                        }`}
+                      />
+                      {hasEntryAmountError ? (
+                        <p className="mt-1 text-xs text-[#b42318]">
+                          A entrada não pode ser maior que o valor total.
+                        </p>
+                      ) : null}
                     </div>
-                  )}
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Forma da entrada
+                      </label>
+                      <select
+                        value={entryPaymentTypeId}
+                        onChange={(e) =>
+                          void handleEntryPaymentTypeChange(e.target.value)
+                        }
+                        className={paymentFieldClassName}
+                      >
+                        <option value="">Selecione...</option>
+                        {entryPaymentTypeOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-primary">
+                        Referência
+                      </label>
+                      <input
+                        value={entryReferenceCode}
+                        onChange={(e) => setEntryReferenceCode(e.target.value)}
+                        className={paymentFieldClassName}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {!doesNotGenerateDebt && selectedPaymentType ? (
                   isPixOrDebitPayment ? (
-                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 rounded-lg border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
                           Saldo
@@ -3570,10 +3670,20 @@ export default function NewSalePage() {
                       </div>
                       <div>
                         <label className="mb-1 block text-sm font-medium text-primary">
-                          Desconto
+                          Desconto dos itens
                         </label>
                         <input
-                          value={formatCurrency(discountAmount)}
+                          value={formatCurrency(itemDiscountAmount)}
+                          disabled
+                          className={paymentReadonlyFieldClassName}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-primary">
+                          Desconto sobre a venda
+                        </label>
+                        <input
+                          value={formatCurrency(saleDiscountAmount)}
                           disabled
                           className={paymentReadonlyFieldClassName}
                         />
@@ -3609,9 +3719,13 @@ export default function NewSalePage() {
                           <input
                             type="number"
                             min={1}
-                            max={selectedPaymentType.maxInstallments || undefined}
+                            max={
+                              selectedPaymentType.maxInstallments || undefined
+                            }
                             value={installmentCount}
-                            onChange={(e) => setInstallmentCount(e.target.value)}
+                            onChange={(e) =>
+                              setInstallmentCount(e.target.value)
+                            }
                             className={paymentFieldClassName}
                           />
                         </div>
@@ -3784,7 +3898,12 @@ export default function NewSalePage() {
                 : selectedPaymentType?.name || "Não definida"}
             </p>
             <p className="text-sm text-neutral-700">
-              Status: {isEditingCompletedSale ? "Venda finalizada" : hasGeneratedQuote ? "Orçamento" : "Em montagem"}
+              Status:{" "}
+              {isEditingCompletedSale
+                ? "Venda finalizada"
+                : hasGeneratedQuote
+                  ? "Orçamento"
+                  : "Em montagem"}
             </p>
             <p className="mb-3 text-sm text-neutral-700">
               Parcelas: {previewInstallmentCount}
@@ -3793,7 +3912,10 @@ export default function NewSalePage() {
               Subtotal: {formatCurrency(totalValue)}
             </p>
             <p className="text-sm text-neutral-700">
-              Desconto aplicado: {formatCurrency(discountAmount)}
+              Desconto dos itens: {formatCurrency(itemDiscountAmount)}
+            </p>
+            <p className="text-sm text-neutral-700">
+              Desconto sobre a venda: {formatCurrency(saleDiscountAmount)}
             </p>
             <p className="text-sm text-neutral-700">
               Entrada:{" "}
