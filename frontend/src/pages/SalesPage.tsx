@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useRef } from "react";
+import { Eye, EyeClosed } from "lucide-react";
 import { Button } from "../components/Button";
 import DatePickerInput from "../components/DatePickerInput";
 import { getRequest } from "../services/request";
@@ -24,6 +25,7 @@ interface SaleRow {
 interface SalesResponse {
   items: SaleRow[];
   total: number;
+  totalAmount: number;
   page: number;
   pageSize: number;
   totalPages: number;
@@ -35,6 +37,7 @@ interface SalesCountResponse {
 
 type SalesViewMode = "orders" | "budgets";
 type SalesStatusFilter = "DEFAULT" | "COMPLETED" | "BUDGET" | "CANCELLED";
+const HIDDEN_VALUE = "R$ •••••";
 
 const formatDate = (value?: string | null) => {
   if (!value) return "-";
@@ -104,6 +107,8 @@ export default function SalesPage() {
     return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
   });
   const [totalItems, setTotalItems] = useState(0);
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [showTotalAmount, setShowTotalAmount] = useState(false);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -267,6 +272,7 @@ export default function SalesPage() {
             : [],
         );
         setTotalItems(Number(data.total) || 0);
+        setTotalAmount(Number(data.totalAmount) || 0);
         setTotalPages(Number(data.totalPages) || 1);
       } catch (err: unknown) {
         if (fetchId !== latestFetchIdRef.current) {
@@ -276,6 +282,7 @@ export default function SalesPage() {
         setError(getUserFacingApiErrorMessage(err));
         setSales([]);
         setTotalItems(0);
+        setTotalAmount(0);
         setTotalPages(1);
       } finally {
         if (fetchId === latestFetchIdRef.current) {
@@ -582,6 +589,22 @@ export default function SalesPage() {
             </button>
           ))
         )}
+      </div>
+
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          aria-label={
+            showTotalAmount ? "Ocultar valor total" : "Mostrar valor total"
+          }
+          onClick={() => setShowTotalAmount((current) => !current)}
+          className="mr-2 text-neutral-600 transition hover:text-primary"
+        >
+          {showTotalAmount ? <Eye size={18} /> : <EyeClosed size={18} />}
+        </button>
+        <p className="text-md font-semibold text-primary">
+          Valor total: {showTotalAmount ? formatCurrency(totalAmount) : HIDDEN_VALUE}
+        </p>
       </div>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

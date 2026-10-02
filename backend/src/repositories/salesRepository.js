@@ -1312,7 +1312,7 @@ async function listSales({
     where[Op.and] = [...(Array.isArray(where[Op.and]) ? where[Op.and] : []), ...searchFilters];
   }
 
-  return Sales.findAndCountAll({
+  const queryOptions = {
     where,
     attributes: {
       include: [[legacyCompletedSignal, "isLegacyCompleted"]],
@@ -1359,7 +1359,26 @@ async function listSales({
     limit: pageSize,
     offset: (page - 1) * pageSize,
     distinct: true,
-  });
+  };
+
+  const [result, totalRows] = await Promise.all([
+    Sales.findAndCountAll(queryOptions),
+    Sales.findAll({
+      ...queryOptions,
+      attributes: ["idSale", "finalAmount"],
+      order: undefined,
+      limit: undefined,
+      offset: undefined,
+    }),
+  ]);
+
+  return {
+    ...result,
+    totalAmount: totalRows.reduce(
+      (sum, sale) => sum + Number(sale.finalAmount || 0),
+      0,
+    ),
+  };
 }
 
 async function listMeasurementDefinitions() {
