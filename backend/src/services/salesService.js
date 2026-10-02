@@ -2794,6 +2794,7 @@ async function listSales({
   return {
     items: result.rows.map(mapSaleListItem),
     total,
+    totalAmount: roundCurrency(Number(result.totalAmount || 0)),
     page: normalizedPage,
     pageSize: normalizedPageSize,
     totalPages: Math.max(1, Math.ceil(total / normalizedPageSize)),
