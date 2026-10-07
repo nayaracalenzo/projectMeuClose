@@ -31,10 +31,6 @@ interface SalesResponse {
   totalPages: number;
 }
 
-interface SalesCountResponse {
-  total: number;
-}
-
 type SalesViewMode = "orders" | "budgets";
 type SalesStatusFilter = "DEFAULT" | "COMPLETED" | "BUDGET" | "CANCELLED";
 const HIDDEN_VALUE = "R$ •••••";
@@ -119,11 +115,6 @@ export default function SalesPage() {
     return Number.isInteger(value) && value > 0 ? value : null;
   }, [searchParams]);
 
-  const hasExplicitTabParam = useMemo(
-    () => searchParams.has("tab"),
-    [searchParams],
-  );
-
   useEffect(() => {
     if (requestedTab === "budgets" || requestedTab === "orders") {
       setViewMode(requestedTab);
@@ -195,44 +186,6 @@ export default function SalesPage() {
           { value: "COMPLETED", label: "Concluído" },
           { value: "CANCELLED", label: "Cancelado" },
         ];
-
-  useEffect(() => {
-    if (hasExplicitTabParam) {
-      return;
-    }
-
-    const resolveDefaultTab = async () => {
-      try {
-        const [completedData, budgetData] = await Promise.all([
-          getRequest(
-            "/sales?page=1&pageSize=1&status=COMPLETED",
-          ) as Promise<SalesCountResponse>,
-          getRequest(
-            "/sales?page=1&pageSize=1&status=BUDGET",
-          ) as Promise<SalesCountResponse>,
-        ]);
-
-        const completedTotal = Number(completedData?.total) || 0;
-        const budgetTotal = Number(budgetData?.total) || 0;
-
-        if (completedTotal === 0 && budgetTotal > 0) {
-          setViewMode("budgets");
-          setSearchParams(
-            (current) => {
-              const next = new URLSearchParams(current);
-              next.set("tab", "budgets");
-              return next;
-            },
-            { replace: true },
-          );
-        }
-      } catch {
-        // Keep the default tab when counts cannot be loaded.
-      }
-    };
-
-    void resolveDefaultTab();
-  }, [hasExplicitTabParam, setSearchParams]);
 
   useEffect(() => {
     const fetchSales = async () => {
