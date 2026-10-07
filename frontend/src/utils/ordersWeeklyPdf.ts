@@ -298,27 +298,9 @@ export const downloadWeeklyOrdersPdf = async ({
     const measurementRowsHeight = measurements.length
       ? Math.ceil(measurements.length / 4) * 7
       : 0;
-    const estimatedGroupHeight =
-      7 + measurementRowsHeight +
-      group.items.reduce((sum, { order, item }) => {
-        const description = [
-          item.name,
-          `Qtd: ${item.quantity}`,
-          `Tecido: ${item.fabric}`,
-          `Cor: ${item.color}`,
-          `Tamanho: ${item.size}`,
-          item.notes ? `Detalhes: ${item.notes}` : null,
-        ]
-          .filter(Boolean)
-          .join(" | ");
-        const descriptionLines = doc.splitTextToSize(description, DESCRIPTION_TEXT_WIDTH);
-        const typeLines = order.productionType ? [order.productionType] : [];
-        const typeHeight = typeLines.length * 4.5 + 4.8 + 4;
-        const descriptionHeight = Math.max(2, descriptionLines.length) * 4.5 + 4;
-        return sum + Math.max(10, typeHeight, descriptionHeight);
-      }, 0);
+    const groupHeaderHeight = 7 + measurementRowsHeight;
 
-    if (currentY + estimatedGroupHeight > 192 && currentY > 40) {
+    if (currentY + groupHeaderHeight > 192 && currentY > 40) {
       doc.addPage();
       drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
       currentY = 40;
