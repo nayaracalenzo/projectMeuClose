@@ -1361,23 +1361,38 @@ async function listSales({
     distinct: true,
   };
 
-  const [result, totalRows] = await Promise.all([
+  const hasAssociatedFilters = [
+    customerWhere,
+    paymentTypeWhere,
+    paymentReceiptWhere,
+    saleItemsWhere,
+  ].some(hasConditions);
+
+  const totalAmountPromise = hasAssociatedFilters
+    ? Sales.findAll({
+        ...queryOptions,
+        attributes: ["idSale", "finalAmount"],
+        order: undefined,
+        limit: undefined,
+        offset: undefined,
+      })
+    : Sales.sum("finalAmount", { where });
+
+  const [result, totalAmountResult] = await Promise.all([
     Sales.findAndCountAll(queryOptions),
-    Sales.findAll({
-      ...queryOptions,
-      attributes: ["idSale", "finalAmount"],
-      order: undefined,
-      limit: undefined,
-      offset: undefined,
-    }),
+    totalAmountPromise,
   ]);
+
+  const totalAmount = Array.isArray(totalAmountResult)
+    ? totalAmountResult.reduce(
+        (sum, sale) => sum + Number(sale.finalAmount || 0),
+        0,
+      )
+    : Number(totalAmountResult || 0);
 
   return {
     ...result,
-    totalAmount: totalRows.reduce(
-      (sum, sale) => sum + Number(sale.finalAmount || 0),
-      0,
-    ),
+    totalAmount,
   };
 }
 

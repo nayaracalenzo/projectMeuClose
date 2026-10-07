@@ -54,16 +54,15 @@ const loadImageAsDataUrl = async (imageUrl: string) => {
   });
 };
 
-const TYPE_COLUMN_END_X = 50;
-const CUSTOMER_COLUMN_END_X = 136;
-const SEAMSTRESS_COLUMN_END_X = 180;
+const LABEL_COLUMN_END_X = 35;
 const TABLE_END_X = 285;
-const CUSTOMER_TEXT_X = TYPE_COLUMN_END_X + 4.8;
-const CUSTOMER_TEXT_WIDTH = CUSTOMER_COLUMN_END_X - CUSTOMER_TEXT_X - 4;
-const SEAMSTRESS_TEXT_X = CUSTOMER_COLUMN_END_X + 4.8;
-const SEAMSTRESS_TEXT_WIDTH = SEAMSTRESS_COLUMN_END_X - SEAMSTRESS_TEXT_X - 4;
-const DESCRIPTION_TEXT_X = SEAMSTRESS_COLUMN_END_X + 4.8;
+const CUSTOMER_TEXT_X = LABEL_COLUMN_END_X + 3;
+const CUSTOMER_TEXT_WIDTH = TABLE_END_X - CUSTOMER_TEXT_X - 4;
+const DESCRIPTION_TEXT_X = LABEL_COLUMN_END_X + 3;
 const DESCRIPTION_TEXT_WIDTH = TABLE_END_X - DESCRIPTION_TEXT_X - 6;
+const PDF_RADIUS = 1.8;
+const TYPE_TEXT_X = 15;
+const TYPE_TEXT_WIDTH = LABEL_COLUMN_END_X - TYPE_TEXT_X - 3;
 
 const drawSingleLineWithAutoFontSize = (
   doc: jsPDF,
@@ -88,21 +87,127 @@ const drawSingleLineWithAutoFontSize = (
   doc.setFontSize(preferredFontSize);
 };
 
-const drawTableHeader = (doc: jsPDF, startY: number) => {
-  doc.setFillColor(246, 243, 241);
-  doc.rect(12, startY, 273, 10, "F");
-  doc.setDrawColor(210, 205, 203);
-  doc.rect(12, startY, 273, 10);
-  doc.line(TYPE_COLUMN_END_X, startY, TYPE_COLUMN_END_X, startY + 10);
-  doc.line(CUSTOMER_COLUMN_END_X, startY, CUSTOMER_COLUMN_END_X, startY + 10);
-  doc.line(SEAMSTRESS_COLUMN_END_X, startY, SEAMSTRESS_COLUMN_END_X, startY + 10);
-  doc.setTextColor(43, 36, 37);
+const drawCustomerRow = (
+  doc: jsPDF,
+  startY: number,
+  label: string,
+  value: string,
+  valueLines: string[],
+  fillColor: [number, number, number],
+) => {
+  const rowHeight = Math.max(7, valueLines.length * 4.5 + 2.5);
+  doc.setFillColor(...fillColor);
+  doc.roundedRect(12, startY, 273, rowHeight, PDF_RADIUS, PDF_RADIUS, "F");
+  doc.setDrawColor(185, 173, 176);
+  doc.roundedRect(12, startY, 273, rowHeight, PDF_RADIUS, PDF_RADIUS);
+  doc.setFillColor(...fillColor);
+  doc.rect(12, startY + rowHeight - PDF_RADIUS, 273, PDF_RADIUS, "F");
+  doc.setDrawColor(185, 173, 176);
+  doc.line(12, startY + rowHeight, 285, startY + rowHeight);
+  doc.line(12, startY + rowHeight - PDF_RADIUS, 12, startY + rowHeight);
+  doc.line(285, startY + rowHeight - PDF_RADIUS, 285, startY + rowHeight);
+  doc.line(LABEL_COLUMN_END_X, startY, LABEL_COLUMN_END_X, startY + rowHeight);
+  doc.setTextColor(20, 20, 20);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text("Tipo / prova", 16, startY + 6.5);
-  doc.text("Cliente", TYPE_COLUMN_END_X + 4, startY + 6.5);
-  doc.text("Costureira", CUSTOMER_COLUMN_END_X + 4, startY + 6.5);
-  doc.text("Descricao", SEAMSTRESS_COLUMN_END_X + 4, startY + 6.5);
+  doc.setFontSize(9.2);
+  doc.text(label, 15, startY + 5.2);
+  doc.setFont("helvetica", "normal");
+  doc.text(valueLines.length ? valueLines : [value || "-"], CUSTOMER_TEXT_X + 1, startY + 5.2);
+  return rowHeight;
+};
+
+const parseMeasurementCells = (value?: string) => {
+  const normalized = String(value || "").trim();
+
+  if (!normalized) {
+    return [];
+  }
+
+  return normalized
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.replace(/:\s*/g, " ").trim());
+};
+
+const drawMeasurementsRows = (doc: jsPDF, startY: number, measurements: string[]) => {
+  const chunks: string[][] = [];
+  const availableWidth = TABLE_END_X - LABEL_COLUMN_END_X;
+  const measurementWidths = measurements.map((measurement) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.2);
+    return doc.getTextWidth(measurement) + 10;
+  });
+  let currentChunk: string[] = [];
+  let currentChunkWidth = 0;
+
+  measurements.forEach((measurement, index) => {
+    const measurementWidth = measurementWidths[index];
+
+    if (
+      currentChunk.length &&
+      currentChunkWidth + measurementWidth > availableWidth
+    ) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+      currentChunkWidth = 0;
+    }
+
+    currentChunk.push(measurement);
+    currentChunkWidth += measurementWidth;
+  });
+
+  if (currentChunk.length) {
+    chunks.push(currentChunk);
+  }
+
+  if (!chunks.length) {
+    chunks.push([]);
+  }
+
+  let currentY = startY;
+
+  chunks.forEach((chunk, chunkIndex) => {
+    const rowHeight = 7;
+    doc.setFillColor(242, 231, 233);
+    doc.rect(12, currentY, 273, rowHeight, "F");
+    doc.setDrawColor(185, 173, 176);
+    doc.rect(12, currentY, 273, rowHeight);
+    doc.line(LABEL_COLUMN_END_X, currentY, LABEL_COLUMN_END_X, currentY + rowHeight);
+    doc.setTextColor(20, 20, 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.2);
+    if (chunkIndex === 0) {
+      doc.text("Medidas", 15, currentY + 4.8);
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.2);
+    const desiredWidths = chunk.map((measurement) => doc.getTextWidth(measurement) + 10);
+    const remainingWidth = Math.max(
+      0,
+      availableWidth - desiredWidths.reduce((sum, width) => sum + width, 0),
+    );
+    const cellWidths = desiredWidths.map(
+      (width) => width + remainingWidth / Math.max(1, desiredWidths.length),
+    );
+    let cellX = LABEL_COLUMN_END_X;
+
+    chunk.forEach((measurement, index) => {
+      const cellWidth = cellWidths[index];
+      const x = cellX;
+      doc.line(x, currentY, x, currentY + rowHeight);
+      doc.setFont("helvetica", "normal");
+      doc.text(measurement, x + cellWidth / 2, currentY + 4.8, {
+        align: "center",
+      });
+      cellX += cellWidth;
+    });
+
+    currentY += rowHeight;
+  });
+
+  return currentY - startY;
 };
 
 const drawPageHeader = (
@@ -121,25 +226,54 @@ const drawPageHeader = (
   doc.text("Meu Close", logoDataUrl ? 38 : 14, 19);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10.5);
-  doc.text("Pedidos por periodo", logoDataUrl ? 38 : 14, 26);
   doc.setFontSize(9.5);
-  doc.text(`Periodo da prova: ${weekLabel}`, logoDataUrl ? 38 : 14, 32);
-  doc.text("Impressao em A4 horizontal", logoDataUrl ? 38 : 14, 37);
+  doc.text(`Periodo da prova: ${weekLabel}`, logoDataUrl ? 38 : 14, 28);
 
-  doc.setDrawColor(210, 205, 203);
-  doc.line(12, 44, 285, 44);
-
+  const summaryStartX = 220;
+  const summaryGap = 38;
   doc.setTextColor(102, 87, 88);
-  doc.setFontSize(9);
-  doc.text("Pedidos", 14, 52);
-  doc.text("Pecas", 56, 52);
-
+  doc.setFontSize(8.5);
+  doc.text("Pedidos", summaryStartX, 15, { align: "center" });
+  doc.text("Pecas", summaryStartX + summaryGap, 15, { align: "center" });
   doc.setTextColor(43, 36, 37);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
-  doc.text(String(totalOrders), 14, 59);
-  doc.text(String(totalItems), 56, 59);
+  doc.setFontSize(13);
+  doc.text(String(totalOrders), summaryStartX, 24, { align: "center" });
+  doc.text(String(totalItems), summaryStartX + summaryGap, 24, { align: "center" });
+
+  doc.setDrawColor(210, 205, 203);
+  doc.line(10, 36, 285, 36);
+};
+
+interface PrintableCustomerGroup {
+  customer: string;
+  measurements: string;
+  items: Array<{ order: PrintableOrder; item: PrintableOrderItem }>;
+}
+
+const groupOrdersByCustomer = (orders: PrintableOrder[]) => {
+  const groups = new Map<string, PrintableCustomerGroup>();
+
+  orders.forEach((order) => {
+    const customer = String(order.customer || "Sem cliente").trim() || "Sem cliente";
+    const key = customer.toLocaleLowerCase("pt-BR");
+    const existing = groups.get(key) || {
+      customer,
+      measurements: "",
+      items: [],
+    };
+
+    order.items.forEach((item) => {
+      if (!existing.measurements && item.measurements) {
+        existing.measurements = item.measurements;
+      }
+      existing.items.push({ order, item });
+    });
+
+    groups.set(key, existing);
+  });
+
+  return Array.from(groups.values());
 };
 
 export const downloadWeeklyOrdersPdf = async ({
@@ -155,93 +289,120 @@ export const downloadWeeklyOrdersPdf = async ({
   );
 
   drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
-  drawTableHeader(doc, 66);
+  let currentY = 40;
+  const customerGroups = groupOrdersByCustomer(orders);
 
-  let currentY = 79;
+  customerGroups.forEach((group) => {
+    const customerLines = doc.splitTextToSize(group.customer, CUSTOMER_TEXT_WIDTH);
+    const measurements = parseMeasurementCells(group.measurements);
+    const measurementRowsHeight = measurements.length
+      ? Math.ceil(measurements.length / 4) * 7
+      : 0;
+    const estimatedGroupHeight =
+      7 + measurementRowsHeight +
+      group.items.reduce((sum, { order, item }) => {
+        const description = [
+          item.name,
+          `Qtd: ${item.quantity}`,
+          `Tecido: ${item.fabric}`,
+          `Cor: ${item.color}`,
+          `Tamanho: ${item.size}`,
+          item.notes ? `Detalhes: ${item.notes}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | ");
+        const descriptionLines = doc.splitTextToSize(description, DESCRIPTION_TEXT_WIDTH);
+        const typeLines = order.productionType ? [order.productionType] : [];
+        const typeHeight = typeLines.length * 4.5 + 4.8 + 4;
+        const descriptionHeight = Math.max(2, descriptionLines.length) * 4.5 + 4;
+        return sum + Math.max(10, typeHeight, descriptionHeight);
+      }, 0);
 
-  orders.forEach((order) => {
-    order.items.forEach((item, index) => {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.2);
+    if (currentY + estimatedGroupHeight > 192 && currentY > 40) {
+      doc.addPage();
+      drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
+      currentY = 40;
+    }
 
+    currentY += drawCustomerRow(
+      doc,
+      currentY,
+      "Cliente",
+      group.customer,
+      customerLines,
+      [198, 198, 198],
+    );
+    if (measurements.length) {
+      currentY += drawMeasurementsRows(doc, currentY, measurements);
+    }
+
+    group.items.forEach(({ order, item }, index) => {
       const details = [
         `Qtd: ${item.quantity}`,
         `Tecido: ${item.fabric}`,
         `Cor: ${item.color}`,
         `Tamanho: ${item.size}`,
         item.notes ? `Detalhes: ${item.notes}` : null,
-        item.measurements ? `Medidas: ${item.measurements}` : null,
       ]
         .filter(Boolean)
         .join(" | ");
 
-      const productionTypeLabel = index === 0 ? order.productionType : "";
-      const dateLabel = index === 0 ? formatDate(order.date) : "";
-      const customerLabel = index === 0 ? order.customer : "";
-      const seamstressLabel = item.seamstress || "-";
+      const productionTypeLabel = order.productionType;
       const mergedDescription = [item.name, details].filter(Boolean).join(" | ");
       const mergedDescriptionLines = doc.splitTextToSize(
         mergedDescription,
         DESCRIPTION_TEXT_WIDTH,
       );
-      const seamstressLines = doc.splitTextToSize(seamstressLabel, SEAMSTRESS_TEXT_WIDTH);
-      const customerLines = customerLabel
-        ? doc.splitTextToSize(customerLabel, CUSTOMER_TEXT_WIDTH)
-        : [];
       const typeLines = productionTypeLabel ? [productionTypeLabel] : [];
-      const dateLines = dateLabel ? [dateLabel] : [];
-      const baseHeight = Math.max(
-        typeLines.length + dateLines.length,
-        customerLines.length,
-        seamstressLines.length,
-        mergedDescriptionLines.length,
-        1,
-      );
-      const rowHeight = Math.max(14, baseHeight * 5.2);
+      const dateLines = [formatDate(order.date)];
+      const typeHeight = typeLines.length * 4.5 + dateLines.length * 3.8 + 4;
+      const descriptionHeight = Math.max(2, mergedDescriptionLines.length) * 4 + 4;
+      const rowHeight = Math.max(8, typeHeight, descriptionHeight);
 
       if (currentY + rowHeight > 192) {
         doc.addPage();
         drawPageHeader(doc, logoDataUrl, weekLabel, orders.length, totalItems);
-        drawTableHeader(doc, 66);
-        currentY = 79;
+        currentY = 40;
       }
 
-      doc.setDrawColor(227, 218, 214);
-      doc.rect(12, currentY - 4, 273, rowHeight);
-      doc.line(TYPE_COLUMN_END_X, currentY - 4, TYPE_COLUMN_END_X, currentY - 4 + rowHeight);
-      doc.line(CUSTOMER_COLUMN_END_X, currentY - 4, CUSTOMER_COLUMN_END_X, currentY - 4 + rowHeight);
-      doc.line(SEAMSTRESS_COLUMN_END_X, currentY - 4, SEAMSTRESS_COLUMN_END_X, currentY - 4 + rowHeight);
-
-      const textStartY = currentY + 2.5;
-
-      doc.setTextColor(43, 36, 37);
-      doc.setFont("helvetica", index === 0 ? "bold" : "normal");
-      if (typeLines.length) {
+      doc.setFillColor(index % 2 === 0 ? 252 : 248, index % 2 === 0 ? 248 : 244, index % 2 === 0 ? 249 : 246);
+      doc.rect(12, currentY, 273, rowHeight, "F");
+      doc.setDrawColor(185, 173, 176);
+      doc.rect(12, currentY, 273, rowHeight);
+      doc.line(LABEL_COLUMN_END_X, currentY, LABEL_COLUMN_END_X, currentY + rowHeight);
+      doc.setTextColor(20, 20, 20);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.2);
+      typeLines.forEach((line, lineIndex) => {
         drawSingleLineWithAutoFontSize(
           doc,
-          typeLines[0],
-          16.8,
-          textStartY,
-          TYPE_COLUMN_END_X - 18,
-          9.2,
+          line,
+          TYPE_TEXT_X,
+          currentY + 4.8 + lineIndex * 4.3,
+          TYPE_TEXT_WIDTH,
+          8.2,
           6.4,
         );
-      }
-      if (dateLines.length) {
-        doc.text(dateLines, 16.8, textStartY + (typeLines.length ? 5.4 : 0));
-      }
-
+      });
+      dateLines.forEach((line, lineIndex) => {
+        drawSingleLineWithAutoFontSize(
+          doc,
+          line,
+          TYPE_TEXT_X,
+          currentY + 4.8 + typeLines.length * 4.3 + lineIndex * 4.3,
+          TYPE_TEXT_WIDTH,
+          8.2,
+          6.4,
+        );
+      });
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(9.2);
-      if (customerLines.length) {
-        doc.text(customerLines, CUSTOMER_TEXT_X, textStartY);
-      }
-      doc.text(seamstressLines, SEAMSTRESS_TEXT_X, textStartY);
-      doc.text(mergedDescriptionLines, DESCRIPTION_TEXT_X, textStartY);
+      doc.text(mergedDescriptionLines, DESCRIPTION_TEXT_X, currentY + 5);
       doc.setFontSize(9.5);
 
-      currentY += rowHeight + 2;
+      currentY += rowHeight;
     });
+
+    currentY += 2;
   });
 
   const totalPages = doc.getNumberOfPages();
