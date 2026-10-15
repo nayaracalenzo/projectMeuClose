@@ -58,6 +58,20 @@ function normalizeDate(value, fieldName) {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 0, 0, 0, 0);
 }
 
+function normalizeReceiptDate(value) {
+  const normalized = normalizeDate(value, "Data de recebimento");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (normalized.getTime() > today.getTime()) {
+    throw createReceivablesValidationError(
+      "A data de recebimento nao pode ser futura.",
+    );
+  }
+
+  return normalized;
+}
+
 function normalizeOptionalDate(value, fieldName, options = {}) {
   if (!value) {
     return null;
@@ -687,7 +701,7 @@ async function registerReceipt(installmentId, body = {}) {
 
   const normalizedPaymentType = buildPaymentTypeResponse(paymentType);
   const amount = normalizeAmount(body.amount, "Valor recebido");
-  const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
+  const paidAt = normalizeReceiptDate(body.paidAt);
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
   const discardInterest = normalizeBoolean(body.discardInterest);
   return repository.withLockedInstallment(normalizedInstallmentId, async (installment, items, transaction) => {
@@ -790,7 +804,7 @@ async function updateReceivable(installmentId, body = {}) {
   }
 
   if (normalizedInstallmentId < 0) {
-    const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
+    const paidAt = normalizeReceiptDate(body.paidAt);
     const updated = await repository.updateStandaloneReceiptDetails(
       Math.abs(normalizedInstallmentId),
       { paymentTypeId, paidAt },
@@ -823,7 +837,7 @@ async function updateReceivable(installmentId, body = {}) {
     }, transaction);
 
     if (receipts.length > 0) {
-      const paidAt = normalizeDate(body.paidAt, "Data de recebimento");
+      const paidAt = normalizeReceiptDate(body.paidAt);
       await repository.updatePaymentReceiptDetails(
         receipts[0].idPaymentReceipt,
         { paymentTypeId, paidAt },
