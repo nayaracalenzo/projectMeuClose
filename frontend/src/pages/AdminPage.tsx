@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Pencil, Trash2 } from "lucide-react";
+import { AlertCircle, Pencil, Search, Trash2 } from "lucide-react";
 import { CircularProgress, FormControl, MenuItem, Select } from "@mui/material";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
@@ -335,6 +335,23 @@ export default function AdminPage() {
     history: "",
     auditTypeId: "",
   });
+  const [searchByResource, setSearchByResource] = useState<
+    Record<AdminResourceKey, string>
+  >({
+    employees: "",
+    suppliers: "",
+    roles: "",
+    professions: "",
+    colors: "",
+    sizes: "",
+    "clothings-types": "",
+    fabrics: "",
+    "financial-categories": "",
+    "financial-accounts": "",
+    "measurement-definitions": "",
+    "payment-types": "",
+    audits: "",
+  });
 
   const currentConfig = useMemo(
     () => resourceConfigList.find((item) => item.key === selectedResource)!,
@@ -495,8 +512,24 @@ export default function AdminPage() {
     void fetchAudits();
   }, [auditFilters, selectedResource]);
 
-  const visibleRows =
+  const rowsBeforeSearch =
     selectedResource === "employees" ? employeeRows : currentRows;
+  const searchTerm = searchByResource[selectedResource].trim();
+  const normalizedSearchTerm = searchTerm
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR");
+  const visibleRows = normalizedSearchTerm
+    ? rowsBeforeSearch.filter((row) =>
+        Object.values(row).some((value) =>
+          String(value ?? "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLocaleLowerCase("pt-BR")
+            .includes(normalizedSearchTerm),
+        ),
+      )
+    : rowsBeforeSearch;
   const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
   const paginatedRows = visibleRows.slice(startIndex, startIndex + pageSize);
@@ -1355,10 +1388,37 @@ export default function AdminPage() {
 
             <div className="grid gap-4">
               <div className="bg-white md:bg-transparent">
-                <div className="mb-3 flex items-center justify-between">
+                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <h2 className="text-3xl font-semibold text-primary">
                     {currentConfig.title}
                   </h2>
+                  <div className="relative flex-1 md:mx-2 md:max-w-lg">
+                    <label
+                      className="sr-only"
+                      htmlFor={`admin-search-${selectedResource}`}
+                    >
+                      Pesquisar em {currentConfig.title.toLocaleLowerCase("pt-BR")}
+                    </label>
+                    <Search
+                      size={18}
+                      aria-hidden="true"
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-700"
+                    />
+                    <input
+                      id={`admin-search-${selectedResource}`}
+                      type="search"
+                      value={searchByResource[selectedResource]}
+                      onChange={(event) => {
+                        setSearchByResource((prev) => ({
+                          ...prev,
+                          [selectedResource]: event.target.value,
+                        }));
+                        setCurrentPage(1);
+                      }}
+                      placeholder="Pesquisar..."
+                      className="h-10 w-full border border-outline-variant/50 bg-white pl-10 pr-3 text-sm text-primary"
+                    />
+                  </div>
                   {currentConfig.readOnly ? null : (
                     <Button
                       variant="primary"
@@ -1380,7 +1440,9 @@ export default function AdminPage() {
 
                 {visibleRows.length === 0 ? (
                   <div className="bg-surface-lowest p-6 text-sm text-neutral-700">
-                    {currentConfig.emptyLabel}
+                    {searchTerm
+                      ? "Nenhum registro encontrado para essa pesquisa."
+                      : currentConfig.emptyLabel}
                   </div>
                 ) : (
                   <>
