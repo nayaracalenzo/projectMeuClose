@@ -533,6 +533,15 @@ export default function ReceivablesPage() {
 
   const handleSubmitReceivable = async () => {
     const amount = parseCurrencyToNumber(formAmount);
+    const today = getCurrentDateInputValue();
+    const isEditingReceiptDate =
+      receivableFormMode === "edit" &&
+      Boolean(selectedRow?.lastPaidAt || (selectedRow?.id ?? 0) < 0);
+
+    if (isEditingReceiptDate && formPaidAt > today) {
+      setMessage("A data de recebimento não pode ser futura.");
+      return;
+    }
 
     if (
       !formPaymentTypeId ||
@@ -735,6 +744,11 @@ export default function ReceivablesPage() {
 
     if (!receiptPaidAt) {
       setMessage("Informe a data do pagamento.");
+      return;
+    }
+
+    if (receiptPaidAt > getCurrentDateInputValue()) {
+      setMessage("A data de recebimento não pode ser futura.");
       return;
     }
 
@@ -1089,6 +1103,7 @@ export default function ReceivablesPage() {
                 value={formPaidAt}
                 onChange={setFormPaidAt}
                 format="iso"
+                max={getCurrentDateInputValue()}
                 className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
               />
             </div>
@@ -1628,6 +1643,7 @@ export default function ReceivablesPage() {
                     value={receiptPaidAt}
                     onChange={setReceiptPaidAt}
                     format="iso"
+                    max={getCurrentDateInputValue()}
                     className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
                   />
                 </div>
