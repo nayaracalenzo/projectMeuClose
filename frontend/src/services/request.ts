@@ -82,6 +82,55 @@ export const postRequest = async (url: string, body: object) => {
   });
 };
 
+export interface UploadedReferenceImage {
+  id: number;
+  originalName: string;
+  mimeType: string;
+  sizeBytes: number;
+}
+
+const fileToBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const dataUrl = String(reader.result || "");
+      const separatorIndex = dataUrl.indexOf(",");
+
+      if (separatorIndex < 0) {
+        reject(new Error("Não foi possível converter a imagem para Base64."));
+        return;
+      }
+
+      resolve(dataUrl.slice(separatorIndex + 1));
+    };
+    reader.onerror = () =>
+      reject(new Error("Não foi possível ler a imagem selecionada."));
+    reader.readAsDataURL(file);
+  });
+
+export const uploadReferenceImageRequest = async (file: File) => {
+  return runMutationRequest(async () => {
+    const imageBase64 = await fileToBase64(file);
+    const { data } = await API.post<UploadedReferenceImage>(
+      "/sales/reference-images",
+      {
+        imageBase64,
+        mimeType: file.type,
+        originalName: file.name,
+      },
+    );
+    return data;
+  });
+};
+
+export const getReferenceImageUrl = async (imageId: number) => {
+  const { data } = await API.get<Blob>(`/sales/reference-images/${imageId}`, {
+    responseType: "blob",
+  });
+  return URL.createObjectURL(data);
+};
+
 export const updateRequest = async (url: string, body: object) => {
   return runMutationRequest(async () => {
     const { data } = await API.put(url, body);

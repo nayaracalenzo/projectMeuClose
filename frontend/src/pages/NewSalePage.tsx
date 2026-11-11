@@ -19,6 +19,7 @@ import {
   getRequest,
   postRequest,
   updateRequest,
+  type UploadedReferenceImage,
 } from "../services/request";
 import {
   deleteSaleDraftRequest,
@@ -419,6 +420,26 @@ function buildMeasurementsMap(
     measurements: measurementMap,
     selectedMeasurements,
   };
+}
+
+function normalizeReferenceImages(value: unknown): UploadedReferenceImage[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((image) => {
+      const record = image as Partial<UploadedReferenceImage>;
+      const id = Number(record.id);
+
+      if (!Number.isInteger(id) || id <= 0) return null;
+
+      return {
+        id,
+        originalName: String(record.originalName || "referencia"),
+        mimeType: String(record.mimeType || ""),
+        sizeBytes: Math.max(0, Number(record.sizeBytes) || 0),
+      };
+    })
+    .filter((image): image is UploadedReferenceImage => Boolean(image));
 }
 
 function buildTableItemsFromDraftCollections(
@@ -894,7 +915,7 @@ export default function NewSalePage() {
         )) as CustomerCreditsResponse;
         setCustomerCredits(Array.isArray(data.items) ? data.items : []);
         setCustomerCreditAvailable(Number(data.totalAvailable || 0));
-      } catch (_error) {
+      } catch {
         setCustomerCredits([]);
         setCustomerCreditAvailable(0);
         setUseCustomerCredit(false);
@@ -1894,6 +1915,7 @@ export default function NewSalePage() {
               Number((metadata.seamstressCost as number | null) || 0) > 0
                 ? formatCurrency(Number(metadata.seamstressCost))
                 : "",
+            referenceImages: normalizeReferenceImages(metadata.referenceImages),
           });
           return;
         }
@@ -2384,6 +2406,7 @@ export default function NewSalePage() {
             fittingDate: product.fittingDate || null,
             seamstressCost: seamstressCost || null,
             selectedMeasurements: product.selectedMeasurements,
+            referenceImages: product.referenceImages || [],
           },
         };
       });
@@ -2605,6 +2628,7 @@ export default function NewSalePage() {
           fittingDate: product.fittingDate || null,
           seamstressCost: seamstressCost || null,
           selectedMeasurements: product.selectedMeasurements,
+          referenceImages: product.referenceImages || [],
         },
       };
     });

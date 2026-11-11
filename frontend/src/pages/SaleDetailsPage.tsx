@@ -1202,28 +1202,28 @@ export default function SaleDetailsPage() {
           </h2>
 
           <div className="hidden overflow-auto md:block">
-            <table className="w-full min-w-[900px] table-fixed border-separate border-spacing-y-2 text-sm">
+            <table className="w-full min-w-225 table-fixed border-separate border-spacing-y-2 text-sm">
               <thead className="rounded-t-md bg-[#dbd1d1]">
                 <tr className="text-left">
-                  <th className="w-[290px] rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal text-primary">
+                  <th className="w-72.5 rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal text-primary">
                     Descrição
                   </th>
-                  <th className="w-[100px] whitespace-nowrap bg-[#dbd1d1] px-3 py-3 font-editorial text-[1.2rem] font-normal text-primary">
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 font-editorial text-[1.2rem] font-normal text-primary">
                     Tipo
                   </th>
-                  <th className="w-[50px] bg-[#dbd1d1] px-2 py-3 text-center font-editorial text-[1.2rem] font-normal text-primary">
+                  <th className="w-12.5 bg-[#dbd1d1] px-2 py-3 text-center font-editorial text-[1.2rem] font-normal text-primary">
                     Qtd.
                   </th>
-                  <th className="w-[100px] whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
                     Unitário
                   </th>
-                  <th className="w-[100px] whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
                     Bruto
                   </th>
-                  <th className="w-[130px] whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
+                  <th className="w-32.5 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
                     Desconto
                   </th>
-                  <th className="w-[100px] whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
                     Final
                   </th>
                   <th className="whitespace-nowrap bg-[#dbd1d1] px-3 py-3 font-editorial text-[1.2rem] font-normal text-primary">
@@ -1343,7 +1343,7 @@ export default function SaleDetailsPage() {
                       <td className="whitespace-nowrap px-3 py-3 align-middle text-neutral-800">
                         {formatSaleItemType(item)}
                       </td>
-                      <td className="w-[60px] px-2 py-3 text-center align-middle text-neutral-800">
+                      <td className="w-15 px-2 py-3 text-center align-middle text-neutral-800">
                         {item.quantity}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 text-right align-middle text-neutral-800">
@@ -1411,7 +1411,7 @@ export default function SaleDetailsPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="break-words font-semibold text-primary">
+                      <p className="wrap-break-word font-semibold text-primary">
                         {item.description}
                       </p>
                       <p className="mt-1 text-xs uppercase text-neutral-700">
@@ -1495,7 +1495,7 @@ export default function SaleDetailsPage() {
             className="mb-6 bg-white p-5"
           >
             <div className="hidden overflow-auto md:block">
-              <table className="mt-2 w-full min-w-[860px] border-separate border-spacing-y-2 text-left text-sm">
+              <table className="mt-2 w-full min-w-215 border-separate border-spacing-y-2 text-left text-sm">
                 <thead className="rounded-t-md bg-[#dbd1d1]">
                   <tr className="text-primary">
                     <th className="rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
@@ -1598,7 +1598,7 @@ export default function SaleDetailsPage() {
                   Transação de cartão
                 </h3>
                 <div className="hidden overflow-auto md:block">
-                  <table className="mt-2 w-full min-w-[860px] border-separate border-spacing-y-2 text-left text-sm">
+                  <table className="mt-2 w-full min-w-215 border-separate border-spacing-y-2 text-left text-sm">
                     <thead className="rounded-t-md bg-[#dbd1d1]">
                       <tr className="text-primary">
                         <th className="rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
@@ -1684,7 +1684,7 @@ export default function SaleDetailsPage() {
               <>
                 <div className="mt-6">
                   <div className="hidden overflow-auto md:block">
-                    <table className="mt-2 w-full min-w-[900px] border-separate border-spacing-y-2 text-left text-sm">
+                    <table className="mt-2 w-full min-w-225 border-separate border-spacing-y-2 text-left text-sm">
                       <thead className="rounded-t-md bg-[#dbd1d1]">
                         <tr className="text-primary">
                           <th className="rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">

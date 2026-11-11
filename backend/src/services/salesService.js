@@ -93,12 +93,57 @@ function normalizeOptionalText(value) {
   return normalized || null;
 }
 
-function normalizeSaleItemMetadata(metadata = {}) {
+function normalizeSaleItemMetadata(metadata = {}, itemType = "") {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return null;
   }
 
   const normalizedMetadata = { ...metadata };
+
+  if (normalizedMetadata.referenceImages !== undefined) {
+    if (itemType !== "CUSTOM_MADE") {
+      throw createSalesValidationError(
+        "Imagens de referencia sao permitidas apenas para roupa sob medida, reforma ou ajuste.",
+      );
+    }
+
+    if (!Array.isArray(normalizedMetadata.referenceImages)) {
+      throw createSalesValidationError("Imagens de referencia invalidas.");
+    }
+
+    if (normalizedMetadata.referenceImages.length > 5) {
+      throw createSalesValidationError("Adicione no maximo 5 imagens de referencia por peca.");
+    }
+
+    const productMode = String(normalizedMetadata.productMode || "")
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    if (
+      normalizedMetadata.referenceImages.length > 0 &&
+      !["sob medida", "roupa sob medida", "ajuste", "reforma"].includes(productMode)
+    ) {
+      throw createSalesValidationError(
+        "Imagens de referencia sao permitidas apenas para roupa sob medida, reforma ou ajuste.",
+      );
+    }
+
+    normalizedMetadata.referenceImages = normalizedMetadata.referenceImages.map((image) => {
+      const id = Number(image?.id);
+
+      if (!Number.isInteger(id) || id <= 0) {
+        throw createSalesValidationError("Imagem de referencia invalida.");
+      }
+
+      return {
+        id,
+        originalName: String(image?.originalName || "referencia").trim().slice(0, 255),
+        mimeType: String(image?.mimeType || "").trim().slice(0, 50),
+        sizeBytes: Math.max(0, Number(image?.sizeBytes) || 0),
+      };
+    });
+  }
 
   if (normalizedMetadata.fittingDate !== undefined && normalizedMetadata.fittingDate !== null) {
     const normalizedFittingDate = normalizeShortOrIsoDateToIso(normalizedMetadata.fittingDate);
@@ -940,7 +985,7 @@ function normalizeSaleItem(item = {}) {
     productId: item.productId ? normalizeInteger(item.productId, "Produto") : null,
     itemType,
     description,
-    metadata: normalizeSaleItemMetadata(item.metadata),
+    metadata: normalizeSaleItemMetadata(item.metadata, itemType),
     quantity,
     unitPrice,
     discountType:
