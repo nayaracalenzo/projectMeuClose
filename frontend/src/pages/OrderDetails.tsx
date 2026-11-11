@@ -1,13 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Button } from "../components/Button";
+import CustomerModal from "../components/CustomerModal";
 import MeasurementsFields, {
   type MeasurementOption as MeasurementsFieldOption,
 } from "../components/MeasurementsFields";
 import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import SearchableSelect from "../components/SearchableSelect";
-import { getRequest, updateRequest } from "../services/request";
+import ReferenceImagePreview from "../components/ReferenceImagePreview";
+import {
+  getRequest,
+  updateRequest,
+  type UploadedReferenceImage,
+} from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import {
   formatCurrency,
@@ -63,6 +69,7 @@ type ProductDetails = {
     value: number;
   }>;
   measurementsSummary?: string;
+  referenceImages?: UploadedReferenceImage[];
 };
 
 type SelectOption = {
@@ -319,6 +326,8 @@ export default function OrderDetails() {
   const [employeeOptions, setEmployeeOptions] = useState<SelectOption[]>([]);
   const [statusOptions, setStatusOptions] = useState<SelectOption[]>([]);
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
+  const [selectedReferenceImage, setSelectedReferenceImage] =
+    useState<UploadedReferenceImage | null>(null);
   const returnTo = useMemo(
     () => searchParams.get("returnTo") || "/producao",
     [searchParams],
@@ -680,6 +689,34 @@ export default function OrderDetails() {
           <InfoCard label="Lucro da peca" value={formatCurrency(product.remainingValue)} />
         </div>
 
+        {product.referenceImages?.length ? (
+          <section className="mb-6 rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
+            <h2 className="font-editorial text-3xl text-primary">
+              Fotos de modelo ou inspiração
+            </h2>
+            <p className="mt-2 text-sm text-neutral-600">
+              Referências enviadas para orientar a produção desta peça.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {product.referenceImages.map((image) => (
+                <button
+                  key={image.id}
+                  type="button"
+                  onClick={() => setSelectedReferenceImage(image)}
+                  className="overflow-hidden rounded-lg border border-outline-variant/60 bg-surface-lowest text-left"
+                >
+                  <div className="aspect-square overflow-hidden">
+                    <ReferenceImagePreview imageId={image.id} alt={image.originalName} />
+                  </div>
+                  <p className="truncate px-2 py-2 text-xs text-neutral-700">
+                    {image.originalName}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <form id="order-details-form" onSubmit={handleSubmit} className="space-y-6">
           <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
             <h2 className="font-editorial text-3xl text-primary">Dados do Produto</h2>
@@ -958,6 +995,24 @@ export default function OrderDetails() {
           </section>
         </form>
       </div>
+
+      <CustomerModal
+        open={Boolean(selectedReferenceImage)}
+        onClose={() => setSelectedReferenceImage(null)}
+        title="Foto de modelo ou inspiração"
+        subtitle={selectedReferenceImage?.originalName || undefined}
+        size="lg"
+      >
+        {selectedReferenceImage ? (
+          <div className="flex max-h-[72vh] justify-center overflow-hidden rounded bg-surface-lowest">
+            <ReferenceImagePreview
+              imageId={selectedReferenceImage.id}
+              alt={selectedReferenceImage.originalName}
+              className="max-h-[72vh] max-w-full object-contain"
+            />
+          </div>
+        ) : null}
+      </CustomerModal>
 
       <NoticeToast
         open={toast.open}

@@ -1,15 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ImagePlus, Trash2 } from "lucide-react";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrencyInput, parseCurrencyToNumber } from "../utils/currency";
 import {
   formatLegacyShortDateInput,
 } from "../utils/legacyDate";
-import { getRequest, postRequest } from "../services/request";
+import {
+  getRequest,
+  postRequest,
+  uploadReferenceImageRequest,
+  type UploadedReferenceImage,
+} from "../services/request";
 import MeasurementsFields from "./MeasurementsFields";
 import CustomerModal from "./CustomerModal";
 import DatePickerInput from "./DatePickerInput";
 import NoticeToast from "./NoticeToast";
 import SearchableSelect from "./SearchableSelect";
+import ReferenceImagePreview from "./ReferenceImagePreview";
 
 interface AdminOption {
   desc?: string | null;
@@ -78,6 +85,7 @@ interface CustomMadeProduct {
   seamstress: string;
   fittingDate: string;
   seamstressCost: string;
+  referenceImages: UploadedReferenceImage[];
 }
 
 export interface CustomMadeProductDraft {
@@ -96,6 +104,7 @@ export interface CustomMadeProductDraft {
   seamstress: string;
   fittingDate: string;
   seamstressCost: string;
+  referenceImages?: UploadedReferenceImage[];
 }
 
 export interface CustomMadeSummaryItem {
@@ -195,6 +204,12 @@ export default function CustomMadeClothing({
   const [quickCreateSubmitting, setQuickCreateSubmitting] = useState(false);
   const [quickCreateError, setQuickCreateError] = useState("");
   const [notice, setNotice] = useState<QuickCreateNotice | null>(null);
+  const [uploadingProductIds, setUploadingProductIds] = useState<Set<number>>(
+    () => new Set(),
+  );
+  const [referenceImageErrors, setReferenceImageErrors] = useState<
+    Record<number, string>
+  >({});
   const [sharedMeasurements, setSharedMeasurements] = useState<CustomMadeMeasurements>(() => {
     const seededFromProducts =
       initialProducts?.find((product) => Object.keys(product.measurements || {}).length > 0)
@@ -220,6 +235,7 @@ export default function CustomMadeClothing({
     seamstress: "",
     fittingDate: "",
     seamstressCost: "",
+    referenceImages: [],
   });
   const [products, setProducts] = useState<CustomMadeProduct[]>(
     initialProducts?.length
@@ -229,6 +245,9 @@ export default function CustomMadeClothing({
           fittingDate: formatLegacyShortDateInput(product.fittingDate),
           measurements: emptyMeasurements(),
           selectedMeasurements: [...product.selectedMeasurements],
+          referenceImages: Array.isArray(product.referenceImages)
+            ? [...product.referenceImages]
+            : [],
         }))
       : [buildEmptyProduct(1)],
   );
@@ -415,6 +434,97 @@ export default function CustomMadeClothing({
 
   const removeProduct = (productId: number) => {
     setProducts((prev) => prev.filter((product) => product.id !== productId));
+  };
+
+  const handleReferenceImagesChange = async (
+    productId: number,
+    files: FileList | null,
+  ) => {
+    const selectedFiles = Array.from(files || []);
+    if (!selectedFiles.length) return;
+
+    const currentCount =
+      products.find((product) => product.id === productId)?.referenceImages.length || 0;
+    const availableSlots = Math.max(0, 5 - currentCount);
+
+    if (availableSlots === 0) {
+      setReferenceImageErrors((prev) => ({
+        ...prev,
+        [productId]: "Cada peça pode ter no máximo 5 fotos de referência.",
+      }));
+      return;
+    }
+
+    const filesToUpload = selectedFiles.slice(0, availableSlots);
+    const invalidFile = filesToUpload.find(
+      (file) =>
+        !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+        file.size > 5 * 1024 * 1024,
+    );
+
+    if (invalidFile) {
+      setReferenceImageErrors((prev) => ({
+        ...prev,
+        [productId]: "Use imagens JPG, PNG ou WEBP com até 5 MB cada.",
+      }));
+      return;
+    }
+
+    setUploadingProductIds((prev) => new Set(prev).add(productId));
+    setReferenceImageErrors((prev) => ({ ...prev, [productId]: "" }));
+
+    try {
+      for (const file of filesToUpload) {
+        const uploaded = await uploadReferenceImageRequest(file);
+        setProducts((prev) =>
+          prev.map((product) =>
+            product.id === productId
+              ? {
+                  ...product,
+                  referenceImages: [...product.referenceImages, uploaded].slice(0, 5),
+                }
+              : product,
+          ),
+        );
+      }
+
+      if (selectedFiles.length > availableSlots) {
+        setReferenceImageErrors((prev) => ({
+          ...prev,
+          [productId]: "Algumas fotos não foram adicionadas porque o limite é de 5 por peça.",
+        }));
+      }
+    } catch (error) {
+      setReferenceImageErrors((prev) => ({
+        ...prev,
+        [productId]: getUserFacingApiErrorMessage(
+          error,
+          "Não foi possível enviar a foto de referência.",
+        ),
+      }));
+    } finally {
+      setUploadingProductIds((prev) => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
+  };
+
+  const removeReferenceImage = (productId: number, imageId: number) => {
+    setProducts((prev) =>
+      prev.map((product) =>
+        product.id === productId
+          ? {
+              ...product,
+              referenceImages: product.referenceImages.filter(
+                (image) => image.id !== imageId,
+              ),
+            }
+          : product,
+      ),
+    );
+    setReferenceImageErrors((prev) => ({ ...prev, [productId]: "" }));
   };
 
   const syncQuickCreateOptions = useCallback(
@@ -671,6 +781,87 @@ export default function CustomMadeClothing({
                 updateMeasurement(field as MeasurementField, value)
               }
             />
+
+            <div className="mt-4 rounded border border-outline-variant/60 bg-white p-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-primary">
+                    Fotos de modelo ou inspiração
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-600">
+                    Adicione até 5 imagens JPG, PNG ou WEBP, com até 5 MB cada.
+                  </p>
+                </div>
+
+                <label
+                  htmlFor={`reference-images-${product.id}`}
+                  className={`inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded border border-primary px-3 text-sm font-semibold text-primary transition-colors hover:bg-surface-low ${
+                    uploadingProductIds.has(product.id) ||
+                    product.referenceImages.length >= 5
+                      ? "pointer-events-none opacity-60"
+                      : ""
+                  }`}
+                >
+                  <ImagePlus size={17} aria-hidden="true" />
+                  {uploadingProductIds.has(product.id) ? "Enviando..." : "Adicionar fotos"}
+                </label>
+                <input
+                  id={`reference-images-${product.id}`}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  className="sr-only"
+                  disabled={
+                    uploadingProductIds.has(product.id) ||
+                    product.referenceImages.length >= 5
+                  }
+                  onChange={(event) => {
+                    void handleReferenceImagesChange(product.id, event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+              </div>
+
+              {referenceImageErrors[product.id] ? (
+                <p className="mt-2 text-xs text-[#b42318]">
+                  {referenceImageErrors[product.id]}
+                </p>
+              ) : null}
+
+              {product.referenceImages.length ? (
+                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  {product.referenceImages.map((image) => (
+                    <div
+                      key={image.id}
+                      className="overflow-hidden rounded border border-outline-variant/60 bg-surface-lowest"
+                    >
+                      <div className="aspect-square overflow-hidden">
+                        <ReferenceImagePreview
+                          imageId={image.id}
+                          alt={`Referência ${image.originalName}`}
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 px-2 py-2">
+                        <span
+                          className="min-w-0 flex-1 truncate text-xs text-neutral-700"
+                          title={image.originalName}
+                        >
+                          {image.originalName}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeReferenceImage(product.id, image.id)}
+                          className="rounded p-1 text-[#8f2525] hover:bg-[#fdecec]"
+                          aria-label={`Remover ${image.originalName}`}
+                        >
+                          <Trash2 size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             <div className="mt-4 rounded border border-outline-variant/60 bg-white p-3">
               <div className="my-3 grid grid-cols-1 items-center gap-2 md:grid-cols-[110px_1fr] md:items-center">

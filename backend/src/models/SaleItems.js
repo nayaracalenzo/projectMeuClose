@@ -71,6 +71,9 @@ const SaleItemsSchema = (sequelize, DataTypes) => {
     SaleItems.hasMany(models.CustomerCredits, {
       foreignKey: "saleItemId",
     });
+    SaleItems.hasMany(models.GarmentReferenceImages, {
+      foreignKey: "saleItemId",
+    });
   };
 
   return SaleItems

@@ -81,6 +81,13 @@ API padrao:
 
 - `http://localhost:3000`
 
+Fotos de referência de peças (rotas autenticadas):
+
+- `POST /sales/reference-images`: recebe uma imagem JPG, PNG ou WEBP no corpo binário, com até 5 MB; o nome original vai no header `X-File-Name`.
+- `GET /sales/reference-images/:imageId`: devolve a imagem para pré-visualização.
+- O identificador retornado pelo upload é persistido em `metadata.referenceImages` de itens `CUSTOM_MADE`. Cada peça aceita até cinco imagens.
+- Antes do deploy, execute a migration `20261016120000-create-garment-reference-images.js` e publique frontend e backend em conjunto.
+
 ### Frontend
 
 ```bash

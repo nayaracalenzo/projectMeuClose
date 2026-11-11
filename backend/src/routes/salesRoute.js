@@ -10,6 +10,8 @@ router.use(authMiddleware);
 router.get("/draft", saleDraftsController.getActiveSaleDraftController);
 router.put("/draft", saleDraftsController.upsertActiveSaleDraftController);
 router.delete("/draft", saleDraftsController.discardActiveSaleDraftController);
+router.post("/reference-images", controller.createReferenceImageController);
+router.get("/reference-images/:imageId", controller.getReferenceImageController);
 router.get("/", controller.listSalesController);
 router.get("/:id", controller.getSaleByIdController);
 router.put("/:id/customer", controller.updateSaleCustomerController);

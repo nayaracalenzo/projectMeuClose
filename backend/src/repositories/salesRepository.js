@@ -11,6 +11,7 @@ const {
   PaymentReceipts,
   PaymentTypes,
   FinancialAccounts,
+  GarmentReferenceImages,
   Products,
   ReceivableInstallments,
   Receivables,
@@ -28,6 +29,7 @@ const productsRepository = require("./productsRepository");
 const receivablesRepository = require("./receivablesRepository");
 
 let hasSaleBudgetPaymentDraftsTableCache = null;
+const UNLINKED_IMAGE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function hasConditions(value) {
   return Reflect.ownKeys(value || {}).length > 0;
@@ -158,6 +160,45 @@ function buildSaleFinancialMovementDescription(movement, saleId, customerName) {
   return `Recebimento da venda ${saleId} - ${resolvedCustomerName}`;
 }
 
+function getReferenceImageIds(item) {
+  const images = item?.metadata?.referenceImages;
+
+  if (!Array.isArray(images)) {
+    return [];
+  }
+
+  return images
+    .map((image) => Number(image?.id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+async function linkReferenceImagesToItems(items, createdItems, transaction) {
+  for (const [index, createdItem] of createdItems.entries()) {
+    const imageIds = getReferenceImageIds(items[index]);
+
+    if (!imageIds.length) {
+      continue;
+    }
+
+    await GarmentReferenceImages.update(
+      {
+        saleItemId: createdItem.idSaleItem,
+        expiresAt: null,
+      },
+      {
+        where: {
+          idGarmentReferenceImage: imageIds,
+          [Op.or]: [
+            { saleItemId: null },
+            { saleItemId: createdItem.idSaleItem },
+          ],
+        },
+        transaction,
+      },
+    );
+  }
+}
+
 async function createSale({
   sale,
   items,
@@ -196,6 +237,8 @@ async function createSale({
       })),
       { transaction }
     );
+
+    await linkReferenceImagesToItems(items, createdItems, transaction);
 
     let createdMeasurements = [];
     let createdBudgetPaymentDraft = null;
@@ -420,6 +463,20 @@ async function updateQuote(
 
     await existingSale.update(sale, { transaction });
 
+    const previousItemIds = (existingSale.SaleItems || []).map((item) => item.idSaleItem);
+    if (previousItemIds.length) {
+      await GarmentReferenceImages.update(
+        {
+          saleItemId: null,
+          expiresAt: new Date(Date.now() + UNLINKED_IMAGE_RETENTION_MS),
+        },
+        {
+          where: { saleItemId: previousItemIds },
+          transaction,
+        },
+      );
+    }
+
     await SaleItems.destroy({
       where: { saleId: existingSale.idSale },
       transaction,
@@ -438,6 +495,8 @@ async function updateQuote(
       })),
       { transaction },
     );
+
+    await linkReferenceImagesToItems(items, createdItems, transaction);
 
     let createdMeasurements = [];
 
@@ -516,6 +575,19 @@ async function updateCompletedSaleStructure(
         },
         { transaction },
       );
+
+      await GarmentReferenceImages.update(
+        {
+          saleItemId: null,
+          expiresAt: new Date(Date.now() + UNLINKED_IMAGE_RETENTION_MS),
+        },
+        {
+          where: { saleItemId: saleItem.idSaleItem },
+          transaction,
+        },
+      );
+
+      await linkReferenceImagesToItems([nextItem], [saleItem], transaction);
 
       if (saleItem.productId) {
         await productsRepository.syncProductFromSaleItem(
@@ -627,6 +699,14 @@ async function deleteQuote(idSale) {
       where: { saleId: existingSale.idSale },
       transaction,
     });
+
+    const saleItemIds = (existingSale.SaleItems || []).map((item) => item.idSaleItem);
+    if (saleItemIds.length) {
+      await GarmentReferenceImages.destroy({
+        where: { saleItemId: saleItemIds },
+        transaction,
+      });
+    }
 
     await SaleItems.destroy({
       where: { saleId: existingSale.idSale },

@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { FormControl, MenuItem, Select } from "@mui/material";
 import { Button } from "../components/Button";
 import CustomerModal from "../components/CustomerModal";
 import DatePickerInput from "../components/DatePickerInput";
 import NoticeToast from "../components/NoticeToast";
 import SearchableSelect from "../components/SearchableSelect";
-import { deleteRequest, getRequest, postRequest, updateRequest } from "../services/request";
+import ReferenceImagePreview from "../components/ReferenceImagePreview";
+import {
+  deleteRequest,
+  getRequest,
+  postRequest,
+  updateRequest,
+  type UploadedReferenceImage,
+} from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 import { parseLegacyOrIsoDate } from "../utils/legacyDate";
@@ -172,25 +180,36 @@ type ToastState = {
   message: string;
 };
 
+type SaleDetailsTab = "items" | "receipts" | "receivable";
+
 const EMPTY_TOAST: ToastState = {
   open: false,
   tone: "success",
   message: "",
 };
 
-function getTodayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+function getItemReferenceImages(item: SaleDetailItem): UploadedReferenceImage[] {
+  const value = item.metadata?.referenceImages;
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((image) => {
+      const record = image as Partial<UploadedReferenceImage>;
+      const id = Number(record.id);
+      if (!Number.isInteger(id) || id <= 0) return null;
+
+      return {
+        id,
+        originalName: String(record.originalName || "referencia"),
+        mimeType: String(record.mimeType || ""),
+        sizeBytes: Math.max(0, Number(record.sizeBytes) || 0),
+      };
+    })
+    .filter((image): image is UploadedReferenceImage => Boolean(image));
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-outline-variant/35 bg-white px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.12em] text-neutral-600">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-medium text-primary">{value}</p>
-    </div>
-  );
+function getTodayIsoDate() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function formatDate(value?: string | null) {
@@ -273,9 +292,29 @@ function formatSaleStatus(value?: string | null) {
     .trim()
     .toUpperCase();
   if (normalized === "BUDGET") return "Orçamento";
-  if (normalized === "COMPLETED") return "Concluido";
+  if (normalized === "COMPLETED") return "Concluído";
   if (normalized === "CANCELLED") return "Cancelado";
   return value || "-";
+}
+
+function getSaleStatusBadgeClassName(value?: string | null) {
+  const normalized = String(value || "")
+    .trim()
+    .toUpperCase();
+
+  if (normalized === "CANCELLED") {
+    return "border border-[#d8a2ab] bg-[#f7d9dd] text-[#8a1f2d]";
+  }
+
+  if (normalized === "BUDGET") {
+    return "border border-[#d7c27a] bg-[#f4ebc7] text-[#6b5600]";
+  }
+
+  if (normalized === "COMPLETED") {
+    return "border border-[#9cc7ad] bg-[#d9efe0] text-[#1f5f3a]";
+  }
+
+  return "border border-outline-variant/40 bg-secondary text-primary";
 }
 
 function formatSaleItemType(item?: SaleDetailItem | null) {
@@ -356,6 +395,8 @@ export default function SaleDetailsPage() {
   const [error, setError] = useState("");
   const [sale, setSale] = useState<SaleDetailsResponse | null>(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [selectedReferenceImage, setSelectedReferenceImage] =
+    useState<UploadedReferenceImage | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [discardModalOpen, setDiscardModalOpen] = useState(false);
@@ -384,6 +425,8 @@ export default function SaleDetailsPage() {
   const [customerSearchTerm, setCustomerSearchTerm] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [toast, setToast] = useState<ToastState>(EMPTY_TOAST);
+  const [selectedDetailTab, setSelectedDetailTab] =
+    useState<SaleDetailsTab>("items");
   const returnTo = useMemo(
     () => searchParams.get("returnTo") || "/vendas",
     [searchParams],
@@ -432,7 +475,7 @@ export default function SaleDetailsPage() {
           "/payment-types",
         )) as PaymentTypeOption[];
         setPaymentTypes(Array.isArray(data) ? data : []);
-      } catch (_error) {
+      } catch {
         setPaymentTypes([]);
       }
     };
@@ -560,6 +603,14 @@ export default function SaleDetailsPage() {
   //   sale.status !== "CANCELLED",
   // );
   const isBudgetSale = sale?.status === "BUDGET";
+  const detailTabs: Array<{ value: SaleDetailsTab; label: string }> = [
+    {
+      value: "items",
+      label: isBudgetSale ? "Itens do orçamento" : "Itens da venda",
+    },
+    { value: "receipts", label: "Recebimentos" },
+    { value: "receivable", label: "A receber" },
+  ];
 
   async function refreshSale() {
     const data = (await getRequest(`/sales/${id}`)) as SaleDetailsResponse;
@@ -761,7 +812,7 @@ export default function SaleDetailsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-full bg-white p-5 md:bg-surface-low">
+      <div className="min-h-full max-w-7xl bg-white p-5 md:bg-surface-low">
         <div className="rounded-2xl border border-outline-variant/35 bg-white px-6 py-10 text-center text-sm text-neutral-700">
           Carregando detalhes da venda...
         </div>
@@ -776,6 +827,7 @@ export default function SaleDetailsPage() {
           <p>{error}</p>
           <div className="mt-4 flex justify-center gap-3">
             <Button variant="secondary" onClick={() => navigate(returnTo)}>
+              
               Voltar para vendas
             </Button>
           </div>
@@ -788,7 +840,7 @@ export default function SaleDetailsPage() {
 
   return (
     <div className="min-h-full bg-white p-3 sm:p-5 md:bg-surface-low">
-      <div className="mx-auto max-w-7xl">
+      <div className="w-full min-w-0">
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <button
@@ -798,14 +850,6 @@ export default function SaleDetailsPage() {
             >
               Voltar para vendas
             </button>
-            <h1 className="font-editorial text-[2rem] text-primary md:text-[1.85rem]">
-              {isBudgetSale ? "Detalhes do Orçamento" : "Detalhes da Venda"}
-            </h1>
-            <p className="mt-2 text-sm text-neutral-700">
-              {isBudgetSale
-                ? "Visualize os itens e dados vinculados a este orçamento."
-                : "Visualize os itens, recebimentos e parcelas vinculadas a esta venda."}
-            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -968,95 +1012,225 @@ export default function SaleDetailsPage() {
           </section>
         ) : null}
 
-        <section className="mb-6 rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-          <h2 className="font-editorial text-3xl text-primary">Resumo</h2>
+        <section className="mb-6 w-full overflow-hidden">
+          <div className="p-5 md:px-6 md:py-5">
+            <h2 className="font-editorial text-3xl text-primary">
+              Histórico da Venda
+            </h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border border-outline-variant/35 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-neutral-600">
+                  Venda
+                </p>
+                <p className="mt-1 text-sm font-medium text-primary">
+                  #{sale.id}
+                </p>
+              </div>
+              <div className="rounded-xl border border-outline-variant/35 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-neutral-600">
+                  Cliente atual
+                </p>
+                <p className="mt-1 text-sm font-medium uppercase text-primary">
+                  {sale.customer?.name || "Sem cliente"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-outline-variant/35 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-neutral-600">
+                  Status atual
+                </p>
+                <span
+                  className={`mt-1 inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] ${getSaleStatusBadgeClassName(sale.status)}`}
+                >
+                  {formatSaleStatus(sale.status)}
+                </span>
+              </div>
+              <div className="rounded-xl border border-outline-variant/35 bg-white px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-neutral-600">
+                  Data da venda
+                </p>
+                <p className="mt-1 text-sm font-medium text-primary">
+                  {formatDateTime(sale.createdAt)}
+                </p>
+              </div>
+            </div>
+          </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <InfoCard label="Venda" value={`#${sale.id}`} />
-            <InfoCard
-              label="Cliente"
-              value={sale.customer?.name || "Sem cliente"}
-            />
-            <InfoCard label="Status" value={formatSaleStatus(sale.status)} />
-            <InfoCard
-              label="Valor final"
-              value={formatCurrency(sale.finalAmount)}
-            />
-            <InfoCard label="Recebido" value={formatCurrency(totalReceived)} />
-            <InfoCard label="Abatimento por exclusão" value={formatCurrency(sale.receivable?.waivedAmount || 0)} />
-            <InfoCard
-              label="Subtotal bruto"
-              value={formatCurrency(sale.totalAmount)}
-            />
-            <InfoCard
-              label="Desconto dos itens"
-              value={formatCurrency(totalItemDiscount)}
-            />
-            <InfoCard
-              label="Desconto sobre a venda"
-              value={formatCurrency(saleDiscountAmount)}
-            />
-            <InfoCard
-              label="Saldo atual devido"
-              value={formatCurrency(
-                sale.doesNotGenerateDebt ? 0 : sale.receivable?.openAmount || 0,
-              )}
-            />
-            <InfoCard
-              label="Parcelas previstas"
-              value={String(
-                sale.doesNotGenerateDebt ? 0 : sale.installmentCount,
-              )}
-            />
-            <InfoCard
-              label="Criada em"
-              value={formatDateTime(sale.createdAt)}
-            />
-            <InfoCard
-              label="Atualizada em"
-              value={formatDateTime(sale.updatedAt)}
-            />
-            <InfoCard
-              label="Vencimento base"
-              value={formatDate(sale.dueDate)}
-            />
+          <div className="grid gap-4 border-y border-outline-variant/35  p-4 md:p-5 lg:grid-cols-[1.35fr_1fr]">
+            <section className="rounded-xl border border-outline-variant/35 bg-white p-5">
+              <div className="flex items-start justify-between gap-4 border-b border-outline-variant/30 pb-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-primary">
+                    Composição da venda
+                  </h3>
+                </div>
+              </div>
+
+              <dl className="mt-2 grid gap-x-6">
+                {[
+                  ["Subtotal bruto", formatCurrency(sale.totalAmount)],
+                  ["Desconto dos produtos", formatCurrency(totalItemDiscount)],
+                  ["Desconto subtotal", formatCurrency(saleDiscountAmount)],
+                  ["Total final", formatCurrency(sale.finalAmount)],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between gap-4 border-b border-outline-variant/20 py-3 last:border-b-0"
+                  >
+                    <dt className="text-sm text-neutral-700">{label}</dt>
+                    <dd
+                      className={`whitespace-nowrap text-sm font-semibold ${
+                        label === "Total final"
+                          ? "text-[#1f7a1f]"
+                          : label.startsWith("Desconto")
+                            ? "text-[#b42318]"
+                            : "text-primary"
+                      }`}
+                    >
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
+            <section className="overflow-hidden rounded-xl border border-outline-variant/35 bg-white">
+              <dl className="divide-y divide-outline-variant/30 px-5">
+                <div className="flex items-center justify-between gap-4 py-4">
+                  <dt className="text-sm font-semibold text-neutral-700 ">
+                    Total da venda
+                  </dt>
+                  <dd className="whitespace-nowrap text-lg font-semibold ">
+                    {formatCurrency(sale.finalAmount)}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-4 py-4">
+                  <dt className="text-sm font-semibold text-neutral-700 ">
+                    Recebido
+                  </dt>
+                  <dd className="whitespace-nowrap text-lg font-semibold text-[#1f7a1f]">
+                    {formatCurrency(totalReceived)}
+                  </dd>
+                </div>
+                {Number(sale.receivable?.waivedAmount || 0) > 0 ? (
+                  <div className="flex items-center justify-between gap-4 py-4">
+                    <dt className="text-sm font-semibold text-neutral-700">
+                      Abatimento por exclusão
+                    </dt>
+                    <dd className="whitespace-nowrap text-lg font-semibold text-[#b42318]">
+                      {formatCurrency(sale.receivable?.waivedAmount || 0)}
+                    </dd>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between gap-4 py-4">
+                  <dt className="text-sm  font-semibold text-neutral-700">
+                    Saldo atual
+                  </dt>
+                  <dd className="whitespace-nowrap text-lg font-semibold ">
+                    {formatCurrency(
+                      sale.doesNotGenerateDebt
+                        ? 0
+                        : sale.receivable?.openAmount || 0,
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </section>
           </div>
         </section>
 
-        <section className="mb-6 rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
+        <div className="mb-4 hidden border-b border-outline-variant/35 md:block">
+          <div
+            className="flex flex-wrap gap-2"
+            role="tablist"
+            aria-label="Detalhes da venda"
+          >
+            {detailTabs.map((tab) => (
+              <button
+                key={tab.value}
+                id={`sale-details-${tab.value}-tab`}
+                type="button"
+                role="tab"
+                aria-selected={selectedDetailTab === tab.value}
+                aria-controls={`sale-details-${tab.value}-panel`}
+                onClick={() => setSelectedDetailTab(tab.value)}
+                className={`px-4 py-3 text-sm uppercase tracking-widest transition-colors ${
+                  selectedDetailTab === tab.value
+                    ? "border-b-2 border-primary font-semibold text-primary"
+                    : "text-neutral-700 hover:text-primary"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4 md:hidden">
+          <FormControl fullWidth size="medium">
+            <Select
+              value={selectedDetailTab}
+              onChange={(event) =>
+                setSelectedDetailTab(event.target.value as SaleDetailsTab)
+              }
+              inputProps={{ "aria-label": "Seção dos detalhes da venda" }}
+              sx={{
+                height: 46,
+                backgroundColor: "white",
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "rgba(112, 105, 106, 0.45)",
+                },
+              }}
+            >
+              {detailTabs.map((tab) => (
+                <MenuItem key={tab.value} value={tab.value}>
+                  {tab.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </div>
+
+        <section
+          id="sale-details-items-panel"
+          role="tabpanel"
+          aria-labelledby="sale-details-items-tab"
+          hidden={selectedDetailTab !== "items"}
+          className="mb-6 bg-white p-5"
+        >
           <h2 className="font-editorial text-3xl text-primary">
             {isBudgetSale ? "Itens do Orçamento" : "Itens da Venda"}
           </h2>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="min-w-full border-separate border-spacing-y-2 text-sm">
-              <thead className="bg-[#dbd1d1] rounded-t-md">
+          <div className="hidden overflow-auto md:block">
+            <table className="w-full min-w-225 table-fixed border-separate border-spacing-y-2 text-sm">
+              <thead className="rounded-t-md bg-[#dbd1d1]">
                 <tr className="text-left">
-                  <th className="px-4 py-2 font-semibold text-primary">
-                    Descricao
+                  <th className="w-72.5 rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal text-primary">
+                    Descrição
                   </th>
-                  <th className="px-4 py-2 font-semibold text-primary">Tipo</th>
-                  <th className="px-4 py-2 font-semibold text-primary">Qtd.</th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">
-                    Unitario
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 font-editorial text-[1.2rem] font-normal text-primary">
+                    Tipo
                   </th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                  <th className="w-12.5 bg-[#dbd1d1] px-2 py-3 text-center font-editorial text-[1.2rem] font-normal text-primary">
+                    Qtd.
+                  </th>
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
+                    Unitário
+                  </th>
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
                     Bruto
                   </th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                  <th className="w-32.5 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
                     Desconto
                   </th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">
+                  <th className="w-25 whitespace-nowrap bg-[#dbd1d1] px-3 py-3 text-right font-editorial text-[1.2rem] font-normal text-primary">
                     Final
                   </th>
-                  <th className="px-4 py-2 font-semibold text-primary">
+                  <th className="whitespace-nowrap bg-[#dbd1d1] px-3 py-3 font-editorial text-[1.2rem] font-normal text-primary">
                     Costureira
                   </th>
-                  <th className="px-4 py-2 font-semibold text-primary">
-                    Data Prova
-                  </th>
-                  <th className="px-4 py-2 font-semibold text-primary text-right">
-                    Acoes
+                  <th className="whitespace-nowrap rounded-r-lg bg-[#dbd1d1] px-3 py-3 font-editorial text-[1.2rem] font-normal text-primary">
+                    Data da prova
                   </th>
                 </tr>
               </thead>
@@ -1064,8 +1238,8 @@ export default function SaleDetailsPage() {
                 {sale.items.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={10}
-                      className="bg-surface-lowest px-4 py-6 text-center text-neutral-700"
+                      colSpan={9}
+                      className="rounded-lg bg-[#eee7e9] px-4 py-6 text-center text-neutral-700"
                     >
                       Nenhum item encontrado para esta venda.
                     </td>
@@ -1074,14 +1248,44 @@ export default function SaleDetailsPage() {
                   sale.items.map((item) => (
                     <tr
                       key={item.id}
-                      className={
-                        item.isCancelled ? "bg-[#f8eeee]" : "bg-surface-lowest"
+                      role={
+                        isProductionItem(item) && item.productId
+                          ? "button"
+                          : undefined
                       }
+                      tabIndex={
+                        isProductionItem(item) && item.productId ? 0 : undefined
+                      }
+                      onClick={() => {
+                        if (!isProductionItem(item) || !item.productId) return;
+                        navigate(
+                          `/pedido/${item.productId}?returnTo=${encodeURIComponent(saleDetailsPath)}`,
+                        );
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget) return;
+                        if (
+                          (event.key === "Enter" || event.key === " ") &&
+                          isProductionItem(item) &&
+                          item.productId
+                        ) {
+                          event.preventDefault();
+                          navigate(
+                            `/pedido/${item.productId}?returnTo=${encodeURIComponent(saleDetailsPath)}`,
+                          );
+                        }
+                      }}
+                      className={`${
+                        item.isCancelled
+                          ? "bg-[#f8eeee]"
+                          : "bg-[#eee7e9] transition-colors hover:bg-[#e4dadd]"
+                      } ${isProductionItem(item) && item.productId ? "cursor-pointer focus:outline-none" : ""}`}
                     >
-                      <td className="px-4 py-3 text-neutral-800">
-                        <div className="flex flex-col gap-1">
+                      <td className="overflow-hidden rounded-l-lg px-4 py-3 align-middle text-neutral-800">
+                        <div className="min-w-0 overflow-hidden flex flex-col gap-1">
                           <span
-                            className={`font-medium ${item.isCancelled ? "text-[#7a1717]" : "text-primary"}`}
+                            title={item.description}
+                            className={`block max-w-full truncate font-medium ${item.isCancelled ? "text-[#7a1717]" : "text-primary"}`}
                           >
                             {item.description}
                           </span>
@@ -1093,7 +1297,7 @@ export default function SaleDetailsPage() {
                           <span className="text-xs text-neutral-600">
                             {isProductionItem(item)
                               ? `Pedido #${item.productId}`
-                              : "Sem producao vinculada"}
+                              : "Sem produção vinculada"}
                           </span>
                           {item.cancellation?.reason ? (
                             <span className="text-xs text-neutral-600">
@@ -1102,80 +1306,63 @@ export default function SaleDetailsPage() {
                           ) : null}
                           {item.cancellation?.refundAmount ? (
                             <span className="text-xs text-neutral-600">
-                              Devolucao:{" "}
+                              Devolução:{" "}
                               {formatCurrency(item.cancellation.refundAmount)}
                             </span>
                           ) : null}
                           {item.cancellation?.creditAmount ? (
                             <span className="text-xs text-neutral-600">
-                              Credito:{" "}
+                              Crédito:{" "}
                               {formatCurrency(item.cancellation.creditAmount)}
                             </span>
                           ) : null}
+                          {getItemReferenceImages(item).length ? (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {getItemReferenceImages(item).map((image) => (
+                                <button
+                                  key={image.id}
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setSelectedReferenceImage(image);
+                                  }}
+                                  className="h-11 w-11 overflow-hidden rounded-md border border-outline-variant/60 bg-white shadow-sm transition hover:border-primary/50 hover:shadow"
+                                  aria-label={`Abrir foto de referência ${image.originalName}`}
+                                  title={image.originalName}
+                                >
+                                  <ReferenceImagePreview
+                                    imageId={image.id}
+                                    alt={image.originalName}
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-neutral-800">
+                      <td className="whitespace-nowrap px-3 py-3 align-middle text-neutral-800">
                         {formatSaleItemType(item)}
                       </td>
-                      <td className="px-4 py-3 text-neutral-800">
+                      <td className="w-15 px-2 py-3 text-center align-middle text-neutral-800">
                         {item.quantity}
                       </td>
-                      <td className="px-4 py-3 text-right text-neutral-800">
+                      <td className="whitespace-nowrap px-3 py-3 text-right align-middle text-neutral-800">
                         {formatCurrency(item.unitPrice)}
                       </td>
-                      <td className="px-4 py-3 text-right text-neutral-800">
+                      <td className="whitespace-nowrap px-3 py-3 text-right align-middle text-neutral-800">
                         {formatCurrency(item.grossAmount)}
                       </td>
-                      <td className="px-4 py-3 text-right text-neutral-800">
+                      <td className="px-3 py-3 text-right align-middle text-neutral-800">
                         {formatItemDiscount(item)}
                       </td>
-                      <td className="px-4 py-3 text-right font-semibold text-primary">
+                      <td className="whitespace-nowrap px-3 py-3 text-right align-middle font-semibold text-primary">
                         {formatCurrency(item.subtotal)}
                       </td>
-                      <td className="px-4 py-3 text-neutral-800">
+                      <td className="px-3 py-3 align-middle text-neutral-800">
                         {item.seamstress || "-"}
                       </td>
-                      <td className="px-4 py-3 text-neutral-800">
+                      <td className="whitespace-nowrap rounded-r-lg px-3 py-3 align-middle text-neutral-800">
                         {formatDate(item.fittingDate)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-2">
-                          {isProductionItem(item) && item.productId ? (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() =>
-                                navigate(
-                                  `/pedido/${item.productId}?returnTo=${encodeURIComponent(
-                                    saleDetailsPath,
-                                  )}`,
-                                )
-                              }
-                            >
-                              Editar producao
-                            </Button>
-                          ) : null}
-                          {sale.status !== "CANCELLED" &&
-                          !item.isCancelled &&
-                          activeItemsCount > 1 ? (
-                            <Button
-                              type="button"
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => {
-                                setSelectedSaleItem(item);
-                                setCancelItemReason("");
-                                setCancelItemResolution("APPLY_REMAINING");
-                                setCancelItemModalOpen(true);
-                              }}
-                            >
-                              Cancelar peca
-                            </Button>
-                          ) : !isProductionItem(item) || !item.productId ? (
-                            <span className="text-xs text-neutral-500">-</span>
-                          ) : null}
-                        </div>
                       </td>
                     </tr>
                   ))
@@ -1183,26 +1370,202 @@ export default function SaleDetailsPage() {
               </tbody>
             </table>
           </div>
+
+          <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
+            {sale.items.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-neutral-700">
+                Nenhum item encontrado para esta venda.
+              </div>
+            ) : (
+              sale.items.map((item) => (
+                <div
+                  key={item.id}
+                  role={
+                    isProductionItem(item) && item.productId
+                      ? "button"
+                      : undefined
+                  }
+                  tabIndex={
+                    isProductionItem(item) && item.productId ? 0 : undefined
+                  }
+                  onClick={() => {
+                    if (!isProductionItem(item) || !item.productId) return;
+                    navigate(
+                      `/pedido/${item.productId}?returnTo=${encodeURIComponent(saleDetailsPath)}`,
+                    );
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (
+                      (event.key === "Enter" || event.key === " ") &&
+                      isProductionItem(item) &&
+                      item.productId
+                    ) {
+                      event.preventDefault();
+                      navigate(
+                        `/pedido/${item.productId}?returnTo=${encodeURIComponent(saleDetailsPath)}`,
+                      );
+                    }
+                  }}
+                  className={`px-4 py-4 ${item.isCancelled ? "bg-[#f8eeee]" : ""} ${isProductionItem(item) && item.productId ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/40" : ""}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="wrap-break-word font-semibold text-primary">
+                        {item.description}
+                      </p>
+                      <p className="mt-1 text-xs uppercase text-neutral-700">
+                        {formatSaleItemType(item)} · Qtd. {item.quantity}
+                      </p>
+                    </div>
+                    <p className="whitespace-nowrap text-sm font-semibold text-primary">
+                      {formatCurrency(item.subtotal)}
+                    </p>
+                  </div>
+                  {item.isCancelled ? (
+                    <p className="mt-2 text-xs font-medium uppercase tracking-[0.08em] text-[#7a1717]">
+                      Item cancelado
+                    </p>
+                  ) : null}
+                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-neutral-700">
+                    <p>Unitário: {formatCurrency(item.unitPrice)}</p>
+                    <p>Bruto: {formatCurrency(item.grossAmount)}</p>
+                    <p>Desconto: {formatItemDiscount(item)}</p>
+                    <p>Costureira: {item.seamstress || "-"}</p>
+                    <p>Data da prova: {formatDate(item.fittingDate)}</p>
+                    <p>
+                      {isProductionItem(item)
+                        ? `Pedido #${item.productId}`
+                        : "Sem produção"}
+                    </p>
+                  </div>
+                  {getItemReferenceImages(item).length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {getItemReferenceImages(item).map((image) => (
+                        <button
+                          key={image.id}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedReferenceImage(image);
+                          }}
+                          className="h-12 w-12 overflow-hidden rounded-md border border-outline-variant/60 bg-white"
+                          aria-label={`Abrir foto de referência ${image.originalName}`}
+                        >
+                          <ReferenceImagePreview
+                            imageId={image.id}
+                            alt={image.originalName}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {sale.status !== "CANCELLED" &&
+                    !item.isCancelled &&
+                    activeItemsCount > 1 ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedSaleItem(item);
+                          setCancelItemReason("");
+                          setCancelItemResolution("APPLY_REMAINING");
+                          setCancelItemModalOpen(true);
+                        }}
+                      >
+                        Cancelar peça
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-2">
-          <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-            <h2 className="font-editorial text-3xl text-primary">
-              Recebimentos
-            </h2>
+        <>
+          <section
+            id="sale-details-receipts-panel"
+            role="tabpanel"
+            aria-labelledby="sale-details-receipts-tab"
+            hidden={selectedDetailTab !== "receipts"}
+            className="mb-6 bg-white p-5"
+          >
+            <div className="hidden overflow-auto md:block">
+              <table className="mt-2 w-full min-w-215 border-separate border-spacing-y-2 text-left text-sm">
+                <thead className="rounded-t-md bg-[#dbd1d1]">
+                  <tr className="text-primary">
+                    <th className="rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                      Tipo
+                    </th>
+                    <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                      Forma
+                    </th>
+                    <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                      Data
+                    </th>
+                    <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                      Referência
+                    </th>
+                    <th className="rounded-r-lg bg-[#dbd1d1] px-4 py-3 text-right font-editorial text-[1.2rem] font-normal">
+                      Valor
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sale.receipts.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="rounded-lg bg-[#eee7e9] px-4 py-6 text-center text-neutral-700"
+                      >
+                        Nenhum recebimento registrado.
+                      </td>
+                    </tr>
+                  ) : (
+                    sale.receipts.map((receipt) => (
+                      <tr
+                        key={receipt.id}
+                        className="bg-[#eee7e9] transition-colors hover:bg-[#e4dadd]"
+                      >
+                        <td className="rounded-l-lg px-4 py-3 font-medium text-primary">
+                          {buildReceiptTitle(
+                            receipt,
+                            sale.receivable?.installments || [],
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-neutral-700">
+                          {receipt.paymentType?.name ||
+                            "Forma não identificada"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-neutral-700">
+                          {formatDate(receipt.paidAt)}
+                        </td>
+                        <td className="px-4 py-3 text-neutral-700">
+                          {receipt.referenceCode || "-"}
+                        </td>
+                        <td className="whitespace-nowrap rounded-r-lg px-4 py-3 text-right font-semibold text-primary">
+                          {formatCurrency(receipt.amount)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
               {sale.receipts.length === 0 ? (
-                <div className="rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
+                <div className="px-4 py-6 text-center text-sm text-neutral-700">
                   Nenhum recebimento registrado.
                 </div>
               ) : (
                 sale.receipts.map((receipt) => (
-                  <div
-                    key={receipt.id}
-                    className="rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4"
-                  >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div key={receipt.id} className="px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-primary">
                           {buildReceiptTitle(
@@ -1210,19 +1573,19 @@ export default function SaleDetailsPage() {
                             sale.receivable?.installments || [],
                           )}
                         </p>
-                        <p className="text-sm text-neutral-700">
+                        <p className="text-xs uppercase text-neutral-700">
                           {receipt.paymentType?.name ||
-                            "Forma nao identificada"}
+                            "Forma não identificada"}
                         </p>
                       </div>
-                      <p className="text-sm font-semibold text-primary">
+                      <p className="whitespace-nowrap text-sm font-semibold text-primary">
                         {formatCurrency(receipt.amount)}
                       </p>
                     </div>
-                    <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
+                    <div className="mt-2 space-y-1 text-xs text-neutral-700">
                       <p>Data: {formatDate(receipt.paidAt)}</p>
                       <p>Recebido em: {receipt.accountLabel || "-"}</p>
-                      <p>Referencia: {receipt.referenceCode || "-"}</p>
+                      <p>Referência: {receipt.referenceCode || "-"}</p>
                     </div>
                   </div>
                 ))
@@ -1230,20 +1593,67 @@ export default function SaleDetailsPage() {
             </div>
 
             {sale.cardTransaction ? (
-              <div className="mt-5 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4">
-                <p className="text-sm font-semibold text-primary">
-                  Transacao de cartao
-                </p>
-                <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
+              <div className="mt-6">
+                <h3 className="mb-3 text-sm font-semibold text-primary">
+                  Transação de cartão
+                </h3>
+                <div className="hidden overflow-auto md:block">
+                  <table className="mt-2 w-full min-w-215 border-separate border-spacing-y-2 text-left text-sm">
+                    <thead className="rounded-t-md bg-[#dbd1d1]">
+                      <tr className="text-primary">
+                        <th className="rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                          Operadora
+                        </th>
+                        <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                          Bandeira
+                        </th>
+                        <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                          Autorização
+                        </th>
+                        <th className="bg-[#dbd1d1] px-4 py-3 text-center font-editorial text-[1.2rem] font-normal">
+                          Parcelas
+                        </th>
+                        <th className="bg-[#dbd1d1] px-4 py-3 text-right font-editorial text-[1.2rem] font-normal">
+                          Taxa prevista
+                        </th>
+                        <th className="rounded-r-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                          Repasse previsto
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="bg-[#eee7e9]">
+                        <td className="rounded-l-lg px-4 py-3 text-neutral-700">
+                          {sale.cardTransaction.operatorLabel || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-neutral-700">
+                          {sale.cardTransaction.cardBrand || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-neutral-700">
+                          {sale.cardTransaction.authorizationCode || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-center text-neutral-700">
+                          {sale.cardTransaction.clientInstallmentCount}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-neutral-700">
+                          {formatCurrency(sale.cardTransaction.feeAmount)}
+                        </td>
+                        <td className="whitespace-nowrap rounded-r-lg px-4 py-3 text-neutral-700">
+                          {formatDate(
+                            sale.cardTransaction.expectedSettlementDate,
+                          )}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div className="space-y-1 px-4 py-4 text-xs text-neutral-700 md:hidden">
                   <p>Operadora: {sale.cardTransaction.operatorLabel || "-"}</p>
                   <p>Bandeira: {sale.cardTransaction.cardBrand || "-"}</p>
                   <p>
-                    Autorizacao: {sale.cardTransaction.authorizationCode || "-"}
+                    Autorização: {sale.cardTransaction.authorizationCode || "-"}
                   </p>
-                  <p>
-                    Parcelas no cartao:{" "}
-                    {sale.cardTransaction.clientInstallmentCount}
-                  </p>
+                  <p>Parcelas: {sale.cardTransaction.clientInstallmentCount}</p>
                   <p>
                     Taxa prevista:{" "}
                     {formatCurrency(sale.cardTransaction.feeAmount)}
@@ -1257,81 +1667,177 @@ export default function SaleDetailsPage() {
             ) : null}
           </section>
 
-          <section className="rounded-2xl border border-outline-variant/35 bg-white p-5 shadow-sm">
-            <h2 className="font-editorial text-3xl text-primary">A Receber</h2>
-
+          <section
+            id="sale-details-receivable-panel"
+            role="tabpanel"
+            aria-labelledby="sale-details-receivable-tab"
+            hidden={selectedDetailTab !== "receivable"}
+            className="mb-6 bg-white p-5"
+          >
             {!sale.receivable ? (
-              <div className="mt-5 rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
+              <p className="py-5 text-center text-sm text-neutral-700">
                 {sale.doesNotGenerateDebt
                   ? sale.debtExemptionLabel || "Esta venda não gera débitos."
-                  : "Esta venda nao gerou contas a receber."}
-              </div>
+                  : "Esta venda não gerou contas a receber."}
+              </p>
             ) : (
               <>
-                <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  <InfoCard
-                    label="Perfil"
-                    value={sale.receivable.originLabel}
-                  />
-                  <InfoCard label="Origem" value={sale.receivable.originName} />
-                  <InfoCard
-                    label="Status"
-                    value={formatReceivableStatus(sale.receivable.status)}
-                  />
-                  <InfoCard
-                    label="Valor original"
-                    value={formatCurrency(sale.receivable.originalAmount)}
-                  />
-                  <InfoCard
-                    label="Saldo atual devido"
-                    value={formatCurrency(sale.receivable.openAmount)}
-                  />
-                </div>
-
-                <div className="mt-5 space-y-3">
-                  {sale.receivable.installments.length === 0 ? (
-                    <div className="rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 text-sm text-neutral-700">
-                      Nenhuma parcela em aberto.
-                    </div>
-                  ) : (
-                    sale.receivable.installments.map((installment) => (
-                      <div
-                        key={installment.id}
-                        className={`rounded-xl border border-outline-variant/35 bg-surface-lowest px-4 py-4 ${installment.deletionAuditId ? "opacity-45" : ""}`}
-                      >
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-primary">
-                              Parcela {installment.installmentNumber}/
-                              {installment.totalInstallments}
-                            </p>
-                            <p className="text-sm text-neutral-700">
-                              {installment.paymentType?.name ||
-                                "Forma nao identificada"}
+                <div className="mt-6">
+                  <div className="hidden overflow-auto md:block">
+                    <table className="mt-2 w-full min-w-225 border-separate border-spacing-y-2 text-left text-sm">
+                      <thead className="rounded-t-md bg-[#dbd1d1]">
+                        <tr className="text-primary">
+                          <th className="rounded-l-lg bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                            Parcela
+                          </th>
+                          <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                            Forma
+                          </th>
+                          <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                            Vencimento
+                          </th>
+                          <th className="bg-[#dbd1d1] px-4 py-3 font-editorial text-[1.2rem] font-normal">
+                            Status
+                          </th>
+                          <th className="bg-[#dbd1d1] px-4 py-3 text-right font-editorial text-[1.2rem] font-normal">
+                            Valor
+                          </th>
+                          <th className="bg-[#dbd1d1] px-4 py-3 text-right font-editorial text-[1.2rem] font-normal">
+                            Pago
+                          </th>
+                          <th className="bg-[#dbd1d1] px-4 py-3 text-right font-editorial text-[1.2rem] font-normal">
+                            Abatimento
+                          </th>
+                          <th className="rounded-r-lg bg-[#dbd1d1] px-4 py-3 text-right font-editorial text-[1.2rem] font-normal">
+                            Em aberto
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sale.receivable.installments.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={8}
+                              className="rounded-lg bg-[#eee7e9] px-4 py-6 text-center text-neutral-700"
+                            >
+                              Nenhuma parcela cadastrada.
+                            </td>
+                          </tr>
+                        ) : (
+                          sale.receivable.installments.map((installment) => (
+                            <tr
+                              key={installment.id}
+                              className={`bg-[#eee7e9] transition-colors hover:bg-[#e4dadd] `}
+                            >
+                              <td className="whitespace-nowrap rounded-l-lg px-4 py-3 font-medium text-primary">
+                                {installment.installmentNumber}/
+                                {installment.totalInstallments}
+                              </td>
+                              <td className="px-4 py-3 text-neutral-700">
+                                {installment.paymentType?.name ||
+                                  "Forma não identificada"}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-neutral-700">
+                                {formatDate(installment.dueDate)}
+                              </td>
+                              <td className="px-4 py-3 text-neutral-700">
+                                {installment.deletionAuditId
+                                  ? "Excluída"
+                                  : formatReceivableStatus(installment.status)}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-right text-neutral-700">
+                                {formatCurrency(installment.amount)}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-right text-neutral-700">
+                                {formatCurrency(installment.paidAmount)}
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3 text-right text-neutral-700">
+                                {formatCurrency(installment.waivedAmount || 0)}
+                              </td>
+                              <td className="whitespace-nowrap rounded-r-lg px-4 py-3 text-right font-semibold text-primary">
+                                {formatCurrency(installment.openAmount)}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-2 w-full min-w-0 divide-y divide-outline-variant/35 bg-white md:hidden">
+                    {sale.receivable.installments.length === 0 ? (
+                      <div className="px-4 py-6 text-center text-sm text-neutral-700">
+                        Nenhuma parcela cadastrada.
+                      </div>
+                    ) : (
+                      sale.receivable.installments.map((installment) => (
+                        <div
+                          key={installment.id}
+                          className={`px-4 py-4 ${installment.deletionAuditId ? "opacity-45" : ""}`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-primary">
+                                Parcela {installment.installmentNumber}/
+                                {installment.totalInstallments}
+                              </p>
+                              <p className="text-xs uppercase text-neutral-700">
+                                {installment.paymentType?.name ||
+                                  "Forma não identificada"}
+                              </p>
+                            </div>
+                            <p className="whitespace-nowrap text-sm font-semibold text-primary">
+                              {formatCurrency(installment.openAmount)}
                             </p>
                           </div>
-                          <p className="text-sm font-semibold text-primary">
-                            {formatCurrency(installment.amount)}
-                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-neutral-700">
+                            <p>Vencimento: {formatDate(installment.dueDate)}</p>
+                            <p>
+                              Status:{" "}
+                              {installment.deletionAuditId
+                                ? "Excluída"
+                                : formatReceivableStatus(installment.status)}
+                            </p>
+                            <p>Valor: {formatCurrency(installment.amount)}</p>
+                            <p>
+                              Pago: {formatCurrency(installment.paidAmount)}
+                            </p>
+                            <p>
+                              Abatimento:{" "}
+                              {formatCurrency(installment.waivedAmount || 0)}
+                            </p>
+                            <p>
+                              Em aberto:{" "}
+                              {formatCurrency(installment.openAmount)}
+                            </p>
+                          </div>
                         </div>
-                        <div className="mt-2 grid gap-2 text-sm text-neutral-700 md:grid-cols-2">
-                          <p>Vencimento: {formatDate(installment.dueDate)}</p>
-                          <p>Status: {installment.deletionAuditId ? "Excluída" : formatReceivableStatus(installment.status)}</p>
-                          {installment.deletionAuditId ? <p>Abatimento: {formatCurrency(installment.waivedAmount || 0)}</p> : null}
-                          <p>Pago: {formatCurrency(installment.paidAmount)}</p>
-                          <p>
-                            Em aberto: {formatCurrency(installment.openAmount)}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
               </>
             )}
           </section>
-        </div>
+        </>
       </div>
+
+      <CustomerModal
+        open={Boolean(selectedReferenceImage)}
+        onClose={() => setSelectedReferenceImage(null)}
+        title="Foto de modelo ou inspiração"
+        subtitle={selectedReferenceImage?.originalName || undefined}
+        size="lg"
+      >
+        {selectedReferenceImage ? (
+          <div className="flex max-h-[72vh] justify-center overflow-hidden rounded bg-surface-lowest">
+            <ReferenceImagePreview
+              imageId={selectedReferenceImage.id}
+              alt={selectedReferenceImage.originalName}
+              className="max-h-[72vh] max-w-full object-contain"
+            />
+          </div>
+        ) : null}
+      </CustomerModal>
 
       <CustomerModal
         open={discardModalOpen}

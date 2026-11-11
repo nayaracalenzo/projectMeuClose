@@ -1,4 +1,36 @@
 const service = require("../services/salesService");
+const garmentReferenceImagesService = require("../services/garmentReferenceImagesService");
+
+async function createReferenceImageController(req, res, next) {
+  try {
+    const created = await garmentReferenceImagesService.createReferenceImage(
+      {
+        imageBase64: req.body?.imageBase64,
+        mimeType: req.body?.mimeType,
+        originalName: req.body?.originalName,
+      },
+      req.user,
+    );
+    return res.status(201).json(created);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function getReferenceImageController(req, res, next) {
+  try {
+    const image = await garmentReferenceImagesService.getReferenceImage(req.params.imageId);
+    const encodedName = encodeURIComponent(image.originalName);
+
+    res.setHeader("Content-Type", image.mimeType);
+    res.setHeader("Content-Length", image.sizeBytes);
+    res.setHeader("Content-Disposition", `inline; filename*=UTF-8''${encodedName}`);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    return res.status(200).send(image.imageData);
+  } catch (error) {
+    return next(error);
+  }
+}
 
 async function createSaleController(req, res, next) {
   try {
@@ -94,9 +126,11 @@ module.exports = {
   cancelSaleItemController,
   cancelSaleController,
   createSaleController,
+  createReferenceImageController,
   deleteSaleController,
   finalizeSaleController,
   getSaleByIdController,
+  getReferenceImageController,
   listSalesController,
   renegotiateSalePaymentController,
   updateSaleCustomerController,

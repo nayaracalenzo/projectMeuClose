@@ -925,91 +925,6 @@ export default function ReceivablesPage() {
         A Receber
       </h1>
 
-      {false ? (
-        <div className="mb-5 grid grid-cols-1 gap-3 border border-outline-variant/45 bg-white p-4 md:grid-cols-4">
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Cliente
-            </label>
-            <SearchableSelect
-              id="receivable-customer"
-              value={formCustomerId}
-              options={customerSearchableOptions}
-              onChange={setFormCustomerId}
-              onSearchChange={setCustomerSearchTerm}
-              className="relative"
-              inputClassName="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary outline-none transition focus:border-primary"
-              dropdownClassName="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded border border-outline-variant/60 bg-white shadow-lg"
-              optionClassName="block w-full px-3 py-2 text-left text-sm text-primary hover:bg-surface-low"
-              placeholder="Digite para filtrar"
-              emptyMessage="Nenhum cliente encontrado."
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Forma prevista
-            </label>
-            <select
-              value={formPaymentTypeId}
-              onChange={(e) => setFormPaymentTypeId(e.target.value)}
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            >
-              <option value="">Selecione...</option>
-              {paymentTypes.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Valor
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={formAmount}
-              onChange={(e) => setFormAmount(formatCurrencyInput(e.target.value))}
-              placeholder="R$ 0,00"
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-semibold text-primary">
-              Vencimento
-            </label>
-            <DatePickerInput
-              value={formDueDate}
-              onChange={setFormDueDate}
-              format="iso"
-              className="h-11 w-full rounded border border-outline-variant/60 bg-white px-3 text-[15px] text-primary"
-            />
-          </div>
-          <div className="flex gap-2 md:col-span-4">
-            <button
-              type="button"
-              onClick={handleSubmitReceivable}
-              className="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
-            >
-              {receivableFormMode === "create"
-                ? "Gravar conta a receber"
-                : "Salvar alteração"}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setReceivableFormOpen(false);
-                resetReceivableForm();
-              }}
-              className="rounded border border-outline-variant/60 bg-white px-4 py-2 text-sm font-medium text-primary"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <CustomerModal
         open={receivableFormOpen}
         onClose={() => {
@@ -1387,41 +1302,41 @@ export default function ReceivablesPage() {
       </div>
 
       <div className="hidden overflow-x-auto md:block">
-        <table className="mt-2 min-w-[1380px] w-full table-fixed border-separate border-spacing-y-2">
+        <table className="mt-2 min-w-345 w-full table-fixed border-separate border-spacing-y-2">
           <thead className="bg-[#dbd1d1] rounded-t-md">
             <tr className="text-left">
               <th className="w-12 px-4 pt-2" aria-label="Selecionar registro" />
-              <th className="w-[130px] px-4 pt-2 font-editorial text-[1.2rem] text-primary text-nowrap">
+              <th className="w-32.5 px-4 pt-2 font-editorial text-[1.2rem] text-primary text-nowrap">
                 Data Emissão
               </th>
-              <th className="w-[140px] whitespace-nowrap px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-35 whitespace-nowrap px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Histórico
               </th>
               <th className="w-[24%] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Origem
               </th>
-              <th className="w-[90px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-22.5 px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Parcela
               </th>
-              <th className="w-[130px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-32.5 px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Vencimento
               </th>
-              <th className="w-[130px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-32.5 px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Recebimento
               </th>
-              <th className="w-[120px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-30 px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Status
               </th>
-              <th className="w-[100px] px-4 pt-2 font-editorial text-[1.2rem] text-primary">
+              <th className="w-25 px-4 pt-2 font-editorial text-[1.2rem] text-primary">
                 Forma
               </th>
-              <th className="w-[110px] px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="w-27.5 px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Valor
               </th>
-              <th className="w-[120px] px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="w-30 px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Recebido
               </th>
-              <th className="w-[120px] px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
+              <th className="w-30 px-4 pt-2 text-right font-editorial text-[1.2rem] text-primary">
                 Saldo
               </th>
             </tr>

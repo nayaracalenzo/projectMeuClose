@@ -184,6 +184,21 @@ function mapProductDetails(product, measurementsBySaleId = new Map()) {
   );
   const saleId = Number(saleItem?.saleId || 0) || null;
   const measurements = saleId ? measurementsBySaleId.get(saleId) || [] : [];
+  const referenceImages = Array.isArray(saleItemMetadata?.referenceImages)
+    ? saleItemMetadata.referenceImages
+        .map((image) => {
+          const id = Number(image?.id);
+          if (!Number.isInteger(id) || id <= 0) return null;
+
+          return {
+            id,
+            originalName: String(image?.originalName || "referencia"),
+            mimeType: String(image?.mimeType || ""),
+            sizeBytes: Math.max(0, Number(image?.sizeBytes) || 0),
+          };
+        })
+        .filter(Boolean)
+    : [];
 
   return {
     id: product.id,
@@ -227,6 +242,7 @@ function mapProductDetails(product, measurementsBySaleId = new Map()) {
     updatedAt: product.updatedAt,
     measurements,
     measurementsSummary: formatMeasurementsSummary(measurements),
+    referenceImages,
   };
 }
 
