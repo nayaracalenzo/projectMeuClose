@@ -1164,7 +1164,7 @@ function buildIncomingFinancialMovement({
   };
 }
 
-function mapSaleItem(item) {
+function mapSaleItem(item, measurementsSummary = "") {
   const product = item.Product || item.Products;
   const employee = product?.Employee || product?.Employees;
   const status = product?.Status;
@@ -1184,6 +1184,8 @@ function mapSaleItem(item) {
     itemType: item.itemType,
     productMode,
     description: item.description,
+    measurementsSummary,
+    details: product?.details || itemMetadata?.details || null,
     quantity,
     unitPrice,
     discountType: item.discountType || null,
@@ -1226,6 +1228,23 @@ function mapMeasurementRecord(record) {
     label: fallbackLabel || key || "Medida",
     value: record.value === null || record.value === undefined ? null : Number(record.value),
   };
+}
+
+function formatMeasurementsSummary(measurements = []) {
+  return measurements
+    .map((measurement) => {
+      if (
+        !measurement?.label ||
+        measurement.value === null ||
+        measurement.value === undefined
+      ) {
+        return null;
+      }
+
+      return `${measurement.label}: ${Number(measurement.value)}`;
+    })
+    .filter(Boolean)
+    .join(" | ");
 }
 
 function mapBudgetPaymentDraft(draft) {
@@ -1401,7 +1420,6 @@ function mapSaleDetails(sale) {
   const receivable = sale.Receivable || sale.Receivables;
   const cardTransaction = sale.CardTransaction || sale.CardTransactions || receivable?.CardTransaction || receivable?.CardTransactions || null;
   const receivableOrigin = receivable ? resolveReceivableOrigin(receivable, customer) : null;
-  const items = Array.isArray(sale.SaleItems) ? sale.SaleItems.map(mapSaleItem) : [];
   const receipts = Array.isArray(sale.PaymentReceipts)
     ? sale.PaymentReceipts.map(mapPaymentReceipt)
     : [];
@@ -1422,6 +1440,10 @@ function mapSaleDetails(sale) {
         })
     : [];
   const measurementsCount = measurements.length;
+  const measurementsSummary = formatMeasurementsSummary(measurements);
+  const items = Array.isArray(sale.SaleItems)
+    ? sale.SaleItems.map((item) => mapSaleItem(item, measurementsSummary))
+    : [];
   const budgetPaymentDraft = mapBudgetPaymentDraft(
     sale.SaleBudgetPaymentDraft || sale.SaleBudgetPaymentDrafts || null,
   );

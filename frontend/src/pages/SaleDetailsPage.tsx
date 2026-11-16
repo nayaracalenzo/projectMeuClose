@@ -24,6 +24,8 @@ type SaleDetailItem = {
   itemType: string;
   productMode?: string | null;
   description: string;
+  measurementsSummary: string;
+  details: string | null;
   quantity: number;
   unitPrice: number;
   discountType: "PERCENTAGE" | "FIXED" | null;
@@ -206,6 +208,16 @@ function getItemReferenceImages(item: SaleDetailItem): UploadedReferenceImage[] 
       };
     })
     .filter((image): image is UploadedReferenceImage => Boolean(image));
+}
+
+function formatSaleItemDescription(item: SaleDetailItem) {
+  return [
+    item.description,
+    item.measurementsSummary ? `Medidas: ${item.measurementsSummary}` : null,
+    item.details ? `Detalhes: ${item.details}` : null,
+  ]
+    .filter(Boolean)
+    .join(" | ");
 }
 
 function getTodayIsoDate() {
@@ -1284,10 +1296,10 @@ export default function SaleDetailsPage() {
                       <td className="overflow-hidden rounded-l-lg px-4 py-3 align-middle text-neutral-800">
                         <div className="min-w-0 overflow-hidden flex flex-col gap-1">
                           <span
-                            title={item.description}
-                            className={`block max-w-full truncate font-medium ${item.isCancelled ? "text-[#7a1717]" : "text-primary"}`}
+                            title={formatSaleItemDescription(item)}
+                            className={`block max-w-full wrap-break-word font-medium ${item.isCancelled ? "text-[#7a1717]" : "text-primary"}`}
                           >
-                            {item.description}
+                            {formatSaleItemDescription(item)}
                           </span>
                           {item.isCancelled ? (
                             <span className="text-xs font-medium uppercase tracking-[0.08em] text-[#7a1717]">
@@ -1297,7 +1309,7 @@ export default function SaleDetailsPage() {
                           <span className="text-xs text-neutral-600">
                             {isProductionItem(item)
                               ? `Pedido #${item.productId}`
-                              : "Sem produção vinculada"}
+                              : ""}
                           </span>
                           {item.cancellation?.reason ? (
                             <span className="text-xs text-neutral-600">
@@ -1412,7 +1424,7 @@ export default function SaleDetailsPage() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="wrap-break-word font-semibold text-primary">
-                        {item.description}
+                        {formatSaleItemDescription(item)}
                       </p>
                       <p className="mt-1 text-xs uppercase text-neutral-700">
                         {formatSaleItemType(item)} · Qtd. {item.quantity}
@@ -1436,7 +1448,7 @@ export default function SaleDetailsPage() {
                     <p>
                       {isProductionItem(item)
                         ? `Pedido #${item.productId}`
-                        : "Sem produção"}
+                        : ""}
                     </p>
                   </div>
                   {getItemReferenceImages(item).length ? (
