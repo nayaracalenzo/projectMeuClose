@@ -126,10 +126,9 @@ function buildInclude({ summary = false } = {}) {
   if (!summary) {
     include.push({
       model: PayablePayments,
-      attributes: ["paidAt"],
+      attributes: ["idPayablePayment", "amount", "paidAt"],
       required: false,
       separate: true,
-      limit: 1,
       order: [["paidAt", "DESC"], ["idPayablePayment", "DESC"]],
     });
   }
@@ -280,6 +279,14 @@ async function registerPayment(payableId, payload) {
       return undefined;
     }
 
+    if (payable.status === "PAID" || Number(payable.openAmount || 0) <= 0) {
+      return {
+        payable,
+        payment: null,
+        alreadyPaid: true,
+      };
+    }
+
     const payment = await PayablePayments.create(
       {
         payableId: payable.idPayable,
@@ -291,14 +298,20 @@ async function registerPayment(payableId, payload) {
       { transaction }
     );
 
+    const currentAmount = Number(payable.amount);
     const currentOpenAmount = Number(payable.openAmount);
     const paidAmount = Number(payload.amount);
     const nextOpenAmount = Math.max(0, currentOpenAmount - paidAmount);
+    const nextAmount =
+      paidAmount > currentOpenAmount
+        ? Number((currentAmount + paidAmount - currentOpenAmount).toFixed(2))
+        : currentAmount;
     const nextStatus =
-      nextOpenAmount === 0 ? "PAID" : nextOpenAmount < Number(payable.amount) ? "PARTIAL" : "OPEN";
+      nextOpenAmount === 0 ? "PAID" : nextOpenAmount < nextAmount ? "PARTIAL" : "OPEN";
 
     await payable.update(
       {
+        amount: nextAmount,
         openAmount: nextOpenAmount,
         status: nextStatus,
       },

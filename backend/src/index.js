@@ -3,6 +3,7 @@ const cors = require("cors");
 const { logger } = require("./utils/logger");
 const { errorHandler, notFoundHandler } = require("./middlewars/errorHandler");
 const requestLogger = require("./middlewars/requestLogger");
+const uppercasePayloadText = require("./middlewars/uppercasePayloadText");
 const authRoute = require("./routes/authRoute");
 const clientsRoute = require("./routes/clientsRoute.js");
 const usersRoute = require("./routes/usersRoute");
@@ -32,6 +33,7 @@ const allowedOrigins = [process.env.ORIGIN_URL, process.env.PROD_URL].filter(Boo
 app.use(requestLogger);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
+app.use(uppercasePayloadText);
 app.use(
   cors({
     origin: allowedOrigins,
