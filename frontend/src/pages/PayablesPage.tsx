@@ -398,6 +398,14 @@ export default function PayablesPage() {
   }, []);
 
   const selectedRow = rows.find((row) => row.id === selectedPayableId) || null;
+  const activePayable = rows.find((row) => row.id === activePayableId) || null;
+  const parsedPaymentAmount = parseCurrencyToNumber(paymentAmount);
+  const paymentOverage = activePayable
+    ? roundCurrency(Math.max(0, parsedPaymentAmount - activePayable.openAmount))
+    : 0;
+  const updatedPayableAmount = activePayable
+    ? roundCurrency(activePayable.amount + paymentOverage)
+    : 0;
   const canEditSelectedPayable = Boolean(selectedRow && selectedRow.id > 0);
   const canDeleteSelectedPayable = Boolean(
     selectedRow &&
@@ -1624,16 +1632,29 @@ export default function PayablesPage() {
       <CustomerModal
         open={paymentConfirmOpen && Boolean(activePayableId)}
         onClose={resetPaymentFlow}
-        title="Confirmar quitação"
-        subtitle="Confirme o pagamento da conta a pagar."
+        title="Confirme o pagamento da conta a pagar."
         size="sm"
       >
         <div className="space-y-5">
-          <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4">
-            <p className="text-sm text-primary">
-              Deseja confirmar o pagamento informado?
-            </p>
-          </div>
+          {paymentOverage > 0 && activePayable ? (
+            <div className="rounded-lg border border-[#d59b32]/60 bg-[#fff4df] p-4">
+              <p className="font-semibold text-[#7a4b00]">
+                Pagamento acima do saldo previsto
+              </p>
+              <div className="mt-3 space-y-1 text-sm text-primary">
+                <p>Valor atual da conta: {formatCurrency(activePayable.amount)}</p>
+                <p className="font-semibold text-[#7a4b00]">
+                  Novo valor da conta: {formatCurrency(updatedPayableAmount)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4">
+              <p className="text-sm text-primary">
+                Deseja confirmar o pagamento informado?
+              </p>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button
               variant="primary"

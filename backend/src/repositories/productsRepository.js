@@ -696,6 +696,24 @@ async function listMeasurementValuesBySaleIds(saleIds = []) {
   });
 }
 
+async function uppercaseProductDescriptions(transaction) {
+  const [updatedCount] = await Products.update(
+    {
+      desc: Sequelize.fn("UPPER", Sequelize.col("desc")),
+    },
+    {
+      where: Sequelize.where(
+        Sequelize.col("desc"),
+        Op.ne,
+        Sequelize.fn("UPPER", Sequelize.col("desc")),
+      ),
+      transaction,
+    },
+  );
+
+  return Number(updatedCount || 0);
+}
+
 module.exports = {
   createProductsFromSale,
   getProductById,
@@ -708,5 +726,6 @@ module.exports = {
   sequelize,
   syncProductFromSaleItem,
   syncProductsSequence,
+  uppercaseProductDescriptions,
   updateProductById,
 };

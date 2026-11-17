@@ -237,9 +237,12 @@ async function listPayables({
   const items = result.rows.map((item) => {
     const supplier = item.Supplier || item.Suppliers || null;
     const paymentType = item.PaymentType || item.PaymentTypes || null;
-    const latestPayment = Array.isArray(item.PayablePayments)
-      ? item.PayablePayments[0]
-      : null;
+    const payments = Array.isArray(item.PayablePayments) ? item.PayablePayments : [];
+    const latestPayment = payments[0] || null;
+    const recordedPaidAmount = roundCurrency(
+      payments.reduce((totalPaid, payment) => totalPaid + Number(payment.amount || 0), 0),
+    );
+    const legacyPaidAmount = Math.max(0, Number(item.amount) - Number(item.openAmount));
     const supplierName = supplier?.tradeName || supplier?.fullName || null;
 
     return {
@@ -252,7 +255,7 @@ async function listPayables({
       supplierName,
       amount: Number(item.amount),
       openAmount: Number(item.openAmount),
-      paidAmount: Math.max(0, Number(item.amount) - Number(item.openAmount)),
+      paidAmount: payments.length ? recordedPaidAmount : legacyPaidAmount,
       issuedAt: item.createdAt || null,
       lastPaidAt: latestPayment?.paidAt || null,
       dueDate: item.dueDate,
@@ -459,8 +462,8 @@ async function registerPayment(payableId, body = {}) {
 
   const amount = normalizeAmount(body.amount, "Valor pago");
   const currentOpenAmount = Number(payable.openAmount || 0);
-  if (amount > currentOpenAmount) {
-    throw createPayablesValidationError("Valor pago nao pode ser maior que o saldo em aberto.");
+  if (payable.status === "PAID" || currentOpenAmount <= 0) {
+    throw createPayablesValidationError("Conta a pagar já está quitada.");
   }
   const paidAt = normalizeDate(body.paidAt, "Data do pagamento");
   const referenceCode = body.referenceCode ? String(body.referenceCode).trim() : null;
@@ -492,6 +495,10 @@ async function registerPayment(payableId, body = {}) {
 
   if (created === undefined) {
     throw notFoundError("Conta a pagar nao encontrada.");
+  }
+
+  if (created.alreadyPaid || !created.payment) {
+    throw createPayablesValidationError("Conta a pagar já está quitada.");
   }
 
   return {

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getStoredToken } from "../utils/auth";
+import { uppercasePayloadText } from "../utils/uppercasePayloadText";
 
 export const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:3000",
@@ -49,6 +50,10 @@ async function runMutationRequest<T>(callback: () => Promise<T>) {
 API.interceptors.request.use(
   (config) => {
     const normalizedToken = getStoredToken();
+
+    if (config.data) {
+      config.data = uppercasePayloadText(config.data);
+    }
 
     if (normalizedToken) {
       config.headers.Authorization = normalizedToken.startsWith("Bearer ")
