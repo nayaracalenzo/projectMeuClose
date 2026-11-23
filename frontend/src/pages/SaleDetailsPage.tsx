@@ -17,6 +17,7 @@ import {
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
 import { parseLegacyOrIsoDate } from "../utils/legacyDate";
+import { formatSaleItemDescription } from "../utils/saleItemDescription";
 
 type SaleDetailItem = {
   id: number;
@@ -208,16 +209,6 @@ function getItemReferenceImages(item: SaleDetailItem): UploadedReferenceImage[] 
       };
     })
     .filter((image): image is UploadedReferenceImage => Boolean(image));
-}
-
-function formatSaleItemDescription(item: SaleDetailItem) {
-  return [
-    item.description,
-    item.measurementsSummary ? `Medidas: ${item.measurementsSummary}` : null,
-    item.details ? `Detalhes: ${item.details}` : null,
-  ]
-    .filter(Boolean)
-    .join(" | ");
 }
 
 function getTodayIsoDate() {

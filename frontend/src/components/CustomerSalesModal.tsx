@@ -4,6 +4,7 @@ import { Button } from "./Button";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
+import { formatSaleItemDescription } from "../utils/saleItemDescription";
 
 type SaleListRow = {
   id: number;
@@ -32,6 +33,8 @@ type SaleDetailItem = {
   itemType: string;
   productMode?: string | null;
   description: string;
+  measurementsSummary?: string | null;
+  details?: string | null;
   quantity: number;
   unitPrice: number;
   discountAmount: number;
@@ -404,7 +407,7 @@ function CustomerSalesModalComponent({
                   {selectedSale.details.items.map((item) => (
                     <tr key={item.id} className="bg-white">
                       <td className="px-4 py-3 font-semibold text-primary">
-                        {item.description || "Sem descrição"}
+                        {formatSaleItemDescription(item) || "Sem descrição"}
                       </td>
                       <td className="px-4 py-3 text-neutral-700">
                         {formatSaleItemType(item)}
