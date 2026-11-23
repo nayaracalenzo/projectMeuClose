@@ -1185,7 +1185,9 @@ function mapSaleItem(item, measurementsSummary = "") {
     productMode,
     description: item.description,
     measurementsSummary,
-    details: product?.details || itemMetadata?.details || null,
+    // Metadata belongs to the sale item and must remain the source of truth for
+    // historical details, even if the generated product is edited afterwards.
+    details: itemMetadata?.details || product?.details || null,
     quantity,
     unitPrice,
     discountType: item.discountType || null,

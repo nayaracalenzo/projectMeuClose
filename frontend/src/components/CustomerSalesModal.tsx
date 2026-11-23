@@ -4,7 +4,6 @@ import { Button } from "./Button";
 import { getRequest } from "../services/request";
 import { getUserFacingApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
-import { formatSaleItemDescription } from "../utils/saleItemDescription";
 
 type SaleListRow = {
   id: number;
@@ -147,6 +146,13 @@ function CustomerSalesModalComponent({
   const [message, setMessage] = useState("");
   const [selectedSaleId, setSelectedSaleId] = useState<number | null>(null);
   const [showItems, setShowItems] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 5;
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const paginatedRows = useMemo(
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, rows],
+  );
 
   useEffect(() => {
     if (!open || !clientId) return;
@@ -157,6 +163,7 @@ function CustomerSalesModalComponent({
         setMessage("");
         setSelectedSaleId(null);
         setShowItems(false);
+        setCurrentPage(1);
 
         const params = new URLSearchParams({
           page: "1",
@@ -284,6 +291,12 @@ function CustomerSalesModalComponent({
     setShowItems(false);
   };
 
+  const changePage = (page: number) => {
+    setCurrentPage(Math.min(pageCount, Math.max(1, page)));
+    setSelectedSaleId(null);
+    setShowItems(false);
+  };
+
   return (
     <CustomerModal
       open={open}
@@ -340,7 +353,7 @@ function CustomerSalesModalComponent({
                 </td>
               </tr>
             ) : (
-              rows.map((row) => {
+              paginatedRows.map((row) => {
                 const isSelected = row.id === selectedSaleId;
 
                 return (
@@ -375,6 +388,32 @@ function CustomerSalesModalComponent({
         </table>
       </div>
 
+      {rows.length > pageSize ? (
+        <div className="mt-3 flex items-center justify-between gap-3 text-sm text-neutral-700">
+          <span>
+            Página {currentPage} de {pageCount} · {rows.length} vendas
+          </span>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => changePage(currentPage - 1)}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={currentPage === pageCount}
+              onClick={() => changePage(currentPage + 1)}
+            >
+              Próxima
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {showItems && selectedSale ? (
         <div className="mt-5 rounded-xl border border-outline-variant/35 bg-surface-lowest p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
@@ -406,8 +445,19 @@ function CustomerSalesModalComponent({
                 <tbody>
                   {selectedSale.details.items.map((item) => (
                     <tr key={item.id} className="bg-white">
-                      <td className="px-4 py-3 font-semibold text-primary">
-                        {formatSaleItemDescription(item) || "Sem descrição"}
+                      <td className="px-4 py-3 align-top text-primary">
+                        <p className="font-semibold">
+                          {item.productMode
+                            ? `${item.productMode} | ${normalizeText(item.details, normalizeText(item.description, "Sem descrição"))}`
+                            : item.details
+                              ? `${normalizeText(item.description, "Sem descrição")} | ${item.details}`
+                              : normalizeText(item.description, "Sem descrição")}
+                        </p>
+                        {item.measurementsSummary ? (
+                          <p className="mt-1 whitespace-pre-wrap text-xs font-normal text-neutral-700">
+                            Medidas: {item.measurementsSummary}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-4 py-3 text-neutral-700">
                         {formatSaleItemType(item)}
