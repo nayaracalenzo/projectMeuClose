@@ -49,10 +49,11 @@ function MeasurementsFieldsComponent({
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-8">
         {measurementOptions.map((item) => (
-          <div key={`${contextKey}-${item.value}`}>
+          <div key={`${contextKey}-${item.value}`} className="min-w-0">
             <label
               htmlFor={`measurement-${contextKey}-${item.value}`}
-              className="mb-1 block whitespace-nowrap text-xs leading-tight text-primary"
+              className="mb-1 block max-w-full truncate text-xs leading-tight text-primary"
+              title={`${item.label} (cm)`}
             >
               {item.label} (cm)
             </label>
