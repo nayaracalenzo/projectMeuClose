@@ -482,6 +482,7 @@ export default function ReceivablesPage() {
     const paidAmount = parseCurrencyToNumber(receiptAmount);
     return Number(Math.max(paidAmount - amountDue, 0).toFixed(2));
   }, [amountDue, receiptAmount]);
+  const hasChange = changeAmount > 0;
 
   const principalRemainingAfterPayment = useMemo(() => {
     if (!selectedRow) return 0;
@@ -708,6 +709,15 @@ export default function ReceivablesPage() {
     setReceiptAmount("");
     setReceiptReferenceCode("");
     setDiscardInterest(false);
+  };
+
+  const handleCloseReceiptConfirmation = () => {
+    if (hasChange) {
+      setReceiptConfirmOpen(false);
+      return;
+    }
+
+    resetQuitFlow();
   };
 
   // const handleOpenReverseReceiptModal = async () => {
@@ -1450,7 +1460,9 @@ export default function ReceivablesPage() {
       </div>
 
       <CustomerModal
-        open={quitModalOpen && Boolean(selectedRow)}
+        open={
+          quitModalOpen && Boolean(selectedRow) && !(receiptConfirmOpen && hasChange)
+        }
         onClose={resetQuitFlow}
         title="Quitação de Conta a Receber"
         subtitle="Confira os dados da conta e informe os dados do pagamento."
@@ -1690,22 +1702,26 @@ export default function ReceivablesPage() {
 
       <CustomerModal
         open={receiptConfirmOpen && Boolean(selectedRow)}
-        onClose={resetQuitFlow}
-        title="Confirmar quitação"
+        onClose={handleCloseReceiptConfirmation}
+        title={hasChange ? "Confirmar devolução de troco" : "Confirmar quitação"}
         size="sm"
         subtitle={
-          selectedRow && principalRemainingAfterPayment > 0
-            ? "O valor pago é menor que o saldo principal e vai gerar saldo restante."
-            : "Confirme a quitação da conta a receber."
+          hasChange
+            ? "O valor informado é maior que o valor devido."
+            : principalRemainingAfterPayment > 0
+              ? "O valor pago é menor que o saldo principal e vai gerar saldo restante."
+              : "Confirme a quitação da conta a receber."
         }
       >
         {selectedRow ? (
           <div className="space-y-5">
             <div className="rounded-lg border border-outline-variant/35 bg-surface-lowest p-4">
               <p className="text-sm text-primary">
-                {principalRemainingAfterPayment > 0
-                  ? `O pagamento de ${formatCurrency(settledAmount)} deixará saldo restante de ${formatCurrency(principalRemainingAfterPayment)}. Deseja continuar?`
-                  : `O pagamento de ${formatCurrency(settledAmount)} quitará a conta selecionada. Deseja continuar?`}
+                {hasChange
+                  ? `Dos ${receiptAmount} informados, ${formatCurrency(settledAmount)} serão registrados como recebimento e ${formatCurrency(changeAmount)} serão devolvidos como troco.`
+                  : principalRemainingAfterPayment > 0
+                    ? `O pagamento de ${formatCurrency(settledAmount)} deixará saldo restante de ${formatCurrency(principalRemainingAfterPayment)}. Deseja continuar?`
+                    : `O pagamento de ${formatCurrency(settledAmount)} quitará a conta selecionada. Deseja continuar?`}
               </p>
             </div>
             <div className="flex gap-2">
@@ -1718,10 +1734,14 @@ export default function ReceivablesPage() {
                   settledAmount <= 0
                 }
               >
-                Confirmar
+                {hasChange ? "Confirmar troco" : "Confirmar"}
               </Button>
-              <Button variant="secondary" size="sm" onClick={resetQuitFlow}>
-                Cancelar
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleCloseReceiptConfirmation}
+              >
+                {hasChange ? "Voltar" : "Cancelar"}
               </Button>
             </div>
           </div>
