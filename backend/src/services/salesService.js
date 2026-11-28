@@ -1687,11 +1687,12 @@ function deriveSaleStatusFromItems() {
   return "COMPLETED";
 }
 
-async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount }) {
+async function normalizeFinalizationPayload(body = {}, { customerId, finalAmount }, transaction) {
   const customerCreditApplication = await resolveCustomerCreditApplication(
     body,
     customerId,
     finalAmount,
+    transaction,
   );
   const mainPaymentType = await getRequiredPaymentType(body.paymentTypeId, "Forma de pagamento");
   const isCreditPayment = isCreditInstallmentPaymentType(mainPaymentType);
@@ -2114,90 +2115,99 @@ async function finalizeSale(id, body = {}) {
     throw createSalesValidationError("Venda invalida.");
   }
 
-  const sale = await repository.getSaleForFinalization(normalizedId);
+  return sequelize.transaction(async (transaction) => {
+    const sale = await repository.getSaleForFinalization(normalizedId, transaction);
 
-  if (!sale) {
-    throw notFoundError("Venda nao encontrada.");
-  }
+    if (!sale) {
+      throw notFoundError("Venda nao encontrada.");
+    }
 
-  if (sale.status !== "BUDGET") {
-    throw createSalesValidationError("Somente vendas em orçamento podem ser concluidas.");
-  }
+    if (sale.status !== "BUDGET") {
+      throw createSalesValidationError("Somente vendas em orçamento podem ser concluidas.");
+    }
 
-  const items = Array.isArray(sale.SaleItems) ? sale.SaleItems : [];
+    const quoteDetails = Object.hasOwn(body, "items") ? await normalizeQuoteBase(body) : null;
+    const items = quoteDetails?.items || sale.SaleItems || [];
 
-  if (!items.length) {
-    throw createSalesValidationError("Nao foi possivel concluir um orçamento sem itens.");
-  }
+    if (!items.length) {
+      throw createSalesValidationError("Nao foi possivel concluir um orçamento sem itens.");
+    }
 
-  if (sale.PaymentReceipts?.length || sale.Receivable || sale.CardTransaction || sale.CardTransactions) {
-    throw createSalesValidationError("Este orçamento ja possui registros financeiros vinculados.");
-  }
+    if (sale.PaymentReceipts?.length || sale.Receivable || sale.CardTransaction || sale.CardTransactions) {
+      throw createSalesValidationError("Este orçamento ja possui registros financeiros vinculados.");
+    }
 
-  const debtExemption = normalizeDebtExemption(body);
+    const debtExemption = normalizeDebtExemption(body);
 
-  if (!debtExemption.doesNotGenerateDebt) {
-    await ensureOpenStoreCashSessionForSaleFinalization();
-  }
+    if (!debtExemption.doesNotGenerateDebt) {
+      await ensureOpenStoreCashSessionForSaleFinalization();
+    }
 
-  const finalization = debtExemption.doesNotGenerateDebt
-    ? {
-        mainPaymentType: null,
-        installmentCount: 1,
-        dueDate: null,
-        installmentIntervalDays: null,
-        entryReceipt: null,
-        additionalReceipts: [],
-        customerCreditUsages: [],
-        customerCreditAmount: 0,
-        financialMovement: [],
-        receivable: null,
-        remainingAmount: 0,
-      }
-    : await normalizeFinalizationPayload(body, {
-        customerId: sale.customerId,
-        finalAmount: Number(sale.finalAmount || 0),
-      });
+    const finalization = debtExemption.doesNotGenerateDebt
+      ? {
+          mainPaymentType: null,
+          installmentCount: 1,
+          dueDate: null,
+          installmentIntervalDays: null,
+          entryReceipt: null,
+          additionalReceipts: [],
+          customerCreditUsages: [],
+          customerCreditAmount: 0,
+          financialMovement: [],
+          receivable: null,
+          remainingAmount: 0,
+        }
+      : await normalizeFinalizationPayload(body, {
+          customerId: quoteDetails?.customerId ?? sale.customerId,
+          finalAmount: quoteDetails?.finalAmount ?? Number(sale.finalAmount || 0),
+        }, transaction);
 
-  const finalStatus = deriveSaleStatusFromItems(items);
+    const finalStatus = deriveSaleStatusFromItems(items);
 
-  const finalized = await repository.finalizeSale(normalizedId, {
-    sale: {
-      status: finalStatus,
-      dueDate: finalization.dueDate || null,
-      paymentTypeId: finalization.mainPaymentType?.id || null,
-      installmentCount: finalization.installmentCount,
-      doesNotGenerateDebt: debtExemption.doesNotGenerateDebt,
-      internalReason: debtExemption.internalReason,
-    },
-    entryReceipt: finalization.entryReceipt,
-    additionalReceipts: finalization.additionalReceipts,
-    customerCreditUsages: finalization.customerCreditUsages,
-    receivable: finalization.receivable,
-    financialMovements: finalization.financialMovement,
-  });
+    const updatedQuote = quoteDetails && {
+      customerId: quoteDetails.customerId,
+      ...(Object.hasOwn(body, "userId") ? { userId: quoteDetails.userId } : {}),
+      totalAmount: quoteDetails.totalAmount,
+      finalAmount: quoteDetails.finalAmount,
+      discountType: quoteDetails.discountType,
+      discountValue: quoteDetails.discountValue,
+    };
+    const finalized = await repository.finalizeSale(sale, {
+      sale: {
+        ...updatedQuote,
+        status: finalStatus,
+        dueDate: finalization.dueDate || null,
+        paymentTypeId: finalization.mainPaymentType?.id || null,
+        installmentCount: finalization.installmentCount,
+        doesNotGenerateDebt: debtExemption.doesNotGenerateDebt,
+        internalReason: debtExemption.internalReason,
+      },
+      entryReceipt: finalization.entryReceipt,
+      additionalReceipts: finalization.additionalReceipts,
+      customerCreditUsages: finalization.customerCreditUsages,
+      receivable: finalization.receivable,
+      financialMovements: finalization.financialMovement,
+      quoteDetails,
+    }, transaction);
 
-  if (!finalized) {
-    throw notFoundError("Venda nao encontrada.");
-  }
-
-  return buildSaleResponse(finalized, {
-    paymentPreview: {
-      paymentTypeId: finalization.mainPaymentType?.id || null,
-      paymentTypeName: finalization.mainPaymentType?.name || null,
-      entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
-      customerCreditAmount: roundCurrency(finalization.customerCreditAmount || 0),
-      remainingAmount: finalization.remainingAmount,
-      debtorType: finalization.receivable?.debtorType || null,
-      installments:
-        finalization.receivable?.installments.map((installment) => ({
-          installmentNumber: installment.installmentNumber,
-          totalInstallments: installment.totalInstallments,
-          dueDate: installment.dueDate,
-          amount: installment.amount,
-        })) || [],
-      installmentIntervalDays: finalization.installmentIntervalDays,
-    },
+    return buildSaleResponse(finalized, {
+      paymentPreview: {
+        paymentTypeId: finalization.mainPaymentType?.id || null,
+        paymentTypeName: finalization.mainPaymentType?.name || null,
+        entryAmount: roundCurrency(finalization.entryReceipt?.amount || 0),
+        customerCreditAmount: roundCurrency(finalization.customerCreditAmount || 0),
+        remainingAmount: finalization.remainingAmount,
+        debtorType: finalization.receivable?.debtorType || null,
+        installments:
+          finalization.receivable?.installments.map((installment) => ({
+            installmentNumber: installment.installmentNumber,
+            totalInstallments: installment.totalInstallments,
+            dueDate: installment.dueDate,
+            amount: installment.amount,
+          })) || [],
+        installmentIntervalDays: finalization.installmentIntervalDays,
+      },
+    });
   });
 }
 
