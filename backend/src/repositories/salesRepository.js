@@ -24,6 +24,7 @@ const {
   sequelize,
 } = require("../models");
 const { Op } = require("sequelize");
+const { validationError } = require("../errors/AppError");
 const { createBankEntry, createCashEntry } = require("../services/financialEntriesService");
 const productsRepository = require("./productsRepository");
 const receivablesRepository = require("./receivablesRepository");
@@ -392,6 +393,16 @@ async function createSale({
 }
 
 async function getSaleForFinalization(idSale, transaction) {
+  if (transaction) {
+    // Read the item list after acquiring the sale lock so a concurrent edit is visible.
+    const lockedSale = await Sales.findByPk(idSale, {
+      attributes: ["idSale"],
+      transaction,
+      lock: transaction.LOCK.UPDATE,
+    });
+    if (!lockedSale) return null;
+  }
+
   const include = [
     {
       model: SaleItems,
@@ -435,13 +446,59 @@ async function getSaleForFinalization(idSale, transaction) {
     },
     include,
     transaction,
-    lock: transaction
-      ? {
-          level: transaction.LOCK.UPDATE,
-          of: Sales,
-        }
-      : undefined,
   });
+}
+
+async function replaceQuoteItemsAndMeasurements(existingSale, items, customerMeasurements, transaction) {
+  const previousItemIds = (existingSale.SaleItems || []).map((item) => item.idSaleItem);
+  if (previousItemIds.length) {
+    await GarmentReferenceImages.update(
+      {
+        saleItemId: null,
+        expiresAt: new Date(Date.now() + UNLINKED_IMAGE_RETENTION_MS),
+      },
+      {
+        where: { saleItemId: previousItemIds },
+        transaction,
+      },
+    );
+  }
+
+  await SaleItems.destroy({
+    where: { saleId: existingSale.idSale },
+    transaction,
+  });
+
+  await CustomerMeasurementValues.destroy({
+    where: { saleId: existingSale.idSale },
+    transaction,
+  });
+
+  const createdItems = await SaleItems.bulkCreate(
+    items.map((item) => ({
+      ...item,
+      saleId: existingSale.idSale,
+      productId: null,
+    })),
+    { transaction },
+  );
+
+  await linkReferenceImagesToItems(items, createdItems, transaction);
+
+  let createdMeasurements = [];
+
+  if (customerMeasurements.length) {
+    createdMeasurements = await CustomerMeasurementValues.bulkCreate(
+      customerMeasurements.map((measurement) => ({
+        ...measurement,
+        customerId: existingSale.customerId,
+        saleId: existingSale.idSale,
+      })),
+      { transaction },
+    );
+  }
+
+  return { items: createdItems, measurements: createdMeasurements };
 }
 
 async function updateQuote(
@@ -461,56 +518,14 @@ async function updateQuote(
       return null;
     }
 
+    if (existingSale.status !== "BUDGET") {
+      throw validationError("Somente orçamentos em aberto podem ser alterados.");
+    }
+
     await existingSale.update(sale, { transaction });
-
-    const previousItemIds = (existingSale.SaleItems || []).map((item) => item.idSaleItem);
-    if (previousItemIds.length) {
-      await GarmentReferenceImages.update(
-        {
-          saleItemId: null,
-          expiresAt: new Date(Date.now() + UNLINKED_IMAGE_RETENTION_MS),
-        },
-        {
-          where: { saleItemId: previousItemIds },
-          transaction,
-        },
-      );
-    }
-
-    await SaleItems.destroy({
-      where: { saleId: existingSale.idSale },
-      transaction,
-    });
-
-    await CustomerMeasurementValues.destroy({
-      where: { saleId: existingSale.idSale },
-      transaction,
-    });
-
-    const createdItems = await SaleItems.bulkCreate(
-      items.map((item) => ({
-        ...item,
-        saleId: existingSale.idSale,
-        productId: null,
-      })),
-      { transaction },
+    const quoteDetails = await replaceQuoteItemsAndMeasurements(
+      existingSale, items, customerMeasurements, transaction,
     );
-
-    await linkReferenceImagesToItems(items, createdItems, transaction);
-
-    let createdMeasurements = [];
-
-    if (customerMeasurements.length) {
-      createdMeasurements = await CustomerMeasurementValues.bulkCreate(
-        customerMeasurements.map((measurement) => ({
-          ...measurement,
-          customerId: existingSale.customerId,
-          saleId: existingSale.idSale,
-        })),
-        { transaction },
-      );
-    }
-
     let createdBudgetPaymentDraft = null;
 
     if (canUseBudgetPaymentDrafts) {
@@ -539,8 +554,7 @@ async function updateQuote(
 
     return {
       sale: existingSale,
-      items: createdItems,
-      measurements: createdMeasurements,
+      ...quoteDetails,
       budgetPaymentDraft: createdBudgetPaymentDraft,
     };
   });
@@ -695,6 +709,10 @@ async function deleteQuote(idSale) {
       return null;
     }
 
+    if (existingSale.status !== "BUDGET") {
+      throw validationError("Somente orçamentos em aberto podem ser descartados.");
+    }
+
     await CustomerMeasurementValues.destroy({
       where: { saleId: existingSale.idSale },
       transaction,
@@ -727,172 +745,177 @@ async function deleteQuote(idSale) {
 }
 
 async function finalizeSale(
-  idSale,
+  existingSale,
   {
     sale,
+    quoteDetails,
     entryReceipt,
     additionalReceipts = [],
     customerCreditUsages = [],
     receivable,
     financialMovements,
   },
+  transaction,
 ) {
-  return sequelize.transaction(async (transaction) => {
-    const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
-    const existingSale = await getSaleForFinalization(idSale, transaction);
+  const canUseBudgetPaymentDrafts = await hasSaleBudgetPaymentDraftsTable(transaction);
+  const customerChanged =
+    sale.customerId !== undefined &&
+    Number(sale.customerId) !== Number(existingSale.customerId);
+  await existingSale.update(sale, { transaction });
 
-    if (!existingSale) {
-      return null;
-    }
+  if (canUseBudgetPaymentDrafts) {
+    await SaleBudgetPaymentDrafts.destroy({
+      where: { saleId: existingSale.idSale },
+      transaction,
+    });
+  }
 
-    await existingSale.update(sale, { transaction });
+  const updatedDetails = quoteDetails
+    ? await replaceQuoteItemsAndMeasurements(
+        existingSale, quoteDetails.items, quoteDetails.customerMeasurements, transaction,
+      )
+    : null;
+  const saleItems = updatedDetails?.items || existingSale.SaleItems || [];
+  const createdProducts = saleItems.length
+    ? await productsRepository.createProductsFromSale(existingSale, saleItems, transaction)
+    : [];
 
-    if (canUseBudgetPaymentDrafts) {
-      await SaleBudgetPaymentDrafts.destroy({
-        where: { saleId: existingSale.idSale },
-        transaction,
-      });
-    }
+  for (const [index, saleItem] of saleItems.entries()) {
+    await saleItem.update(
+      {
+        productId: createdProducts[index]?.id || null,
+      },
+      { transaction },
+    );
+  }
 
-    const saleItems = Array.isArray(existingSale.SaleItems) ? existingSale.SaleItems : [];
-    const createdProducts = saleItems.length
-      ? await productsRepository.createProductsFromSale(existingSale, saleItems, transaction)
-      : [];
+  let createdReceivable = null;
+  let createdEntryReceipt = null;
+  const createdAdditionalReceipts = [];
 
-    for (const [index, saleItem] of saleItems.entries()) {
-      await saleItem.update(
+  if (entryReceipt) {
+    createdEntryReceipt = await receivablesRepository.createStandaloneReceipt(
+      {
+        saleId: existingSale.idSale,
+        receivableInstallmentId: null,
+        paymentTypeId: entryReceipt.paymentTypeId,
+        receiptType: entryReceipt.receiptType,
+        amount: entryReceipt.amount,
+        paidAt: entryReceipt.paidAt,
+        referenceCode: entryReceipt.referenceCode,
+      },
+      transaction,
+    );
+  }
+
+  if (Array.isArray(additionalReceipts) && additionalReceipts.length) {
+    for (const receipt of additionalReceipts) {
+      const createdReceipt = await receivablesRepository.createStandaloneReceipt(
         {
-          productId: createdProducts[index]?.id || null,
+          saleId: existingSale.idSale,
+          receivableInstallmentId: null,
+          paymentTypeId: receipt.paymentTypeId || null,
+          receiptType: receipt.receiptType,
+          amount: receipt.amount,
+          paidAt: receipt.paidAt,
+          referenceCode: receipt.referenceCode || null,
+        },
+        transaction,
+      );
+      createdAdditionalReceipts.push(createdReceipt);
+    }
+  }
+
+  if (Array.isArray(customerCreditUsages) && customerCreditUsages.length) {
+    const creditReceipt = createdAdditionalReceipts.find(
+      (item) => item.receiptType === "CUSTOMER_CREDIT",
+    );
+
+    for (const usage of customerCreditUsages) {
+      await CustomerCredits.update(
+        {
+          balanceAmount: usage.nextBalanceAmount,
+          status: usage.nextStatus,
+        },
+        {
+          where: {
+            idCustomerCredit: usage.customerCreditId,
+          },
+          transaction,
+        },
+      );
+
+      await CustomerCreditUsages.create(
+        {
+          customerCreditId: usage.customerCreditId,
+          saleId: existingSale.idSale,
+          paymentReceiptId: creditReceipt?.idPaymentReceipt || null,
+          amount: usage.amount,
         },
         { transaction },
       );
     }
+  }
 
-    let createdReceivable = null;
-    let createdEntryReceipt = null;
-    const createdAdditionalReceipts = [];
+  if (Array.isArray(financialMovements) && financialMovements.length) {
+    const customer = customerChanged
+      ? await Customers.findByPk(existingSale.customerId, { transaction })
+      : existingSale.Customer;
+    const customerName = customer?.fullName || customer?.companyName || null;
 
-    if (entryReceipt) {
-      createdEntryReceipt = await receivablesRepository.createStandaloneReceipt(
-        {
+    for (const movement of financialMovements) {
+      const payload = {
+        ...movement,
+        description: buildSaleFinancialMovementDescription(
+          movement,
+          existingSale.idSale,
+          customerName,
+        ),
+        saleId: existingSale.idSale,
+        paymentReceiptId: createdEntryReceipt?.idPaymentReceipt || null,
+      };
+
+      if (movement.target === "CASH") {
+        await createCashEntry(payload, transaction);
+        continue;
+      }
+
+      await createBankEntry(payload, transaction);
+    }
+  }
+
+  if (receivable) {
+    createdReceivable = await receivablesRepository.createReceivableWithInstallments(
+      {
+        receivable: {
           saleId: existingSale.idSale,
-          receivableInstallmentId: null,
-          paymentTypeId: entryReceipt.paymentTypeId,
-          receiptType: entryReceipt.receiptType,
-          amount: entryReceipt.amount,
-          paidAt: entryReceipt.paidAt,
-          referenceCode: entryReceipt.referenceCode,
+          customerId: receivable.customerId,
+          originalAmount: receivable.originalAmount,
+          openAmount: receivable.originalAmount,
+          status: "OPEN",
+          debtorType: receivable.debtorType,
+          operatorLabel: receivable.operatorLabel,
         },
-        transaction,
-      );
-    }
+        installments: receivable.installments,
+        cardTransaction: receivable.cardTransaction
+          ? {
+              ...receivable.cardTransaction,
+              saleId: existingSale.idSale,
+            }
+          : null,
+      },
+      transaction,
+    );
+  }
 
-    if (Array.isArray(additionalReceipts) && additionalReceipts.length) {
-      for (const receipt of additionalReceipts) {
-        const createdReceipt = await receivablesRepository.createStandaloneReceipt(
-          {
-            saleId: existingSale.idSale,
-            receivableInstallmentId: null,
-            paymentTypeId: receipt.paymentTypeId || null,
-            receiptType: receipt.receiptType,
-            amount: receipt.amount,
-            paidAt: receipt.paidAt,
-            referenceCode: receipt.referenceCode || null,
-          },
-          transaction,
-        );
-        createdAdditionalReceipts.push(createdReceipt);
-      }
-    }
-
-    if (Array.isArray(customerCreditUsages) && customerCreditUsages.length) {
-      const creditReceipt = createdAdditionalReceipts.find(
-        (item) => item.receiptType === "CUSTOMER_CREDIT",
-      );
-
-      for (const usage of customerCreditUsages) {
-        await CustomerCredits.update(
-          {
-            balanceAmount: usage.nextBalanceAmount,
-            status: usage.nextStatus,
-          },
-          {
-            where: {
-              idCustomerCredit: usage.customerCreditId,
-            },
-            transaction,
-          },
-        );
-
-        await CustomerCreditUsages.create(
-          {
-            customerCreditId: usage.customerCreditId,
-            saleId: existingSale.idSale,
-            paymentReceiptId: creditReceipt?.idPaymentReceipt || null,
-            amount: usage.amount,
-          },
-          { transaction },
-        );
-      }
-    }
-
-    if (Array.isArray(financialMovements) && financialMovements.length) {
-      const customerName =
-        existingSale.Customer?.fullName || existingSale.Customer?.companyName || null;
-
-      for (const movement of financialMovements) {
-        const payload = {
-          ...movement,
-          description: buildSaleFinancialMovementDescription(
-            movement,
-            existingSale.idSale,
-            customerName,
-          ),
-          saleId: existingSale.idSale,
-          paymentReceiptId: createdEntryReceipt?.idPaymentReceipt || null,
-        };
-
-        if (movement.target === "CASH") {
-          await createCashEntry(payload, transaction);
-          continue;
-        }
-
-        await createBankEntry(payload, transaction);
-      }
-    }
-
-    if (receivable) {
-      createdReceivable = await receivablesRepository.createReceivableWithInstallments(
-        {
-          receivable: {
-            saleId: existingSale.idSale,
-            customerId: receivable.customerId,
-            originalAmount: receivable.originalAmount,
-            openAmount: receivable.originalAmount,
-            status: "OPEN",
-            debtorType: receivable.debtorType,
-            operatorLabel: receivable.operatorLabel,
-          },
-          installments: receivable.installments,
-          cardTransaction: receivable.cardTransaction
-            ? {
-                ...receivable.cardTransaction,
-                saleId: existingSale.idSale,
-              }
-            : null,
-        },
-        transaction,
-      );
-    }
-
-    return {
-      sale: existingSale,
-      products: createdProducts,
-      entryReceipt: createdEntryReceipt,
-      additionalReceipts: createdAdditionalReceipts,
-      receivable: createdReceivable,
-    };
-  });
+  return {
+    sale: existingSale,
+    ...updatedDetails,
+    products: createdProducts,
+    entryReceipt: createdEntryReceipt,
+    additionalReceipts: createdAdditionalReceipts,
+    receivable: createdReceivable,
+  };
 }
 
 async function getSaleForCancellation(idSale, transaction) {
